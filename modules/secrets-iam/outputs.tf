@@ -1,0 +1,39 @@
+output "kms_secrets_arn" {
+  description = "KMS CMK ARN for Secrets Manager"
+  value       = aws_kms_key.secrets.arn
+}
+
+output "kms_ssm_arn" {
+  description = "KMS CMK ARN for SSM (if created)"
+  value       = try(aws_kms_key.ssm[0].arn, null)
+}
+
+output "secrets_read_policy_arn" {
+  description = "IAM policy ARN that allows read of the effective secret ARNs (may be null if none)."
+  value       = try(aws_iam_policy.secrets_read[0].arn, null)
+}
+
+output "ssm_read_policy_arn" {
+  description = "IAM policy ARN to allow reading listed SSM Parameters + decrypt (if any listed)"
+  value       = try(aws_iam_policy.ssm_read[0].arn, null)
+}
+
+output "wpapp_db_secret_arn" {
+  description = "ARN of created wpapp DB secret (if created)"
+  value       = try(aws_secretsmanager_secret.wpapp[0].arn, null)
+}
+
+output "wp_admin_secret_arn" {
+  description = "ARN of created WP admin secret (if created)"
+  value       = try(aws_secretsmanager_secret.wpadmin[0].arn, null)
+}
+
+output "redis_auth_secret_arn" {
+  description = "ARN of the Redis AUTH token secret in Secrets Manager."
+  value       = local.redis_auth_secret_arn
+}
+
+output "eso_role_arn" {
+  description = "IAM Role ARN for the External Secrets Operator (IRSA)."
+  value       = aws_iam_role.eso.arn
+}
