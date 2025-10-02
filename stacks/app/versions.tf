@@ -1,6 +1,12 @@
 terraform {
   required_version = ">= 1.6.0"
 
+  backend "remote" {
+    organization = "WpOrbit"
+    workspaces {
+      name = "wp-app" # change per env
+    }
+  }
 
   required_providers {
     aws = {
