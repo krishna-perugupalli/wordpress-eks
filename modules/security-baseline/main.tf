@@ -321,16 +321,3 @@ resource "aws_guardduty_detector" "this" {
 
   tags = var.tags
 }
-
-#############################################
-# Outputs helpers
-#############################################
-output "kms_key_arn" {
-  value       = aws_kms_key.logs.arn
-  description = "KMS CMK ARN for security logs"
-}
-
-output "security_logs_bucket" {
-  value       = aws_s3_bucket.security_logs.bucket
-  description = "S3 bucket name for security logs"
-}

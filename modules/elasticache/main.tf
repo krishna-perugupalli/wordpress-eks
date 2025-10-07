@@ -138,21 +138,3 @@ resource "aws_elasticache_replication_group" "this" {
     ignore_changes = [auth_token] # allow out-of-band rotation without churn
   }
 }
-
-#############################################
-# Outputs
-#############################################
-output "primary_endpoint_address" {
-  value       = aws_elasticache_replication_group.this.primary_endpoint_address
-  description = "Primary endpoint address (writer)"
-}
-
-output "reader_endpoint_address" {
-  value       = aws_elasticache_replication_group.this.reader_endpoint_address
-  description = "Reader endpoint address"
-}
-
-output "security_group_id" {
-  value       = aws_security_group.redis.id
-  description = "Redis SG ID"
-}
