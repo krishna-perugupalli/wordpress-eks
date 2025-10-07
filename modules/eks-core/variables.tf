@@ -65,14 +65,10 @@ variable "control_plane_log_retention_days" {
 }
 
 variable "secrets_kms_key_arn" {
-  description = "KMS key ARN to encrypt Kubernetes secrets at rest (from foundation)"
+  description = "KMS key ARN for EKS secrets encryption (null to disable)"
   type        = string
-  validation {
-    condition     = length(var.secrets_kms_key_arn) > 0
-    error_message = "secrets_kms_key_arn must be a non-empty ARN."
-  }
+  default     = null
 }
-
 
 variable "addon_versions" {
   description = "Pin versions for EKS managed addons"

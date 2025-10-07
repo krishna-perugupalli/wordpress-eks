@@ -41,9 +41,9 @@ module "eks" {
   # Control plane logs
   cluster_enabled_log_types = local.cp_logs
 
-  # Secrets encryption (KMS)
+  # Secrets encryption: use external KMS CMK when provided; otherwise disable
   create_kms_key = false
-  cluster_encryption_config = [
+  cluster_encryption_config = var.secrets_kms_key_arn == null ? [] : [
     {
       resources        = ["secrets"]
       provider_key_arn = var.secrets_kms_key_arn
