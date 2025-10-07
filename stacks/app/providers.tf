@@ -3,7 +3,7 @@ data "terraform_remote_state" "infra" {
   backend = "remote"
   config = {
     organization = "WpOrbit"
-    workspaces   = { name = "wp-sbx-infra" } # match env
+    workspaces   = { name = "wp-infra" } # match env
   }
 }
 
