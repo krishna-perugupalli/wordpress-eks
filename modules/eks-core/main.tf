@@ -21,36 +21,35 @@ resource "aws_cloudwatch_log_group" "eks_cp" {
 #############################################
 # EKS (terraform-aws-modules/eks/aws v20)
 #############################################
+
+data "aws_caller_identity" "current" {}
+
+locals {
+  default_kms_key_arn = "arn:aws:kms:${var.region}:${data.aws_caller_identity.current.account_id}:alias/aws/secretsmanager"
+}
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 20.11"
 
   cluster_name    = var.name
   cluster_version = var.cluster_version
+  vpc_id          = var.vpc_id
+  subnet_ids      = var.private_subnet_ids
+  enable_irsa     = var.enable_irsa
 
-  vpc_id     = var.vpc_id
-  subnet_ids = var.private_subnet_ids
+  # ✅ final working shape
+  create_kms_key = false
+  cluster_encryption_config = {
+    resources        = ["secrets"]
+    provider_key_arn = local.default_kms_key_arn
+  }
 
-  enable_irsa = var.enable_irsa
-
-  # API endpoint access
   cluster_endpoint_public_access       = var.endpoint_public_access
   cluster_endpoint_private_access      = true
   cluster_endpoint_public_access_cidrs = var.endpoint_public_access ? var.public_access_cidrs : null
+  cluster_enabled_log_types            = local.cp_logs
 
-  # Control plane logs
-  cluster_enabled_log_types = local.cp_logs
-
-  # Secrets encryption: use external KMS CMK when provided; otherwise disable
-  create_kms_key = false
-  cluster_encryption_config = var.secrets_kms_key_arn == null ? [] : [
-    {
-      resources        = ["secrets"]
-      provider_key_arn = var.secrets_kms_key_arn
-    }
-  ]
-
-  # Use external IAM roles (from modules/iam-eks)
   iam_role_arn = var.cluster_role_arn
 
   # ----- Managed Add-ons (un-pinned; let AWS pick valid versions) -----
