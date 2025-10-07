@@ -1,24 +1,19 @@
 output "trail_arn" {
-  description = "CloudTrail ARN"
-  value       = aws_cloudtrail.this.arn
-}
-
-output "logs_bucket_name" {
-  description = "S3 bucket for CloudTrail/Config logs"
-  value       = aws_s3_bucket.security_logs.bucket
+  description = "CloudTrail ARN (null if trail disabled)"
+  value       = try(aws_cloudtrail.this[0].arn, null)
 }
 
 output "kms_key_arn" {
-  description = "KMS key ARN used for security logs"
-  value       = aws_kms_key.security_logs.arn
-}
-
-output "guardduty_detector_id" {
-  description = "GuardDuty detector ID"
-  value       = aws_guardduty_detector.this.id
+  description = "KMS CMK ARN for security logs"
+  value       = aws_kms_key.logs.arn
 }
 
 output "security_logs_bucket" {
+  description = "S3 bucket for security logs"
   value       = aws_s3_bucket.security_logs.bucket
-  description = "S3 bucket name for security logs"
+}
+
+output "guardduty_detector_id" {
+  description = "GuardDuty detector ID (null if disabled)"
+  value       = try(aws_guardduty_detector.this[0].id, null)
 }

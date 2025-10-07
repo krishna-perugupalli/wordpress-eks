@@ -118,12 +118,11 @@ resource "aws_elasticache_replication_group" "this" {
   transit_encryption_enabled = true
   auth_token                 = local.redis_auth_token
 
-  # High-availability
   automatic_failover_enabled = var.automatic_failover
   multi_az_enabled           = var.multi_az
 
-  # Cluster mode enabled with one shard and N replicas per shard
-  cluster_mode {
+  # ✅ Use argument form for your provider
+  cluster_mode = {
     num_node_groups         = 1
     replicas_per_node_group = local.rpng
   }
@@ -135,6 +134,6 @@ resource "aws_elasticache_replication_group" "this" {
   tags = var.tags
 
   lifecycle {
-    ignore_changes = [auth_token] # allow out-of-band rotation without churn
+    ignore_changes = [auth_token]
   }
 }
