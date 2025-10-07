@@ -130,14 +130,19 @@ module "data_efs" {
 # Security baseline (CloudTrail, Config, GuardDuty, Budgets)
 # ---------------------------
 module "security_baseline" {
-  source            = "../../modules/security-baseline"
-  name              = local.name
-  region            = var.region
-  trail_bucket_name = var.security_trail_bucket_name
-  create_budget     = var.create_budget
-  budget_amount     = var.budget_amount
-  budget_emails     = var.budget_emails
-  tags              = local.tags
+  source = "../../modules/security-baseline"
+
+  name = local.name
+  # Optional: pin a bucket name; leave "" to auto-generate a unique one
+  trail_bucket_name             = ""
+  logs_expire_after_days        = 365
+  cloudtrail_cwl_retention_days = 90
+
+  create_cloudtrail = true
+  create_config     = true
+  create_guardduty  = true
+
+  tags = local.tags
 }
 
 # ---------------------------
@@ -176,3 +181,22 @@ module "elasticache" {
   auth_token_secret_arn = module.secrets_iam.redis_auth_secret_arn
   tags                  = local.tags
 }
+
+# ---------------------------
+# Cost-budget alarms
+# ---------------------------
+module "cost_budgets" {
+  source       = "../../modules/cost-budgets"
+  name         = "${local.name}-monthly-budget"
+  limit_amount = 2500
+  time_unit    = "MONTHLY"
+
+  alert_emails            = ["finops@example.com", "platform-alerts@example.com"]
+  create_sns_topic        = true
+  sns_topic_name          = "${local.name}-budgets-alerts"
+  sns_subscription_emails = ["noc@example.com"]
+
+  forecast_threshold_percent = 80
+  actual_threshold_percent   = 100
+}
+  
