@@ -15,7 +15,7 @@ output "cluster_ca" {
 
 output "oidc_provider_arn" {
   description = "OIDC provider ARN (for IRSA)"
-  value       = module.eks.oidc_provider
+  value       = module.eks.oidc_provider_arn
 }
 
 output "eks_oidc_provider" {
@@ -36,4 +36,3 @@ output "cluster_oidc_issuer_url" {
   description = "OIDC issuer URL for the cluster"
   value       = module.eks.cluster_oidc_issuer_url
 }
-
