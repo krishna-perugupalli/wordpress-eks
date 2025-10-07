@@ -41,20 +41,22 @@ module "eks" {
   # Control plane logs
   cluster_enabled_log_types = local.cp_logs
 
-  # Secrets encryption: always use external KMS to keep plan deterministic
+  # Secrets encryption (KMS)
   create_kms_key = false
-  cluster_encryption_config = {
-    resources        = ["secrets"]
-    provider_key_arn = var.secrets_kms_key_arn
-  }
+  cluster_encryption_config = [
+    {
+      resources        = ["secrets"]
+      provider_key_arn = var.secrets_kms_key_arn
+    }
+  ]
 
   # Use external IAM roles (from modules/iam-eks)
   iam_role_arn = var.cluster_role_arn
 
-  # Add-ons (pinned) — EBS CSI will use the IRSA role defined below
+  # ----- Managed Add-ons (un-pinned; let AWS pick valid versions) -----
   cluster_addons = {
     vpc-cni = {
-      addon_version     = var.addon_versions.vpc_cni
+      most_recent       = true
       resolve_conflicts = "OVERWRITE"
       configuration_values = var.enable_cni_prefix_delegation ? jsonencode({
         env = {
@@ -63,24 +65,25 @@ module "eks" {
         }
       }) : null
     }
+
     kube-proxy = {
-      addon_version     = var.addon_versions.kube_proxy
+      most_recent       = true
       resolve_conflicts = "OVERWRITE"
     }
+
     coredns = {
-      addon_version     = var.addon_versions.coredns
+      most_recent       = true
       resolve_conflicts = "OVERWRITE"
     }
-    aws-ebs-csi-driver = {
-      addon_version            = var.addon_versions.ebs_csi
-      resolve_conflicts        = "OVERWRITE"
-      service_account_role_arn = aws_iam_role.ebs_csi.arn
+
+    # We use EFS for wp-content; install the EFS CSI driver as an add-on.
+    aws-efs-csi-driver = {
+      most_recent       = true
+      resolve_conflicts = "OVERWRITE"
     }
   }
 
-  ###########################################
-  # System Managed Node Group
-  ###########################################
+  # ----- System Managed Node Group -----
   eks_managed_node_groups = {
     system = {
       name           = "system"

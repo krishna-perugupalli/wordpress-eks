@@ -192,8 +192,19 @@ resource "aws_kms_key" "s3" {
 #############################################
 # S3: logs + media (+ access logs)
 #############################################
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
+resource "random_id" "suffix" {
+  byte_length = 3
+}
+
+locals {
+  bucket_suffix = "${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}-${random_id.suffix.hex}"
+}
+
 resource "aws_s3_bucket" "logs" {
-  bucket        = "${var.name}-logs"
+  bucket        = "${var.name}-sec-logs-${local.bucket_suffix}"
   force_destroy = false
   tags          = var.tags
 }
@@ -224,7 +235,7 @@ resource "aws_s3_bucket_public_access_block" "logs" {
 }
 
 resource "aws_s3_bucket" "media" {
-  bucket        = local.media_bucket
+  bucket        = "${var.name}-media-${local.bucket_suffix}"
   force_destroy = false
   tags          = var.tags
 }

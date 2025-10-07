@@ -143,3 +143,13 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "backup_service_role_arn" {
+  description = <<-EOT
+    Optional existing IAM role ARN for AWS Backup service to assume.
+    If null, the module creates a new role with policy:
+      arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+  EOT
+  type        = string
+  default     = null
+}

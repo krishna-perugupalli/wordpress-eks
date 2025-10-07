@@ -1,113 +1,118 @@
 #############################################
-# Locals
+# Identity / Region
 #############################################
-locals {
-  bucket_name = var.trail_bucket_name != "" ? var.trail_bucket_name : lower(replace("${var.name}-sec-logs", "/[^0-9a-z-]/", ""))
-}
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
 
 #############################################
-# KMS key for CloudTrail + Config + CW Logs
+# KMS CMK for security logs (CloudTrail/CWL/S3)
 #############################################
-resource "aws_kms_key" "security_logs" {
-  description             = "KMS CMK for CloudTrail/Config/CloudWatch Logs (${var.name})"
+resource "aws_kms_key" "logs" {
+  description             = "CMK for security logs (${var.name})"
   enable_key_rotation     = true
   deletion_window_in_days = 30
-  tags                    = var.tags
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid       = "AllowAccountAdmin",
+        Effect    = "Allow",
+        Principal = { "AWS" = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" },
+        Action    = "kms:*",
+        Resource  = "*"
+      },
+      {
+        Sid       = "AllowCloudWatchLogsUse",
+        Effect    = "Allow",
+        Principal = { "Service" = "logs.${data.aws_region.current.name}.amazonaws.com" },
+        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"],
+        Resource  = "*"
+      },
+      {
+        Sid       = "AllowCloudTrailUse",
+        Effect    = "Allow",
+        Principal = { "Service" = "cloudtrail.amazonaws.com" },
+        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"],
+        Resource  = "*"
+      }
+    ]
+  })
+
+  tags = var.tags
 }
 
-resource "aws_kms_alias" "security_logs" {
-  name          = "alias/${var.name}-security-logs"
-  target_key_id = aws_kms_key.security_logs.key_id
+resource "aws_kms_alias" "logs" {
+  name          = "alias/${var.name}-logs"
+  target_key_id = aws_kms_key.logs.key_id
 }
 
 #############################################
-# S3 bucket for CloudTrail + AWS Config (SSE-KMS)
+# S3 bucket for security logs (CloudTrail, ALB, etc.)
 #############################################
+# Ensure a globally-unique bucket. If user supplied a name, use it.
+resource "random_id" "suffix" {
+  byte_length = 3
+}
+
+locals {
+  logs_bucket_name = var.trail_bucket_name != "" ? var.trail_bucket_name : "${var.name}-sec-logs-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}-${random_id.suffix.hex}"
+}
+
 resource "aws_s3_bucket" "security_logs" {
-  bucket = local.bucket_name
+  bucket = local.logs_bucket_name
   tags   = var.tags
 }
 
 resource "aws_s3_bucket_ownership_controls" "security_logs" {
   bucket = aws_s3_bucket.security_logs.id
-  rule {
-    object_ownership = "BucketOwnerEnforced"
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "security_logs" {
-  bucket                  = aws_s3_bucket.security_logs.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+  rule { object_ownership = "BucketOwnerPreferred" }
 }
 
 resource "aws_s3_bucket_versioning" "security_logs" {
   bucket = aws_s3_bucket.security_logs.id
-  versioning_configuration {
-    status = "Enabled"
-  }
+  versioning_configuration { status = "Enabled" }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "security_logs" {
   bucket = aws_s3_bucket.security_logs.id
   rule {
     apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.security_logs.arn
       sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.logs.arn
     }
     bucket_key_enabled = true
   }
 }
 
+# Lifecycle with a required filter (provider needs either prefix or filter)
 resource "aws_s3_bucket_lifecycle_configuration" "security_logs" {
   bucket = aws_s3_bucket.security_logs.id
 
   rule {
-    id     = "expire-old-logs"
+    id     = "ExpireOldObjects"
     status = "Enabled"
-
-    # Required: choose exactly one of filter or prefix. This filter applies to the whole bucket.
     filter {
-      prefix = ""
+      prefix = "" # all objects
     }
 
     expiration {
-      days = 365
-    }
-
-    noncurrent_version_expiration {
-      noncurrent_days = 90
+      days = var.logs_expire_after_days
     }
   }
 }
 
-
-#############################################
-# Bucket policy to allow CloudTrail + Config writes
-#############################################
-data "aws_iam_policy_document" "security_logs_bucket" {
+# Allow services to write & enforce TLS-only access
+data "aws_iam_policy_document" "security_logs_policy" {
   statement {
-    sid     = "AWSCloudTrailAclCheck"
-    effect  = "Allow"
-    actions = ["s3:GetBucketAcl"]
-    principals {
-      type        = "Service"
-      identifiers = ["cloudtrail.amazonaws.com"]
-    }
-    resources = [aws_s3_bucket.security_logs.arn]
-  }
-
-  statement {
-    sid     = "AWSCloudTrailWrite"
+    sid     = "AllowCloudTrailWrite"
     effect  = "Allow"
     actions = ["s3:PutObject"]
     principals {
       type        = "Service"
       identifiers = ["cloudtrail.amazonaws.com"]
     }
-    resources = ["${aws_s3_bucket.security_logs.arn}/AWSLogs/*"]
+    resources = ["${aws_s3_bucket.security_logs.arn}/*"]
     condition {
       test     = "StringEquals"
       variable = "s3:x-amz-acl"
@@ -116,103 +121,66 @@ data "aws_iam_policy_document" "security_logs_bucket" {
   }
 
   statement {
-    sid     = "AWSConfigWrite"
+    sid     = "AllowELBAccessLogs"
     effect  = "Allow"
     actions = ["s3:PutObject"]
     principals {
       type        = "Service"
-      identifiers = ["config.amazonaws.com"]
+      identifiers = ["logdelivery.elasticloadbalancing.amazonaws.com"]
     }
-    resources = [
-      "${aws_s3_bucket.security_logs.arn}/AWSLogs/*",
-      "${aws_s3_bucket.security_logs.arn}/config/*"
-    ]
+    resources = ["${aws_s3_bucket.security_logs.arn}/*"]
   }
 
-  # Allow AWS services to use the KMS key through S3 for SSE-KMS
   statement {
-    sid    = "AllowS3ToUseKMS"
-    effect = "Allow"
-    actions = [
-      "kms:Encrypt",
-      "kms:Decrypt",
-      "kms:ReEncrypt*",
-      "kms:GenerateDataKey*",
-      "kms:DescribeKey"
-    ]
+    sid     = "DenyInsecureTransport"
+    effect  = "Deny"
+    actions = ["s3:*"]
     principals {
-      type        = "Service"
-      identifiers = ["s3.amazonaws.com"]
+      type        = "*"
+      identifiers = ["*"]
     }
-    resources = [aws_kms_key.security_logs.arn]
+    resources = [
+      aws_s3_bucket.security_logs.arn,
+      "${aws_s3_bucket.security_logs.arn}/*"
+    ]
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
   }
 }
 
 resource "aws_s3_bucket_policy" "security_logs" {
   bucket = aws_s3_bucket.security_logs.id
-  policy = data.aws_iam_policy_document.security_logs_bucket.json
+  policy = data.aws_iam_policy_document.security_logs_policy.json
 }
 
 #############################################
-# CloudWatch Log Group for CloudTrail
+# CloudWatch Logs group for CloudTrail
 #############################################
 resource "aws_cloudwatch_log_group" "trail" {
   name              = "/aws/cloudtrail/${var.name}"
-  kms_key_id        = aws_kms_key.security_logs.arn
-  retention_in_days = 90
+  kms_key_id        = aws_kms_key.logs.arn
+  retention_in_days = var.cloudtrail_cwl_retention_days
   tags              = var.tags
 }
 
-# IAM role to allow CloudTrail to put logs into CloudWatch Logs
-data "aws_iam_policy_document" "trail_to_cw_trust" {
-  statement {
-    effect = "Allow"
-    principals {
-      type        = "Service"
-      identifiers = ["cloudtrail.amazonaws.com"]
-    }
-    actions = ["sts:AssumeRole"]
-  }
-}
-
-resource "aws_iam_role" "trail_to_cw" {
-  name               = "${var.name}-cloudtrail-to-cw"
-  assume_role_policy = data.aws_iam_policy_document.trail_to_cw_trust.json
-  tags               = var.tags
-}
-
-data "aws_iam_policy_document" "trail_to_cw" {
-  statement {
-    effect    = "Allow"
-    actions   = ["logs:PutLogEvents", "logs:CreateLogStream"]
-    resources = ["${aws_cloudwatch_log_group.trail.arn}:*"]
-  }
-}
-
-resource "aws_iam_policy" "trail_to_cw" {
-  name   = "${var.name}-cloudtrail-to-cw"
-  policy = data.aws_iam_policy_document.trail_to_cw.json
-  tags   = var.tags
-}
-
-resource "aws_iam_role_policy_attachment" "trail_to_cw" {
-  role       = aws_iam_role.trail_to_cw.name
-  policy_arn = aws_iam_policy.trail_to_cw.arn
-}
-
 #############################################
-# CloudTrail (multi-region, SSE-KMS, CW Logs)
+# CloudTrail (org-level OFF; single-account trail)
 #############################################
 resource "aws_cloudtrail" "this" {
-  name                          = "${var.name}-trail"
+  count                         = var.create_cloudtrail ? 1 : 0
+  name                          = var.name
   s3_bucket_name                = aws_s3_bucket.security_logs.id
-  is_multi_region_trail         = true
+  s3_key_prefix                 = "cloudtrail"
   include_global_service_events = true
+  is_multi_region_trail         = true
   enable_log_file_validation    = true
-  kms_key_id                    = aws_kms_key.security_logs.arn
-
-  cloud_watch_logs_group_arn = aws_cloudwatch_log_group.trail.arn
-  cloud_watch_logs_role_arn  = aws_iam_role.trail_to_cw.arn
+  is_organization_trail         = false
+  kms_key_id                    = aws_kms_key.logs.arn
+  cloud_watch_logs_group_arn    = "${aws_cloudwatch_log_group.trail.arn}:*" # CWL needs :*
+  cloud_watch_logs_role_arn     = aws_iam_role.cloudtrail[0].arn
 
   event_selector {
     read_write_type           = "All"
@@ -220,70 +188,126 @@ resource "aws_cloudtrail" "this" {
   }
 
   tags = var.tags
+}
 
-  depends_on = [
-    aws_s3_bucket_policy.security_logs,
-    aws_iam_role_policy_attachment.trail_to_cw
-  ]
+# Role for CloudTrail to write to CloudWatch Logs
+data "aws_iam_policy_document" "cloudtrail_assume" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "cloudtrail" {
+  count              = var.create_cloudtrail ? 1 : 0
+  name               = "${var.name}-cloudtrail"
+  assume_role_policy = data.aws_iam_policy_document.cloudtrail_assume.json
+  tags               = var.tags
+}
+
+data "aws_iam_policy_document" "cloudtrail_to_cwl" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "logs:DescribeLogGroups",
+      "logs:DescribeLogStreams"
+    ]
+    resources = [aws_cloudwatch_log_group.trail.arn, "${aws_cloudwatch_log_group.trail.arn}:*"]
+  }
+}
+
+resource "aws_iam_role_policy" "cloudtrail_to_cwl" {
+  count  = var.create_cloudtrail ? 1 : 0
+  name   = "${var.name}-cloudtrail-to-cwl"
+  role   = aws_iam_role.cloudtrail[0].name
+  policy = data.aws_iam_policy_document.cloudtrail_to_cwl.json
 }
 
 #############################################
 # AWS Config (recorder + delivery channel)
 #############################################
+data "aws_iam_policy_document" "config_assume" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["config.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "config" {
+  count              = var.create_config ? 1 : 0
+  name               = "${var.name}-config"
+  assume_role_policy = data.aws_iam_policy_document.config_assume.json
+  tags               = var.tags
+}
+
+# Inline minimal policy for AWS Config
+data "aws_iam_policy_document" "config_inline" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "config:Put*",
+      "config:Get*",
+      "config:Describe*",
+      "config:StartConfigurationRecorder",
+      "config:StopConfigurationRecorder",
+      "s3:PutObject",
+      "s3:GetBucketAcl",
+      "s3:GetBucketLocation"
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "config_inline" {
+  count  = var.create_config ? 1 : 0
+  name   = "${var.name}-config-inline"
+  role   = aws_iam_role.config[0].name
+  policy = data.aws_iam_policy_document.config_inline.json
+}
+
 resource "aws_config_configuration_recorder" "this" {
-  name     = "${var.name}-recorder"
-  role_arn = aws_iam_role.config.arn
+  count    = var.create_config ? 1 : 0
+  name     = "default"
+  role_arn = aws_iam_role.config[0].arn
 
   recording_group {
     all_supported                 = true
     include_global_resource_types = true
   }
-
-  depends_on = [aws_iam_role_policy_attachment.config_attach]
-}
-
-# IAM role for Config
-data "aws_iam_policy_document" "config_trust" {
-  statement {
-    effect = "Allow"
-    principals {
-      type        = "Service"
-      identifiers = ["config.amazonaws.com"]
-    }
-    actions = ["sts:AssumeRole"]
-  }
-}
-
-resource "aws_iam_role" "config" {
-  name               = "${var.name}-config"
-  assume_role_policy = data.aws_iam_policy_document.config_trust.json
-  tags               = var.tags
-}
-
-# Managed policy is sufficient for account-level Config
-resource "aws_iam_role_policy_attachment" "config_attach" {
-  role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
 }
 
 resource "aws_config_delivery_channel" "this" {
-  name           = "${var.name}-delivery"
-  s3_bucket_name = aws_s3_bucket.security_logs.id
+  count          = var.create_config ? 1 : 0
+  name           = "default"
+  s3_bucket_name = aws_s3_bucket.security_logs.bucket
+  s3_key_prefix  = "config"
   depends_on     = [aws_config_configuration_recorder.this]
 }
 
-# Turn on the recorder
 resource "aws_config_configuration_recorder_status" "this" {
-  name       = aws_config_configuration_recorder.this.name
+  count      = var.create_config ? 1 : 0
+  name       = aws_config_configuration_recorder.this[0].name
   is_enabled = true
   depends_on = [aws_config_delivery_channel.this]
 }
 
 #############################################
-# GuardDuty (account/region)
+# GuardDuty (OPTIONAL)
 #############################################
 resource "aws_guardduty_detector" "this" {
+  count  = var.create_guardduty ? 1 : 0
   enable = true
+
   datasources {
     s3_logs {
       enable = true
@@ -293,52 +317,20 @@ resource "aws_guardduty_detector" "this" {
         enable = true
       }
     }
-    malware_protection {
-      scan_ec2_instance_with_findings {
-        ebs_volumes {
-          enable = true
-        }
-      }
-    }
   }
+
   tags = var.tags
 }
 
 #############################################
-# Optional: Monthly Cost Budget
+# Outputs helpers
 #############################################
-resource "aws_budgets_budget" "monthly" {
-  count        = var.create_budget ? 1 : 0
-  name         = "${var.name}-monthly-budget"
-  budget_type  = "COST"
-  limit_amount = tostring(var.budget_amount)
-  limit_unit   = "USD"
-  time_unit    = "MONTHLY"
+output "kms_key_arn" {
+  value       = aws_kms_key.logs.arn
+  description = "KMS CMK ARN for security logs"
+}
 
-  cost_types {
-    include_credit             = true
-    include_discount           = true
-    include_other_subscription = true
-    include_recurring          = true
-    include_refund             = true
-    include_subscription       = true
-    include_support            = true
-    include_tax                = true
-    include_upfront            = true
-    use_amortized              = true
-    use_blended                = false
-  }
-
-  dynamic "notification" {
-    for_each = length(var.budget_emails) > 0 ? [1] : []
-    content {
-      comparison_operator        = "GREATER_THAN"
-      threshold                  = 80
-      threshold_type             = "PERCENTAGE"
-      notification_type          = "FORECASTED"
-      subscriber_email_addresses = var.budget_emails
-    }
-  }
-
-  tags = var.tags
+output "security_logs_bucket" {
+  value       = aws_s3_bucket.security_logs.bucket
+  description = "S3 bucket name for security logs"
 }

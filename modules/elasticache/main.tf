@@ -1,81 +1,158 @@
-data "aws_subnet" "vpc" {
-  id = var.subnet_ids[0]
-}
-
-resource "aws_elasticache_subnet_group" "this" {
-  name        = "${var.name}-redis-subnets"
-  subnet_ids  = var.subnet_ids
-  description = "Redis subnet group"
-}
-
 #############################################
-# Ingress guardrails (runtime)
+# Inputs & derived
 #############################################
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 locals {
-  redis_has_any_ingress = length(var.node_sg_source_ids) > 0
+  allow_any_ingress = length(var.node_sg_source_ids) + length(var.allowed_cidr_blocks) > 0
+  # replicas_per_node_group: how many replicas per shard (exclude the primary)
+  rpng = var.replicas_per_node_group
 }
 
+#############################################
+# Security Group
+#############################################
 resource "aws_security_group" "redis" {
   name        = "${var.name}-redis-sg"
-  description = "Redis TLS access for ${var.name}"
-  vpc_id      = data.aws_subnet.vpc.vpc_id
-  tags        = var.tags
+  description = "Redis (ElastiCache) SG for ${var.name}"
+  vpc_id      = var.vpc_id
+  tags        = merge(var.tags, { Name = "${var.name}-redis-sg" })
 
   lifecycle {
     precondition {
-      condition     = local.redis_has_any_ingress
-      error_message = "No ingress allowed to Redis: provide at least one node_sg_source_id."
+      condition     = local.allow_any_ingress
+      error_message = "No Redis ingress sources provided. Set node_sg_source_ids and/or allowed_cidr_blocks."
     }
   }
 }
 
+# Ingress from Node SGs
 resource "aws_security_group_rule" "ingress" {
-  count                    = length(var.node_sg_source_ids)
+  for_each                 = toset(var.node_sg_source_ids)
   type                     = "ingress"
   from_port                = 6379
   to_port                  = 6379
   protocol                 = "tcp"
   security_group_id        = aws_security_group.redis.id
-  source_security_group_id = var.node_sg_source_ids[count.index]
-  description              = "Redis TLS from node SG"
+  source_security_group_id = each.value
+  description              = "Redis TLS from node SG ${each.value}"
 }
 
+# Optional CIDR ingress (migration/ops)
+resource "aws_security_group_rule" "ingress_cidr" {
+  for_each          = toset(var.allowed_cidr_blocks)
+  type              = "ingress"
+  from_port         = 6379
+  to_port           = 6379
+  protocol          = "tcp"
+  security_group_id = aws_security_group.redis.id
+  cidr_blocks       = [each.value]
+  description       = "Redis TLS from CIDR ${each.value}"
+}
+
+# Egress open
+resource "aws_security_group_rule" "egress_all" {
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  security_group_id = aws_security_group.redis.id
+  cidr_blocks       = ["0.0.0.0/0"]
+}
+
+#############################################
+# Subnet group
+#############################################
+resource "aws_elasticache_subnet_group" "this" {
+  name       = "${var.name}-redis-subnets"
+  subnet_ids = var.subnet_ids
+  tags       = merge(var.tags, { Name = "${var.name}-redis-subnets" })
+}
+
+#############################################
+# Parameter group (use parameter {} blocks)
+#############################################
+resource "aws_elasticache_parameter_group" "this" {
+  name   = "${var.name}-redis"
+  family = var.engine_family # e.g., "redis7"
+
+  parameter {
+    name  = "timeout"
+    value = "0"
+  }
+
+  # Add more parameter blocks as needed; avoid non-modifiable ones like "appendonly".
+}
+
+#############################################
+# Auth token (from Secrets Manager) — optional
+#############################################
 data "aws_secretsmanager_secret_version" "auth" {
+  count     = var.auth_token_secret_arn != "" ? 1 : 0
   secret_id = var.auth_token_secret_arn
 }
 
-resource "aws_elasticache_parameter_group" "this" {
-  name   = "${var.name}-redis-pg"
-  family = "redis7"
+locals {
+  redis_auth_token = try(jsondecode(data.aws_secretsmanager_secret_version.auth[0].secret_string).token, null)
+}
 
-  parameter {
-    name  = "appendonly"
-    value = "no"
+#############################################
+# Replication group (cluster mode: 1 node group + replicas)
+#############################################
+resource "aws_elasticache_replication_group" "this" {
+  replication_group_id = "${var.name}-redis"
+  description          = "Redis replication group for ${var.name}"
+
+  engine         = "redis"
+  engine_version = var.engine_version
+
+  parameter_group_name = aws_elasticache_parameter_group.this.name
+  node_type            = var.node_type
+  port                 = 6379
+
+  subnet_group_name  = aws_elasticache_subnet_group.this.name
+  security_group_ids = [aws_security_group.redis.id]
+
+  at_rest_encryption_enabled = true
+  transit_encryption_enabled = true
+  auth_token                 = local.redis_auth_token
+
+  # High-availability
+  automatic_failover_enabled = var.automatic_failover
+  multi_az_enabled           = var.multi_az
+
+  # Cluster mode enabled with one shard and N replicas per shard
+  cluster_mode {
+    num_node_groups         = 1
+    replicas_per_node_group = local.rpng
   }
-  parameter {
-    name  = "maxmemory-policy"
-    value = "volatile-lru"
+
+  maintenance_window       = var.maintenance_window
+  snapshot_retention_limit = var.snapshot_retention_days
+  snapshot_window          = var.snapshot_window
+
+  tags = var.tags
+
+  lifecycle {
+    ignore_changes = [auth_token] # allow out-of-band rotation without churn
   }
 }
 
-resource "aws_elasticache_replication_group" "this" {
-  replication_group_id       = "${var.name}-rg"
-  description                = "Redis for ${var.name}"
-  engine                     = "redis"
-  engine_version             = var.engine_version
-  node_type                  = var.node_type
-  parameter_group_name       = aws_elasticache_parameter_group.this.name
-  security_group_ids         = [aws_security_group.redis.id]
-  subnet_group_name          = aws_elasticache_subnet_group.this.name
-  at_rest_encryption_enabled = true
-  kms_key_id                 = var.kms_key_id
-  transit_encryption_enabled = true
-  auth_token                 = jsondecode(data.aws_secretsmanager_secret_version.auth.secret_string)["token"]
-  automatic_failover_enabled = true
-  multi_az_enabled           = true
-  num_node_groups            = 1
-  replicas_per_node_group    = var.num_replicas_per_shard
-  auto_minor_version_upgrade = true
-  port                       = 6379
-  tags                       = var.tags
+#############################################
+# Outputs
+#############################################
+output "primary_endpoint_address" {
+  value       = aws_elasticache_replication_group.this.primary_endpoint_address
+  description = "Primary endpoint address (writer)"
+}
+
+output "reader_endpoint_address" {
+  value       = aws_elasticache_replication_group.this.reader_endpoint_address
+  description = "Reader endpoint address"
+}
+
+output "security_group_id" {
+  value       = aws_security_group.redis.id
+  description = "Redis SG ID"
 }
