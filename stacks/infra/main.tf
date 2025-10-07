@@ -170,6 +170,7 @@ module "secrets_iam" {
 module "elasticache" {
   source                = "../../modules/elasticache"
   name                  = local.name
+  vpc_id                = module.foundation.vpc_id
   subnet_ids            = module.foundation.private_subnet_ids
   node_sg_source_ids    = [module.eks_core.node_security_group_id]
   auth_token_secret_arn = module.secrets_iam.redis_auth_secret_arn
