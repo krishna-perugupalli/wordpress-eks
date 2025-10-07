@@ -42,7 +42,7 @@ module "eks" {
   create_kms_key = false
   cluster_encryption_config = {
     resources        = ["secrets"]
-    provider_key_arn = local.default_kms_key_arn
+    provider_key_arn = coalesce(var.secrets_kms_key_arn, local.default_kms_key_arn)
   }
 
   cluster_endpoint_public_access       = var.endpoint_public_access

@@ -85,6 +85,12 @@ variable "auth_token_secret_arn" {
   default     = ""
 }
 
+variable "enable_auth_token_secret" {
+  description = "Set to true when auth_token_secret_arn should be read and applied."
+  type        = bool
+  default     = false
+}
+
 variable "tags" {
   description = "Common tags"
   type        = map(string)

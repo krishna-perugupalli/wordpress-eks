@@ -12,39 +12,39 @@ data "aws_rds_engine_version" "aurora_mysql" {
 }
 
 #############################################
-# Security Group (Aurora MySQL)
+# Security Group (Aurora)
 #############################################
 locals {
-  allow_any_ingress = length(var.allowed_security_group_ids) + length(var.allowed_cidr_blocks) > 0
+  _aurora_has_any_ingress = var.enable_source_node_sg_rule || length(var.allowed_cidr_blocks) > 0
 }
 
 resource "aws_security_group" "db" {
   name        = "${var.name}-aurora-sg"
-  description = "Aurora MySQL SG for ${var.name}"
+  description = "Aurora MySQL security group for ${var.name}"
   vpc_id      = var.vpc_id
-  tags        = merge(var.tags, { Name = "${var.name}-aurora-sg" })
+  tags        = var.tags
 
   lifecycle {
     precondition {
-      condition     = local.allow_any_ingress
-      error_message = "No Aurora ingress provided. Set allowed_security_group_ids and/or allowed_cidr_blocks."
+      condition     = local._aurora_has_any_ingress
+      error_message = "Aurora requires at least one ingress source. Keep enable_source_node_sg_rule=true or specify allowed_cidr_blocks."
     }
   }
 }
 
-# Ingress from SGs
-resource "aws_security_group_rule" "db_ingress_sg" {
-  for_each                 = toset(var.allowed_security_group_ids)
+# Plan-stable: single known SG (e.g., node SG) via count
+resource "aws_security_group_rule" "db_ingress_node_sg" {
+  count                    = var.enable_source_node_sg_rule ? 1 : 0
   type                     = "ingress"
   from_port                = 3306
   to_port                  = 3306
   protocol                 = "tcp"
   security_group_id        = aws_security_group.db.id
-  source_security_group_id = each.value
-  description              = "Aurora MySQL from ${each.value}"
+  source_security_group_id = var.source_node_sg_id
+  description              = "Aurora MySQL from node SG"
 }
 
-# Ingress from CIDRs
+# Optional static CIDRs
 resource "aws_security_group_rule" "db_ingress_cidr" {
   for_each          = toset(var.allowed_cidr_blocks)
   type              = "ingress"
@@ -56,7 +56,7 @@ resource "aws_security_group_rule" "db_ingress_cidr" {
   description       = "Aurora MySQL from ${each.value}"
 }
 
-# Egress open
+# Egress all
 resource "aws_security_group_rule" "db_egress_all" {
   type              = "egress"
   from_port         = 0
@@ -64,7 +64,6 @@ resource "aws_security_group_rule" "db_egress_all" {
   protocol          = "-1"
   security_group_id = aws_security_group.db.id
   cidr_blocks       = ["0.0.0.0/0"]
-  description       = "All egress"
 }
 
 #############################################

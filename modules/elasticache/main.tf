@@ -5,7 +5,8 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 locals {
-  allow_any_ingress = length(var.node_sg_source_ids) + length(var.allowed_cidr_blocks) > 0
+  allow_any_ingress  = length(var.node_sg_source_ids) + length(var.allowed_cidr_blocks) > 0
+  node_sg_source_map = { for idx, sg_id in var.node_sg_source_ids : tostring(idx) => sg_id }
   # replicas_per_node_group: how many replicas per shard (exclude the primary)
   rpng = var.replicas_per_node_group
 }
@@ -29,7 +30,7 @@ resource "aws_security_group" "redis" {
 
 # Ingress from Node SGs
 resource "aws_security_group_rule" "ingress" {
-  for_each                 = toset(var.node_sg_source_ids)
+  for_each                 = local.node_sg_source_map
   type                     = "ingress"
   from_port                = 6379
   to_port                  = 6379
@@ -89,7 +90,7 @@ resource "aws_elasticache_parameter_group" "this" {
 # Auth token (from Secrets Manager) — optional
 #############################################
 data "aws_secretsmanager_secret_version" "auth" {
-  count     = var.auth_token_secret_arn != "" ? 1 : 0
+  count     = var.enable_auth_token_secret ? 1 : 0
   secret_id = var.auth_token_secret_arn
 }
 

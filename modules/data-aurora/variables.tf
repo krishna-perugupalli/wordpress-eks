@@ -228,4 +228,14 @@ variable "backup_service_role_arn" {
   default     = null
 }
 
+variable "enable_source_node_sg_rule" {
+  description = "Create the ingress rule that allows traffic from source_node_sg_id. Set to false if you are not supplying a source security group."
+  type        = bool
+  default     = true
+}
 
+variable "source_node_sg_id" {
+  description = "Primary SG allowed to reach Aurora (e.g., EKS node SG)."
+  type        = string
+  default     = null
+}

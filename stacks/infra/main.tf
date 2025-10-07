@@ -72,7 +72,8 @@ module "data_aurora" {
   storage_kms_key_arn         = module.foundation.kms_logs_arn
   secrets_manager_kms_key_arn = module.foundation.kms_logs_arn
 
-  allowed_security_group_ids = [module.eks_core.node_security_group_id]
+  source_node_sg_id   = module.eks_core.node_security_group_id
+  allowed_cidr_blocks = [] # or ["x.x.x.x/32"] temporarily for migrations
 
   serverless_v2      = true
   serverless_min_acu = var.db_serverless_min_acu
@@ -173,13 +174,14 @@ module "secrets_iam" {
 # ElastiCache (Redis) for object cache
 # ---------------------------
 module "elasticache" {
-  source                = "../../modules/elasticache"
-  name                  = local.name
-  vpc_id                = module.foundation.vpc_id
-  subnet_ids            = module.foundation.private_subnet_ids
-  node_sg_source_ids    = [module.eks_core.node_security_group_id]
-  auth_token_secret_arn = module.secrets_iam.redis_auth_secret_arn
-  tags                  = local.tags
+  source                   = "../../modules/elasticache"
+  name                     = local.name
+  vpc_id                   = module.foundation.vpc_id
+  subnet_ids               = module.foundation.private_subnet_ids
+  node_sg_source_ids       = [module.eks_core.node_security_group_id]
+  enable_auth_token_secret = true
+  auth_token_secret_arn    = module.secrets_iam.redis_auth_secret_arn
+  tags                     = local.tags
 }
 
 # ---------------------------
@@ -199,4 +201,3 @@ module "cost_budgets" {
   forecast_threshold_percent = 80
   actual_threshold_percent   = 100
 }
-  

@@ -7,7 +7,8 @@ data "aws_caller_identity" "current" {}
 # Inputs guardrails
 #############################################
 locals {
-  has_any_ingress = length(var.allowed_security_group_ids) + length(var.allowed_cidr_blocks) > 0
+  has_any_ingress                = length(var.allowed_security_group_ids) + length(var.allowed_cidr_blocks) > 0
+  allowed_security_group_ids_map = { for idx, sg_id in var.allowed_security_group_ids : tostring(idx) => sg_id }
 }
 
 #############################################
@@ -29,7 +30,7 @@ resource "aws_security_group" "efs" {
 
 # SG sources: from SGs
 resource "aws_security_group_rule" "efs_ingress_sg" {
-  for_each                 = toset(var.allowed_security_group_ids)
+  for_each                 = local.allowed_security_group_ids_map
   type                     = "ingress"
   from_port                = 2049
   to_port                  = 2049
@@ -90,7 +91,7 @@ resource "aws_efs_file_system" "this" {
 # Mount Targets (one per private subnet)
 #############################################
 resource "aws_efs_mount_target" "this" {
-  for_each       = toset(var.private_subnet_ids)
+  for_each       = { for idx, subnet_id in var.private_subnet_ids : tostring(idx) => subnet_id }
   file_system_id = aws_efs_file_system.this.id
   subnet_id      = each.value
   security_groups = [
