@@ -238,10 +238,9 @@ resource "aws_iam_policy" "ssm_read" {
 
 # Optional: generate a Redis AUTH token and store in Secrets Manager as JSON: {"token":"..."}
 resource "random_password" "redis_token" {
-  count            = var.create_redis_auth_secret && var.existing_redis_auth_secret_arn == "" ? 1 : 0
-  length           = var.redis_auth_token_length
-  special          = true
-  override_special = "!#$%^*-_=+"
+  count   = var.create_redis_auth_secret && var.existing_redis_auth_secret_arn == "" ? 1 : 0
+  length  = var.redis_auth_token_length
+  special = false
 }
 
 resource "aws_secretsmanager_secret" "redis_auth" {
