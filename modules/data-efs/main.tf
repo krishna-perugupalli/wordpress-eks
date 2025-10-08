@@ -190,7 +190,7 @@ data "aws_iam_policy_document" "backup_assume" {
 
 resource "aws_iam_role" "backup_service" {
   count              = var.enable_backup && var.backup_service_role_arn == null ? 1 : 0
-  name               = "${var.name}-backup-role"
+  name               = "${var.name}-efs-backup-role"
   assume_role_policy = data.aws_iam_policy_document.backup_assume.json
   tags               = var.tags
 }

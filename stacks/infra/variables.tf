@@ -171,7 +171,7 @@ variable "db_enable_backup" {
 variable "backup_vault_name" {
   description = "AWS Backup vault name to use"
   type        = string
-  default     = "Default"
+  default     = "default"
 }
 
 variable "db_backup_cron" {

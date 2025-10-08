@@ -123,7 +123,6 @@ module "data_efs" {
   backup_vault_name        = var.backup_vault_name
   backup_schedule_cron     = var.efs_backup_cron
   backup_delete_after_days = var.efs_backup_delete_after_days
-  backup_service_role_arn  = module.data_aurora.backup_service_role_arn
 
   tags = local.tags
 }

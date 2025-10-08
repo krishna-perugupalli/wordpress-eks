@@ -149,10 +149,6 @@ locals {
   backup_vault_name_effective = var.enable_backup ? (local.use_existing_backup_vault ? data.aws_backup_vault.existing[0].name : aws_backup_vault.aurora[0].name) : null
 }
 
-locals {
-  backup_service_role_arn_effective = var.enable_backup ? (var.backup_service_role_arn != null ? var.backup_service_role_arn : try(aws_iam_role.backup_service[0].arn, null)) : null
-}
-
 resource "aws_backup_plan" "aurora" {
   count = var.enable_backup ? 1 : 0
   name  = "${var.name}-aurora-backup"
@@ -174,7 +170,7 @@ resource "aws_backup_selection" "aurora" {
   count = var.enable_backup ? 1 : 0
   name  = "${var.name}-aurora-selection"
 
-  iam_role_arn = local.backup_service_role_arn_effective
+  iam_role_arn = var.backup_service_role_arn != null ? var.backup_service_role_arn : aws_iam_role.backup_service[0].arn
   plan_id      = aws_backup_plan.aurora[0].id
 
   resources = [aws_rds_cluster.this.arn]
@@ -194,7 +190,7 @@ data "aws_iam_policy_document" "backup_assume" {
 
 resource "aws_iam_role" "backup_service" {
   count              = var.enable_backup && var.backup_service_role_arn == null ? 1 : 0
-  name               = "${var.name}-backup-role"
+  name               = "${var.name}-aurora-backup-role"
   assume_role_policy = data.aws_iam_policy_document.backup_assume.json
   tags               = var.tags
 }
