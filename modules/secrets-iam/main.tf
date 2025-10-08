@@ -241,7 +241,7 @@ resource "random_password" "redis_token" {
   count            = var.create_redis_auth_secret && var.existing_redis_auth_secret_arn == "" ? 1 : 0
   length           = var.redis_auth_token_length
   special          = true
-  override_special = "!#%^*-_=+"
+  override_special = "!#$%^*-_=+"
 }
 
 resource "aws_secretsmanager_secret" "redis_auth" {
