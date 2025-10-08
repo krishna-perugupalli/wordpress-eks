@@ -129,7 +129,6 @@ resource "aws_elasticache_replication_group" "this" {
   automatic_failover_enabled = var.automatic_failover
   multi_az_enabled           = var.multi_az
 
-  cluster_enabled         = true
   num_node_groups         = 1
   replicas_per_node_group = var.replicas_per_node_group
 
