@@ -172,9 +172,8 @@ variable "enable_backup" {
 }
 
 variable "backup_vault_name" {
-  description = "Backup vault to store recovery points. Leave empty to auto-create `${var.name}-aurora-backup`."
+  description = "Backup vault to store recovery points. Leave empty to auto-create."
   type        = string
-  default     = ""
 }
 
 variable "backup_schedule_cron" {
