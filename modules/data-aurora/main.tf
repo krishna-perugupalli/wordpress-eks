@@ -128,12 +128,29 @@ resource "aws_rds_cluster_instance" "this" {
 #############################################
 # AWS Backup (vault + plan + selection)
 #############################################
-# Create a dedicated vault when backups are enabled
+locals {
+  use_existing_backup_vault = var.enable_backup && lower(var.backup_vault_name) == "default"
+}
+
+data "aws_backup_vault" "existing" {
+  count = local.use_existing_backup_vault ? 1 : 0
+  name  = var.backup_vault_name
+}
+
+# Create a dedicated vault when backups are enabled (unless reusing default)
 resource "aws_backup_vault" "aurora" {
-  count       = var.enable_backup ? 1 : 0
+  count       = var.enable_backup && !local.use_existing_backup_vault ? 1 : 0
   name        = var.backup_vault_name
   kms_key_arn = null
   tags        = var.tags
+}
+
+locals {
+  backup_vault_name_effective = var.enable_backup ? (local.use_existing_backup_vault ? data.aws_backup_vault.existing[0].name : aws_backup_vault.aurora[0].name) : null
+}
+
+locals {
+  backup_service_role_arn_effective = var.enable_backup ? (var.backup_service_role_arn != null ? var.backup_service_role_arn : try(aws_iam_role.backup_service[0].arn, null)) : null
 }
 
 resource "aws_backup_plan" "aurora" {
@@ -142,7 +159,7 @@ resource "aws_backup_plan" "aurora" {
 
   rule {
     rule_name         = "daily"
-    target_vault_name = aws_backup_vault.aurora[0].name
+    target_vault_name = local.backup_vault_name_effective
     schedule          = var.backup_schedule_cron
     lifecycle {
       delete_after = var.backup_delete_after_days
@@ -157,7 +174,7 @@ resource "aws_backup_selection" "aurora" {
   count = var.enable_backup ? 1 : 0
   name  = "${var.name}-aurora-selection"
 
-  iam_role_arn = var.backup_service_role_arn != null ? var.backup_service_role_arn : aws_iam_role.backup_service[0].arn
+  iam_role_arn = local.backup_service_role_arn_effective
   plan_id      = aws_backup_plan.aurora[0].id
 
   resources = [aws_rds_cluster.this.arn]

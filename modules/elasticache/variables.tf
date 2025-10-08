@@ -91,6 +91,13 @@ variable "enable_auth_token_secret" {
   default     = false
 }
 
+variable "auth_token" {
+  description = "Redis AUTH token value to apply directly (typically sourced from secrets-iam output). Overrides auth_token_secret_arn when provided."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "tags" {
   description = "Common tags"
   type        = map(string)

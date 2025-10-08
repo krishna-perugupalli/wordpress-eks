@@ -126,11 +126,24 @@ resource "aws_efs_access_point" "ap" {
 #############################################
 # AWS Backup (vault + plan + selection)
 #############################################
+locals {
+  use_existing_backup_vault = var.enable_backup && lower(var.backup_vault_name) == "default"
+}
+
+data "aws_backup_vault" "existing" {
+  count = local.use_existing_backup_vault ? 1 : 0
+  name  = var.backup_vault_name
+}
+
 resource "aws_backup_vault" "efs" {
-  count       = var.enable_backup ? 1 : 0
+  count       = var.enable_backup && !local.use_existing_backup_vault ? 1 : 0
   name        = var.backup_vault_name
   kms_key_arn = null
   tags        = var.tags
+}
+
+locals {
+  backup_vault_name_effective = var.enable_backup ? (local.use_existing_backup_vault ? data.aws_backup_vault.existing[0].name : aws_backup_vault.efs[0].name) : null
 }
 
 resource "aws_backup_plan" "efs" {
@@ -139,7 +152,7 @@ resource "aws_backup_plan" "efs" {
 
   rule {
     rule_name         = "daily"
-    target_vault_name = aws_backup_vault.efs[0].name
+    target_vault_name = local.backup_vault_name_effective
     schedule          = var.backup_schedule_cron
     lifecycle {
       delete_after = var.backup_delete_after_days

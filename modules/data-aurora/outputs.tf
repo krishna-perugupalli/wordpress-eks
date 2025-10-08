@@ -17,3 +17,8 @@ output "security_group_id" {
   description = "Aurora security group ID"
   value       = aws_security_group.db.id
 }
+
+output "backup_service_role_arn" {
+  description = "IAM role ARN used by AWS Backup for this Aurora cluster (null if backups disabled or external role provided)."
+  value       = local.backup_service_role_arn_effective
+}

@@ -262,7 +262,8 @@ resource "aws_secretsmanager_secret_version" "redis_auth" {
 
 # Safe local to expose either the existing ARN or the created one (without evaluating missing indexes)
 locals {
-  redis_auth_secret_arn = var.existing_redis_auth_secret_arn != "" ? var.existing_redis_auth_secret_arn : try(aws_secretsmanager_secret.redis_auth[0].arn, "")
+  redis_auth_secret_arn  = var.existing_redis_auth_secret_arn != "" ? var.existing_redis_auth_secret_arn : try(aws_secretsmanager_secret.redis_auth[0].arn, "")
+  redis_auth_token_value = var.existing_redis_auth_secret_arn != "" ? "" : try(random_password.redis_token[0].result, "")
 }
 
 #############################################

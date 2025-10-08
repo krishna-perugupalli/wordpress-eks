@@ -90,12 +90,13 @@ resource "aws_elasticache_parameter_group" "this" {
 # Auth token (from Secrets Manager) — optional
 #############################################
 data "aws_secretsmanager_secret_version" "auth" {
-  count     = var.enable_auth_token_secret ? 1 : 0
+  count = var.enable_auth_token_secret && var.auth_token == "" && var.auth_token_secret_arn != "" ? 1 : 0
+
   secret_id = var.auth_token_secret_arn
 }
 
 locals {
-  redis_auth_token = try(jsondecode(data.aws_secretsmanager_secret_version.auth[0].secret_string).token, null)
+  redis_auth_token = var.auth_token != "" ? var.auth_token : (var.enable_auth_token_secret && var.auth_token_secret_arn != "" ? try(jsondecode(data.aws_secretsmanager_secret_version.auth[0].secret_string).token, null) : null)
 }
 
 #############################################
