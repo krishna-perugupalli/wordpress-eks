@@ -20,7 +20,7 @@ module "secrets_operator" {
   oidc_provider_arn       = data.terraform_remote_state.infra.outputs.oidc_provider_arn
 
   # Option A: use module-managed read policy (recommended via secrets-iam)
-  secrets_read_policy_arn = null
+  secrets_read_policy_arn = data.terraform_remote_state.infra.outputs.secrets_read_policy_arn
 
   tags = local.tags
 }

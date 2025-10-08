@@ -59,3 +59,8 @@ output "region" {
   value       = var.region
   description = "AWS region for the stack"
 }
+
+output "secrets_read_policy_arn" {
+  description = "IAM policy ARN that grants External Secrets Operator read access."
+  value       = module.secrets_iam.secrets_read_policy_arn
+}
