@@ -96,7 +96,13 @@ data "aws_secretsmanager_secret_version" "auth" {
 }
 
 locals {
-  redis_auth_token = var.auth_token != "" ? var.auth_token : (var.enable_auth_token_secret && var.auth_token_secret_arn != "" ? try(jsondecode(data.aws_secretsmanager_secret_version.auth[0].secret_string).token, null) : null)
+  redis_auth_token_raw = var.auth_token != "" ? var.auth_token : (
+    var.enable_auth_token_secret && var.auth_token_secret_arn != "" ?
+    try(jsondecode(data.aws_secretsmanager_secret_version.auth[0].secret_string).token, null) :
+    null
+  )
+
+  redis_auth_token = local.redis_auth_token_raw == null ? null : replace(replace(replace(local.redis_auth_token_raw, "@", ""), "\"", ""), "/", "")
 }
 
 #############################################
