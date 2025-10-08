@@ -36,6 +36,12 @@ variable "create_config" {
 variable "create_guardduty" {
   description = "Enable GuardDuty detector in this account/region."
   type        = bool
+  default     = false
+}
+
+variable "guardduty_use_existing" {
+  description = "Set to true if a GuardDuty detector already exists in this account/region and should be reused instead of creating a new one."
+  type        = bool
   default     = true
 }
 

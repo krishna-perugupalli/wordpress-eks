@@ -15,5 +15,5 @@ output "security_logs_bucket" {
 
 output "guardduty_detector_id" {
   description = "GuardDuty detector ID (null if disabled)"
-  value       = try(aws_guardduty_detector.this[0].id, null)
+  value       = local.guardduty_detector_id_effective
 }

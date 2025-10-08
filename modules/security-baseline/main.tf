@@ -121,6 +121,17 @@ data "aws_iam_policy_document" "security_logs_policy" {
   }
 
   statement {
+    sid     = "AllowCloudTrailAclCheck"
+    effect  = "Allow"
+    actions = ["s3:GetBucketAcl"]
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+    resources = [aws_s3_bucket.security_logs.arn]
+  }
+
+  statement {
     sid     = "AllowELBAccessLogs"
     effect  = "Allow"
     actions = ["s3:PutObject"]
@@ -304,8 +315,12 @@ resource "aws_config_configuration_recorder_status" "this" {
 #############################################
 # GuardDuty (OPTIONAL)
 #############################################
+data "aws_guardduty_detector" "existing" {
+  count = var.create_guardduty && var.guardduty_use_existing ? 1 : 0
+}
+
 resource "aws_guardduty_detector" "this" {
-  count  = var.create_guardduty ? 1 : 0
+  count  = var.create_guardduty && !var.guardduty_use_existing ? 1 : 0
   enable = true
 
   datasources {
@@ -320,4 +335,8 @@ resource "aws_guardduty_detector" "this" {
   }
 
   tags = var.tags
+}
+
+locals {
+  guardduty_detector_id_effective = var.create_guardduty ? (var.guardduty_use_existing ? data.aws_guardduty_detector.existing[0].id : try(aws_guardduty_detector.this[0].id, null)) : null
 }
