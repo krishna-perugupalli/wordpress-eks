@@ -16,7 +16,7 @@ data "aws_rds_engine_version" "aurora_mysql" {
 #############################################
 locals {
   _aurora_has_any_ingress           = var.enable_source_node_sg_rule || length(var.allowed_cidr_blocks) > 0
-  final_snapshot_identifier_default = regexreplace(lower("${var.name}-aurora-final"), "[^a-z0-9-]", "-")
+  final_snapshot_identifier_default = lower("${var.name}-aurora-final")
 }
 
 resource "aws_security_group" "db" {
