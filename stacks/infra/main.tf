@@ -61,18 +61,20 @@ module "eks_core" {
 #############################################
 # Minimal k8s provider for aws-auth only
 #############################################
-data "aws_eks_cluster" "this" {
-  name = module.eks_core.cluster_name
-}
-
-data "aws_eks_cluster_auth" "this" {
-  name = module.eks_core.cluster_name
-}
-
 provider "kubernetes" {
-  host                   = data.aws_eks_cluster.this.endpoint
-  cluster_ca_certificate = base64decode(data.aws_eks_cluster.this.certificate_authority[0].data)
-  token                  = data.aws_eks_cluster_auth.this.token
+  host                   = module.eks_core.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks_core.cluster_ca)
+
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--cluster-name", module.eks_core.cluster_name, "--region", var.region]
+  }
+}
+
+resource "time_sleep" "wait_for_eks" {
+  depends_on      = [module.eks_core]
+  create_duration = "30s"
 }
 
 #############################################
