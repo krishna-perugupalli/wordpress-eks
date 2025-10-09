@@ -161,6 +161,18 @@ variable "db_deletion_protection" {
   default     = true
 }
 
+variable "db_skip_final_snapshot" {
+  description = "Skip creating a final snapshot when destroying the Aurora cluster"
+  type        = bool
+  default     = true
+}
+
+variable "db_final_snapshot_identifier" {
+  description = "Final snapshot identifier to use when db_skip_final_snapshot = false"
+  type        = string
+  default     = ""
+}
+
 # AWS Backup for Aurora
 variable "db_enable_backup" {
   description = "Enable AWS Backup for Aurora"

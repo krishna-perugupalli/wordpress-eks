@@ -17,6 +17,11 @@ data "aws_rds_engine_version" "aurora_mysql" {
 locals {
   _aurora_has_any_ingress           = var.enable_source_node_sg_rule || length(var.allowed_cidr_blocks) > 0
   final_snapshot_identifier_default = lower("${var.name}-aurora-final")
+  final_snapshot_identifier_effective = var.skip_final_snapshot ? null : (
+    length(trimspace(coalesce(var.final_snapshot_identifier, ""))) > 0
+    ? trimspace(var.final_snapshot_identifier)
+    : local.final_snapshot_identifier_default
+  )
 }
 
 resource "aws_security_group" "db" {
@@ -111,7 +116,7 @@ resource "aws_rds_cluster" "this" {
 
   copy_tags_to_snapshot     = true
   skip_final_snapshot       = var.skip_final_snapshot
-  final_snapshot_identifier = var.skip_final_snapshot ? null : (var.final_snapshot_identifier != "" ? var.final_snapshot_identifier : local.final_snapshot_identifier_default)
+  final_snapshot_identifier = local.final_snapshot_identifier_effective
 
   tags = merge(var.tags, { Name = "${var.name}-aurora" })
 }
