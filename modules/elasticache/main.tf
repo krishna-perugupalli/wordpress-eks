@@ -90,14 +90,16 @@ resource "aws_elasticache_parameter_group" "this" {
 # Auth token (from Secrets Manager) — optional
 #############################################
 data "aws_secretsmanager_secret_version" "auth" {
-  count = var.enable_auth_token_secret && var.auth_token == "" && var.auth_token_secret_arn != "" ? 1 : 0
+  # Make count depend only on a static boolean so it's known at plan time.
+  # Avoid referencing values that may be unknown (e.g., ARN passed from a resource).
+  count = var.enable_auth_token_secret ? 1 : 0
 
   secret_id = var.auth_token_secret_arn
 }
 
 locals {
   redis_auth_token_raw = var.auth_token != "" ? var.auth_token : (
-    var.enable_auth_token_secret && var.auth_token_secret_arn != "" ?
+    var.enable_auth_token_secret ?
     try(jsondecode(data.aws_secretsmanager_secret_version.auth[0].secret_string).token, null) :
     null
   )
