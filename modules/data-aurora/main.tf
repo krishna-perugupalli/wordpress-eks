@@ -15,7 +15,8 @@ data "aws_rds_engine_version" "aurora_mysql" {
 # Security Group (Aurora)
 #############################################
 locals {
-  _aurora_has_any_ingress = var.enable_source_node_sg_rule || length(var.allowed_cidr_blocks) > 0
+  _aurora_has_any_ingress           = var.enable_source_node_sg_rule || length(var.allowed_cidr_blocks) > 0
+  final_snapshot_identifier_default = regexreplace(lower("${var.name}-aurora-final"), "[^a-z0-9-]", "-")
 }
 
 resource "aws_security_group" "db" {
@@ -108,7 +109,9 @@ resource "aws_rds_cluster" "this" {
     max_capacity = var.serverless_max_acu
   }
 
-  copy_tags_to_snapshot = true
+  copy_tags_to_snapshot     = true
+  skip_final_snapshot       = var.skip_final_snapshot
+  final_snapshot_identifier = var.skip_final_snapshot ? null : (var.final_snapshot_identifier != "" ? var.final_snapshot_identifier : local.final_snapshot_identifier_default)
 
   tags = merge(var.tags, { Name = "${var.name}-aurora" })
 }
