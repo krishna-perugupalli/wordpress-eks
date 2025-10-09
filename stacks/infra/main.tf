@@ -1,3 +1,6 @@
+#############################################
+# Locals
+#############################################
 locals {
   name = var.project
   tags = merge(
@@ -10,9 +13,9 @@ locals {
   )
 }
 
-# ---------------------------
+#############################################
 # Foundation (VPC, subnets, NAT, KMS base)
-# ---------------------------
+#############################################
 module "foundation" {
   source           = "../../modules/foundation"
   name             = local.name
@@ -24,18 +27,18 @@ module "foundation" {
   tags             = local.tags
 }
 
-# ---------------------------
+#############################################
 # IAM roles for EKS control plane and nodes
-# ---------------------------
+#############################################
 module "iam_eks" {
   source = "../../modules/iam-eks"
   name   = local.name
   tags   = local.tags
 }
 
-# ---------------------------
+#############################################
 # EKS cluster (terraform-aws-modules/eks via our wrapper)
-# ---------------------------
+#############################################
 module "eks_core" {
   source                       = "../../modules/eks-core"
   name                         = local.name
@@ -55,9 +58,38 @@ module "eks_core" {
   tags                         = local.tags
 }
 
-# ---------------------------
+#############################################
+# Minimal k8s provider for aws-auth only
+#############################################
+data "aws_eks_cluster" "this" {
+  name = module.eks_core.cluster_name
+}
+
+data "aws_eks_cluster_auth" "this" {
+  name = module.eks_core.cluster_name
+}
+
+provider "kubernetes" {
+  host                   = data.aws_eks_cluster.this.endpoint
+  cluster_ca_certificate = base64decode(data.aws_eks_cluster.this.certificate_authority[0].data)
+  token                  = data.aws_eks_cluster_auth.this.token
+}
+
+#############################################
+# aws-auth ConfigMap (map node role + optional admins)
+#############################################
+module "aws_auth" {
+  source = "../../modules/aws-auth"
+
+  node_role_arn   = module.iam_eks.node_role_arn
+  admin_role_arns = var.admin_role_arns
+
+  depends_on = [module.eks_core]
+}
+
+#############################################
 # Aurora MySQL (Serverless v2)
-# ---------------------------
+#############################################
 module "data_aurora" {
   source             = "../../modules/data-aurora"
   name               = local.name
@@ -94,9 +126,9 @@ module "data_aurora" {
   tags = local.tags
 }
 
-# ---------------------------
+#############################################
 # EFS (wp-content)
-# ---------------------------
+#############################################
 module "data_efs" {
   source             = "../../modules/data-efs"
   name               = local.name
@@ -128,14 +160,13 @@ module "data_efs" {
   tags = local.tags
 }
 
-# ---------------------------
+#############################################
 # Security baseline (CloudTrail, Config, GuardDuty, Budgets)
-# ---------------------------
+#############################################
 module "security_baseline" {
   source = "../../modules/security-baseline"
 
-  name = local.name
-  # Optional: pin a bucket name; leave "" to auto-generate a unique one
+  name                          = local.name
   trail_bucket_name             = ""
   logs_expire_after_days        = 365
   cloudtrail_cwl_retention_days = 90
@@ -147,9 +178,9 @@ module "security_baseline" {
   tags = local.tags
 }
 
-# ---------------------------
+#############################################
 # Secrets + IAM for ESO and app secrets
-# ---------------------------
+#############################################
 module "secrets_iam" {
   source = "../../modules/secrets-iam"
   name   = local.name
@@ -171,9 +202,9 @@ module "secrets_iam" {
   redis_auth_secret_name   = "${local.name}-redis-auth"
 }
 
-# ---------------------------
+#############################################
 # ElastiCache (Redis) for object cache
-# ---------------------------
+#############################################
 module "elasticache" {
   source                   = "../../modules/elasticache"
   name                     = local.name
@@ -185,9 +216,9 @@ module "elasticache" {
   tags                     = local.tags
 }
 
-# ---------------------------
+#############################################
 # Cost-budget alarms
-# ---------------------------
+#############################################
 module "cost_budgets" {
   source       = "../../modules/cost-budgets"
   name         = "${local.name}-monthly-budget"

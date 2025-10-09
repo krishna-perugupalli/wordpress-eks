@@ -65,7 +65,7 @@ variable "nat_gateway_mode" {
 variable "cluster_version" {
   description = "EKS Kubernetes version"
   type        = string
-  default     = "1.30"
+  default     = "1.32"
 }
 
 variable "endpoint_public_access" {
@@ -102,6 +102,11 @@ variable "system_node_max" {
   description = "Max nodes for system node group"
   type        = number
   default     = 3
+}
+
+variable "admin_role_arns" {
+  type    = list(string)
+  default = []
 }
 
 # ---------------------------

@@ -129,9 +129,9 @@ variable "node_capacity_type" {
 }
 
 variable "node_ami_type" {
-  description = "EKS AMI type (e.g., AL2_x86_64, AL2_ARM_64, BOTTLEROCKET_x86_64)"
+  description = "EKS AMI type (e.g., AL2023_x86_64_STANDARD, BOTTLEROCKET_x86_64)"
   type        = string
-  default     = "AL2_x86_64"
+  default     = "AL2023_x86_64_STANDARD"
 }
 
 variable "tags" {
