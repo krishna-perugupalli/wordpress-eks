@@ -29,14 +29,16 @@ jobs:
     env:
       TF_IN_AUTOMATION: true
       TF_INPUT: false
-      TF_CLI_CONFIG_FILE: ${{ runner.temp }}/terraform.rc
-      TF_PLUGIN_CACHE_DIR: ${{ runner.temp }}/terraform-plugin-cache
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Prepare Terraform CLI configuration
         run: |
+          TF_CLI_CONFIG_FILE="$RUNNER_TEMP/terraform.rc"
+          TF_PLUGIN_CACHE_DIR="$RUNNER_TEMP/terraform-plugin-cache"
+          echo "TF_CLI_CONFIG_FILE=$TF_CLI_CONFIG_FILE" >> "$GITHUB_ENV"
+          echo "TF_PLUGIN_CACHE_DIR=$TF_PLUGIN_CACHE_DIR" >> "$GITHUB_ENV"
           mkdir -p "$(dirname "$TF_CLI_CONFIG_FILE")"
           mkdir -p "$TF_PLUGIN_CACHE_DIR"
           cat <<'EOF' > "$TF_CLI_CONFIG_FILE"
@@ -78,6 +80,9 @@ jobs:
 
       - name: TFLint (recursive)
         run: tflint --recursive
+
+      - name: Ensure reports directory
+        run: mkdir -p reports
 
       - name: Checkov scan
         id: checkov
