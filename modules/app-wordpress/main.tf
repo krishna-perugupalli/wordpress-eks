@@ -23,7 +23,10 @@ locals {
   wp_env_data = [
     {
       secretKey = "WORDPRESS_DB_PASSWORD"
-      remoteRef = { key = var.db_secret_arn, property = "password" }
+      remoteRef = {
+        key      = var.db_secret_arn
+        property = "password"
+      }
     }
   ]
 }
@@ -50,8 +53,7 @@ resource "kubectl_manifest" "wp_env_es" {
 
 #############################################
 # Optional: ESO ExternalSecret 'wp-admin' for admin bootstrap
-# - Only the password is required by the Bitnami chart when using 'existingSecret'
-# - Username/email are provided via Helm values (below)
+# - Only password is pulled; username/email via Helm values
 #############################################
 resource "kubectl_manifest" "wp_admin_es" {
   count = var.admin_bootstrap_enabled ? 1 : 0
@@ -68,12 +70,32 @@ resource "kubectl_manifest" "wp_admin_es" {
       secretStoreRef  = { name = "aws-sm", kind = "ClusterSecretStore" }
       target          = { name = "wp-admin", creationPolicy = "Owner" }
       data = [
-        { secretKey = "wordpress-password", remoteRef = { key = var.admin_secret_arn, property = "password" } }
+        {
+          secretKey = "wordpress-password"
+          remoteRef = {
+            key      = var.admin_secret_arn
+            property = "password"
+          }
+        }
       ]
     }
   })
 
   depends_on = [kubernetes_namespace.ns]
+}
+
+#############################################
+# Deterministic naming for Service/Ingress
+#############################################
+locals {
+  name_overrides = merge(
+    var.fullname_override != "" ? { fullnameOverride = var.fullname_override } : {},
+    (var.fullname_override == "" && var.name_override != "") ? { nameOverride = var.name_override } : {}
+  )
+
+  effective_fullname = var.fullname_override != "" ? var.fullname_override : (
+    var.name_override != "" ? var.name_override : var.name
+  )
 }
 
 #############################################
@@ -95,7 +117,6 @@ locals {
       "alb.ingress.kubernetes.io/certificate-arn" = var.alb_certificate_arn
     } : {},
     var.waf_acl_arn != "" ? {
-      # ALB + WAFv2 association
       "alb.ingress.kubernetes.io/wafv2-acl-arn" = var.waf_acl_arn
     } : {},
     local.alb_tags_csv != "" ? {
@@ -112,9 +133,26 @@ resource "helm_release" "wordpress" {
   namespace  = var.namespace
   repository = "https://charts.bitnami.com/bitnami"
   chart      = "wordpress"
-  # If you want to pin: add -> version = "x.y.z"
+  # Optional: pin the chart
+  # version    = "22.3.5"
 
-  # Use external DB (disable bundled MariaDB)
+  # Deterministic names (Service/Ingress)
+  dynamic "set" {
+    for_each = var.fullname_override != "" ? [1] : []
+    content {
+      name  = "fullnameOverride"
+      value = var.fullname_override
+    }
+  }
+  dynamic "set" {
+    for_each = var.fullname_override == "" && var.name_override != "" ? [1] : []
+    content {
+      name  = "nameOverride"
+      value = var.name_override
+    }
+  }
+
+  # External DB (disable bundled MariaDB)
   set {
     name  = "mariadb.enabled"
     value = "false"
@@ -132,7 +170,7 @@ resource "helm_release" "wordpress" {
     value = "wp-env"
   }
 
-  # Admin bootstrap via chart (safe one-time init)
+  # Admin bootstrap (safe one-time init)
   set {
     name  = "wordpressUsername"
     value = var.admin_user
@@ -182,6 +220,32 @@ resource "helm_release" "wordpress" {
       value = set.value
     }
   }
+  # (optional) force the ingress object name to match fullname
+  dynamic "set" {
+    for_each = [1]
+    content {
+      name  = "ingress.name"
+      value = local.effective_fullname
+    }
+  }
+
+  # Resources (requests/limits)
+  set {
+    name  = "resources.requests.cpu"
+    value = var.resources_requests_cpu
+  }
+  set {
+    name  = "resources.requests.memory"
+    value = var.resources_requests_memory
+  }
+  set {
+    name  = "resources.limits.cpu"
+    value = var.resources_limits_cpu
+  }
+  set {
+    name  = "resources.limits.memory"
+    value = var.resources_limits_memory
+  }
 
   # HPA
   set {
@@ -209,9 +273,23 @@ resource "helm_release" "wordpress" {
     value = var.target_memory_value
   }
 
+  # Bitnami chart specifics (security context sane defaults)
+  set {
+    name  = "podSecurityContext.fsGroup"
+    value = "1001"
+  }
+  set {
+    name  = "containerSecurityContext.runAsUser"
+    value = "1001"
+  }
+  set {
+    name  = "containerSecurityContext.runAsGroup"
+    value = "1001"
+  }
+
   depends_on = [
     kubernetes_namespace.ns,
-    kubectl_manifest.wp_env_es,
-    kubectl_manifest.wp_admin_es
+    kubectl_manifest.wp_env_es
+    # Do NOT hard-depend on wp_admin_es because it may have count=0
   ]
 }

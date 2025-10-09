@@ -34,6 +34,19 @@ variable "controller_namespace" {
   default     = "kube-system"
 }
 
+# --- New: optional CF -> ALB SG lock-down ---
+variable "restrict_alb_to_cloudfront" {
+  description = "If true, allow ALB ingress only from CloudFront origin-facing prefix list"
+  type        = bool
+  default     = false
+}
+
+variable "alb_security_group_id" {
+  description = "Security Group ID attached to the ALB created by LBC (required if restrict_alb_to_cloudfront = true)"
+  type        = string
+  default     = ""
+}
+
 variable "create_regional_certificate" {
   description = "Create a regional ACM certificate for ALB"
   type        = bool

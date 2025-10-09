@@ -36,7 +36,7 @@ resource "aws_iam_role" "alb_controller" {
   tags               = var.tags
 }
 
-# AWS-recommended IAM policy for ALB Controller (condensed to core privileges)
+# AWS-recommended IAM policy for ALB Controller (core privileges)
 data "aws_iam_policy_document" "alb_controller_policy" {
   statement {
     sid    = "ELBPermissions"
@@ -177,6 +177,25 @@ resource "helm_release" "alb_controller" {
 }
 
 #############################################
+# Optional: Restrict ALB to CloudFront origin-facing IPs
+#############################################
+data "aws_prefix_list" "cloudfront_origin" {
+  count = var.restrict_alb_to_cloudfront ? 1 : 0
+  name  = "com.amazonaws.global.cloudfront.origin-facing"
+}
+
+resource "aws_security_group_rule" "alb_ingress_cf_only" {
+  count             = var.restrict_alb_to_cloudfront ? 1 : 0
+  type              = "ingress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  security_group_id = var.alb_security_group_id
+  prefix_list_ids   = [data.aws_prefix_list.cloudfront_origin[0].id]
+  description       = "Allow only CloudFront origin-facing IPs to reach ALB"
+}
+
+#############################################
 # ACM (Regional) for ALB (DNS validated)
 #############################################
 resource "aws_acm_certificate" "alb" {
@@ -186,7 +205,7 @@ resource "aws_acm_certificate" "alb" {
   tags              = var.tags
 }
 
-# Convert DVO set to map for stable for_each
+# Stable map for DVO
 locals {
   alb_dvo_map = local.create_regional_cert ? {
     for dvo in aws_acm_certificate.alb[0].domain_validation_options :
@@ -215,7 +234,7 @@ resource "aws_acm_certificate_validation" "alb" {
 }
 
 #############################################
-# ACM (us-east-1) for future CloudFront (DNS validated)
+# ACM (us-east-1) for future CloudFront
 #############################################
 provider "aws" {
   alias  = "use1"

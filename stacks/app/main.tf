@@ -104,10 +104,11 @@ module "observability" {
   install_fluent_bit       = var.install_fluent_bit
 
   create_alb_alarms = var.create_alb_alarms
-  ingress_name      = var.project
-  ingress_namespace = var.project
-  service_name      = var.project
-  service_namespace = var.project
+
+  ingress_name      = module.app_wordpress.ingress_name
+  ingress_namespace = module.app_wordpress.namespace
+  service_name      = module.app_wordpress.service_name
+  service_namespace = module.app_wordpress.namespace
 
   tags = local.tags
 }

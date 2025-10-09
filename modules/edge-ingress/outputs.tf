@@ -17,3 +17,13 @@ output "cloudfront_certificate_arn" {
   description = "ACM certificate ARN in us-east-1 for CloudFront (if created)"
   value       = try(aws_acm_certificate_validation.cf[0].certificate_arn, null)
 }
+
+output "controller_namespace" {
+  description = "Namespace where the AWS Load Balancer Controller is installed"
+  value       = var.controller_namespace
+}
+
+output "restricted_to_cloudfront" {
+  description = "True if ALB ingress was restricted to CloudFront prefix list"
+  value       = var.restrict_alb_to_cloudfront
+}

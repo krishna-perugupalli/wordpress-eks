@@ -1,89 +1,90 @@
 variable "name" {
-  description = "Stack/app name used for resource naming."
+  description = "Logical name/prefix for CloudFront resources."
   type        = string
 }
 
 variable "domain_name" {
-  description = "Primary viewer FQDN served by CloudFront (e.g., www.example.com)."
+  description = "Primary DNS name (CNAME) for the distribution."
   type        = string
 }
 
 variable "aliases" {
-  description = "Additional CNAMEs for the distribution."
+  description = "Additional CNAMEs."
   type        = list(string)
   default     = []
 }
 
-variable "acm_certificate_arn" {
-  description = "ACM certificate ARN in us-east-1 for CloudFront viewer TLS."
-  type        = string
-}
-
 variable "alb_dns_name" {
-  description = "ALB DNS name to use as the CloudFront origin."
+  description = "Public DNS name of the ALB (custom origin)."
   type        = string
 }
 
-variable "alb_host_header" {
-  description = "Host header CloudFront sends to the ALB (usually same as domain_name)."
+variable "acm_certificate_arn" {
+  description = "ACM certificate ARN in us-east-1 for CloudFront."
   type        = string
 }
 
 variable "waf_web_acl_arn" {
-  description = "Optional WAFv2 WebACL ARN with CLOUDFRONT scope."
+  description = "Optional WAFv2 Web ACL ARN (CLOUDFRONT scope). Empty to disable."
   type        = string
   default     = ""
 }
 
-variable "log_bucket_name" {
-  description = "S3 bucket name (no s3:// prefix) for CloudFront logs; should be KMS-encrypted."
-  type        = string
-}
-
 variable "price_class" {
-  description = "CloudFront price class (PriceClass_100, PriceClass_200, PriceClass_All)."
+  description = "CloudFront price class (PriceClass_All, PriceClass_200, PriceClass_100)."
   type        = string
   default     = "PriceClass_100"
 }
 
-variable "compress" {
-  description = "Enable gzip/brotli compression at CloudFront."
-  type        = bool
-  default     = true
-}
-
-variable "enable_http3" {
-  description = "Enable HTTP/3 for viewer connections."
-  type        = bool
-  default     = true
-}
-
 variable "default_ttl" {
-  description = "Default TTL (seconds) for dynamic paths."
+  description = "Default TTL for bypass_auth cache policy."
+  type        = number
+  default     = 60
+}
+
+variable "max_ttl" {
+  description = "Max TTL for bypass_auth cache policy."
   type        = number
   default     = 300
 }
 
 variable "min_ttl" {
-  description = "Minimum TTL (seconds)."
+  description = "Min TTL for bypass_auth cache policy."
   type        = number
   default     = 0
 }
 
-variable "max_ttl" {
-  description = "Maximum TTL (seconds)."
+variable "static_ttl" {
+  description = "TTL for static_long policy (e.g., /wp-content/*)."
   type        = number
   default     = 86400
 }
 
-variable "static_ttl" {
-  description = "TTL (seconds) for static paths like /wp-content/*."
-  type        = number
-  default     = 604800
+variable "log_bucket_name" {
+  description = "S3 bucket (name only) for CloudFront logs. Bucket policy must allow CF to write."
+  type        = string
+}
+
+variable "compress" {
+  description = "Enable Gzip/Brotli compression."
+  type        = bool
+  default     = true
+}
+
+variable "enable_http3" {
+  description = "Enable HTTP/3 (QUIC)."
+  type        = bool
+  default     = false
+}
+
+variable "origin_secret_value" {
+  description = "Shared secret header value (X-Origin-Secret) injected by CloudFront and validated at the origin."
+  type        = string
+  sensitive   = true
 }
 
 variable "tags" {
-  description = "Tags to apply to supported resources."
+  description = "Common tags."
   type        = map(string)
   default     = {}
 }

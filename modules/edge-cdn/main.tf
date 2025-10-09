@@ -1,12 +1,14 @@
-resource "aws_cloudfront_origin_access_control" "oac" {
-  name                              = "${var.name}-oac"
-  description                       = "OAC for ALB origin"
-  origin_access_control_origin_type = "custom"
-  signing_behavior                  = "always"
-  signing_protocol                  = "sigv4"
+#############################################
+# Inputs and locals
+#############################################
+locals {
+  cf_aliases    = concat([var.domain_name], var.aliases)
+  origin_secret = var.origin_secret_value
 }
 
-# Default + 2 custom cache policies
+#############################################
+# Cache policies
+#############################################
 resource "aws_cloudfront_cache_policy" "bypass_auth" {
   name        = "${var.name}-bypass-auth"
   default_ttl = var.default_ttl
@@ -17,14 +19,23 @@ resource "aws_cloudfront_cache_policy" "bypass_auth" {
     enable_accept_encoding_brotli = true
     enable_accept_encoding_gzip   = true
 
-    cookies_config { cookie_behavior = "none" }
+    cookies_config {
+      cookie_behavior = "none"
+    }
+
     headers_config {
       header_behavior = "whitelist"
-      headers { items = ["Host", "Origin", "CloudFront-Viewer-Country"] }
+      headers {
+        items = ["Host", "Origin", "CloudFront-Viewer-Country"]
+      }
     }
-    query_strings_config { query_string_behavior = "none" }
+
+    query_strings_config {
+      query_string_behavior = "none"
+    }
   }
-  comment = "Bypass auth/cookies for public pages (we’ll attach to default)"
+
+  comment = "Bypass auth/cookies for public pages (attach to default)."
 }
 
 resource "aws_cloudfront_cache_policy" "static_long" {
@@ -36,33 +47,56 @@ resource "aws_cloudfront_cache_policy" "static_long" {
   parameters_in_cache_key_and_forwarded_to_origin {
     enable_accept_encoding_brotli = true
     enable_accept_encoding_gzip   = true
-    cookies_config { cookie_behavior = "none" }
-    headers_config { header_behavior = "none" }
-    query_strings_config { query_string_behavior = "none" }
+
+    cookies_config {
+      cookie_behavior = "none"
+    }
+
+    headers_config {
+      header_behavior = "none"
+    }
+
+    query_strings_config {
+      query_string_behavior = "none"
+    }
   }
+
   comment = "Long TTL for /wp-content/*"
 }
 
-# Origin request policy to forward only what’s needed to ALB (Host, basic auth paths)
+#############################################
+# Origin request and response headers policies
+#############################################
 resource "aws_cloudfront_origin_request_policy" "minimal" {
   name = "${var.name}-origin-req-minimal"
-  cookies_config { cookie_behavior = "none" }
+
+  cookies_config {
+    cookie_behavior = "none"
+  }
+
   headers_config {
     header_behavior = "whitelist"
-    headers { items = ["Host", "CloudFront-Viewer-Country"] }
+    headers {
+      items = ["Host", "CloudFront-Viewer-Country"]
+    }
   }
-  query_strings_config { query_string_behavior = "none" }
+
+  query_strings_config {
+    query_string_behavior = "none"
+  }
 }
 
-# Response headers (optional: HSTS, security headers)
 resource "aws_cloudfront_response_headers_policy" "security" {
   name = "${var.name}-security"
+
   security_headers_config {
     content_security_policy {
       content_security_policy = "upgrade-insecure-requests; block-all-mixed-content;"
       override                = false
     }
-    content_type_options { override = true }
+    content_type_options {
+      override = true
+    }
     frame_options {
       frame_option = "SAMEORIGIN"
       override     = true
@@ -85,10 +119,9 @@ resource "aws_cloudfront_response_headers_policy" "security" {
   }
 }
 
-locals {
-  cf_aliases = concat([var.domain_name], var.aliases)
-}
-
+#############################################
+# CloudFront distribution (custom origin = ALB)
+#############################################
 resource "aws_cloudfront_distribution" "this" {
   enabled             = true
   is_ipv6_enabled     = true
@@ -105,6 +138,13 @@ resource "aws_cloudfront_distribution" "this" {
   origin {
     domain_name = var.alb_dns_name
     origin_id   = "alb-origin"
+
+    # Inject the secret header CF -> ALB
+    custom_header {
+      name  = "X-Origin-Secret"
+      value = local.origin_secret
+    }
+
     custom_origin_config {
       http_port                = 80
       https_port               = 443
@@ -113,22 +153,25 @@ resource "aws_cloudfront_distribution" "this" {
       origin_keepalive_timeout = 60
       origin_read_timeout      = 60
     }
-    origin_access_control_id = aws_cloudfront_origin_access_control.oac.id
+
+    # NOTE: Do NOT set origin_access_control_id for ALB origins.
   }
 
   default_cache_behavior {
     target_origin_id       = "alb-origin"
     viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
-    cached_methods         = ["GET", "HEAD", "OPTIONS"]
+
+    allowed_methods = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods  = ["GET", "HEAD", "OPTIONS"]
 
     cache_policy_id            = aws_cloudfront_cache_policy.bypass_auth.id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.minimal.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
-    compress                   = var.compress
+
+    compress = var.compress
   }
 
-  # Bypass cache for /wp-admin/* and /wp-login.php
+  # Admin/login bypass cache
   ordered_cache_behavior {
     path_pattern             = "/wp-admin/*"
     target_origin_id         = "alb-origin"
@@ -139,6 +182,7 @@ resource "aws_cloudfront_distribution" "this" {
     origin_request_policy_id = aws_cloudfront_origin_request_policy.minimal.id
     compress                 = var.compress
   }
+
   ordered_cache_behavior {
     path_pattern             = "/wp-login.php"
     target_origin_id         = "alb-origin"
@@ -149,7 +193,8 @@ resource "aws_cloudfront_distribution" "this" {
     origin_request_policy_id = aws_cloudfront_origin_request_policy.minimal.id
     compress                 = var.compress
   }
-  # Long TTL for static media
+
+  # Static media long TTL
   ordered_cache_behavior {
     path_pattern             = "/wp-content/*"
     target_origin_id         = "alb-origin"
@@ -168,11 +213,12 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   restrictions {
-    geo_restriction { restriction_type = "none" }
+    geo_restriction {
+      restriction_type = "none"
+    }
   }
 
-  web_acl_id = var.waf_web_acl_arn != "" ? var.waf_web_acl_arn : null
-
+  web_acl_id   = var.waf_web_acl_arn != "" ? var.waf_web_acl_arn : null
   http_version = var.enable_http3 ? "http3" : "http2"
 
   tags = var.tags
