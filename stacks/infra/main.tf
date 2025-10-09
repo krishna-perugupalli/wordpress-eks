@@ -173,9 +173,9 @@ module "security_baseline" {
   logs_expire_after_days        = 365
   cloudtrail_cwl_retention_days = 90
 
-  create_cloudtrail = true
-  create_config     = true
-  create_guardduty  = true
+  create_cloudtrail = var.create_cloudtrail
+  create_config     = var.create_config
+  create_guardduty  = var.create_guardduty
 
   tags = local.tags
 }

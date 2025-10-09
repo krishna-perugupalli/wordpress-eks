@@ -287,3 +287,21 @@ variable "budget_emails" {
   type        = list(string)
   default     = ["alerts@example.com"]
 }
+
+variable "create_cloudtrail" {
+  description = "Create a multi-region account-level CloudTrail."
+  type        = bool
+  default     = false
+}
+
+variable "create_config" {
+  description = "Enable AWS Config recorder + delivery channel."
+  type        = bool
+  default     = false
+}
+
+variable "create_guardduty" {
+  description = "Enable GuardDuty detector in this account/region."
+  type        = bool
+  default     = false
+}
