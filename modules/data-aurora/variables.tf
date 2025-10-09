@@ -92,14 +92,7 @@ variable "copy_tags_to_snapshot" {
 
 variable "skip_final_snapshot" {
   description = "Skip creating a final snapshot when destroying the cluster."
-  type        = bool
-  default     = true
-}
-
-variable "final_snapshot_identifier" {
-  description = "Final snapshot identifier to use when skip_final_snapshot = false."
-  type        = string
-  default     = ""
+  default     = false
 }
 
 variable "performance_insights_enabled" {

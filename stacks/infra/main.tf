@@ -84,7 +84,6 @@ module "data_aurora" {
   preferred_maintenance_window = var.db_maintenance_window
   deletion_protection          = var.db_deletion_protection
   skip_final_snapshot          = var.db_skip_final_snapshot
-  final_snapshot_identifier    = var.db_final_snapshot_identifier
 
   enable_backup            = var.db_enable_backup
   backup_vault_name        = var.backup_vault_name

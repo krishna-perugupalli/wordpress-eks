@@ -167,12 +167,6 @@ variable "db_skip_final_snapshot" {
   default     = true
 }
 
-variable "db_final_snapshot_identifier" {
-  description = "Final snapshot identifier to use when db_skip_final_snapshot = false"
-  type        = string
-  default     = ""
-}
-
 # AWS Backup for Aurora
 variable "db_enable_backup" {
   description = "Enable AWS Backup for Aurora"
