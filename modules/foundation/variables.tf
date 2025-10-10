@@ -3,11 +3,6 @@ variable "name" {
   type        = string
 }
 
-variable "region" {
-  description = "AWS region"
-  type        = string
-}
-
 # VPC / Subnets
 variable "vpc_cidr" {
   description = "VPC CIDR block"

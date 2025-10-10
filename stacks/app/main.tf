@@ -56,11 +56,9 @@ module "edge_ingress" {
 module "karpenter" {
   source                  = "../../modules/karpenter"
   name                    = local.name
-  region                  = var.region
   cluster_name            = data.terraform_remote_state.infra.outputs.cluster_name
   oidc_provider_arn       = data.terraform_remote_state.infra.outputs.oidc_provider_arn
   cluster_oidc_issuer_url = data.terraform_remote_state.infra.outputs.cluster_oidc_issuer_url
-  vpc_id                  = data.terraform_remote_state.infra.outputs.vpc_id
 
   subnet_selector_tags = {
     "kubernetes.io/cluster/${local.name}" = "shared"
@@ -75,7 +73,6 @@ module "karpenter" {
   instance_types       = var.karpenter_instance_types
   capacity_types       = var.karpenter_capacity_types
   ami_family           = var.karpenter_ami_family
-  kubernetes_version   = "1.30"
   consolidation_policy = var.karpenter_consolidation_policy
   expire_after         = var.karpenter_expire_after
   cpu_limit            = var.karpenter_cpu_limit
@@ -121,7 +118,6 @@ module "app_wordpress" {
 
   name        = local.name
   namespace   = var.wp_namespace
-  region      = var.region
   domain_name = var.wp_domain_name
 
   alb_certificate_arn = module.edge_ingress.alb_certificate_arn

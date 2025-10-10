@@ -9,11 +9,6 @@ variable "namespace" {
   default     = "wordpress"
 }
 
-variable "region" {
-  description = "AWS region (used by ESO provider config etc.)"
-  type        = string
-}
-
 variable "domain_name" {
   description = "Public hostname for the site (Ingress host)"
   type        = string

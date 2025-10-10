@@ -3,11 +3,6 @@ variable "name" {
   type        = string
 }
 
-variable "region" {
-  description = "AWS region"
-  type        = string
-}
-
 variable "cluster_name" {
   description = "EKS cluster name"
   type        = string
@@ -20,11 +15,6 @@ variable "oidc_provider_arn" {
 
 variable "cluster_oidc_issuer_url" {
   description = "Cluster OIDC issuer URL (https://...)"
-  type        = string
-}
-
-variable "vpc_id" {
-  description = "VPC ID for subnets/SG discovery"
   type        = string
 }
 
@@ -82,12 +72,6 @@ variable "ami_family" {
     condition     = contains(["AL2", "Bottlerocket"], var.ami_family)
     error_message = "ami_family must be AL2 or Bottlerocket."
   }
-}
-
-variable "kubernetes_version" {
-  description = "Kubernetes version for AMI selection hints (optional)"
-  type        = string
-  default     = "1.30"
 }
 
 variable "node_role_additional_policy_arns" {

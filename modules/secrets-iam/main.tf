@@ -280,11 +280,6 @@ data "aws_iam_openid_connect_provider" "eks" {
 locals {
   oidc_hostpath = replace(data.aws_iam_openid_connect_provider.eks.url, "https://", "")
   eso_sub       = "system:serviceaccount:${var.eso_namespace}:${var.eso_service_account_name}"
-  aud_condition = var.eso_validate_audience ? {
-    "StringEquals" = {
-      "${local.oidc_hostpath}:aud" = "sts.amazonaws.com"
-    }
-  } : {}
 }
 
 data "aws_iam_policy_document" "eso_trust" {

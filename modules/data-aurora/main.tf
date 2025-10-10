@@ -2,7 +2,6 @@
 # Region/account + discover valid engine version
 #############################################
 data "aws_caller_identity" "current" {}
-data "aws_region" "current" {}
 
 # Discover a valid Aurora MySQL 8.0 engine version for this region
 data "aws_rds_engine_version" "aurora_mysql" {
@@ -15,7 +14,12 @@ data "aws_rds_engine_version" "aurora_mysql" {
 # Security Group (Aurora)
 #############################################
 locals {
-  _aurora_has_any_ingress = var.enable_source_node_sg_rule || length(var.allowed_cidr_blocks) > 0
+  _aurora_has_any_ingress = var.enable_source_node_sg_rule || length(var.allowed_cidr_blocks) > 0 || length(var.allowed_security_group_ids) > 0
+  aurora_port             = var.port
+  allowed_security_group_ids_map = { for idx, sg_id in var.allowed_security_group_ids : tostring(idx) => sg_id }
+  engine_version_effective        = coalesce(var.engine_version, data.aws_rds_engine_version.aurora_mysql.version)
+  backup_copy_enabled             = var.backup_cross_region_copy.enabled
+  backup_copy_destination_vault_arn = local.backup_copy_enabled ? "arn:aws:backup:${var.backup_cross_region_copy.destination_region}:${data.aws_caller_identity.current.account_id}:backup-vault:${var.backup_cross_region_copy.destination_vault_name}" : null
 }
 
 resource "aws_security_group" "db" {
@@ -36,24 +40,43 @@ resource "aws_security_group" "db" {
 resource "aws_security_group_rule" "db_ingress_node_sg" {
   count                    = var.enable_source_node_sg_rule ? 1 : 0
   type                     = "ingress"
-  from_port                = 3306
-  to_port                  = 3306
+  from_port                = local.aurora_port
+  to_port                  = local.aurora_port
   protocol                 = "tcp"
   security_group_id        = aws_security_group.db.id
   source_security_group_id = var.source_node_sg_id
   description              = "Aurora MySQL from node SG"
+
+  lifecycle {
+    precondition {
+      condition     = var.enable_source_node_sg_rule ? var.source_node_sg_id != null : true
+      error_message = "Set source_node_sg_id when enable_source_node_sg_rule is true."
+    }
+  }
 }
 
 # Optional static CIDRs
 resource "aws_security_group_rule" "db_ingress_cidr" {
   for_each          = toset(var.allowed_cidr_blocks)
   type              = "ingress"
-  from_port         = 3306
-  to_port           = 3306
+  from_port         = local.aurora_port
+  to_port           = local.aurora_port
   protocol          = "tcp"
   security_group_id = aws_security_group.db.id
   cidr_blocks       = [each.value]
   description       = "Aurora MySQL from ${each.value}"
+}
+
+# Optional additional SG sources (e.g., app-tier SGs)
+resource "aws_security_group_rule" "db_ingress_additional_sg" {
+  for_each                 = local.allowed_security_group_ids_map
+  type                     = "ingress"
+  from_port                = local.aurora_port
+  to_port                  = local.aurora_port
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.db.id
+  source_security_group_id = each.value
+  description              = "Aurora MySQL from ${each.value}"
 }
 
 # Egress all
@@ -82,7 +105,8 @@ resource "aws_rds_cluster" "this" {
   cluster_identifier = "${var.name}-aurora"
 
   engine         = "aurora-mysql"
-  engine_version = data.aws_rds_engine_version.aurora_mysql.version
+  engine_version = local.engine_version_effective
+  port           = local.aurora_port
 
   database_name                 = var.db_name
   master_username               = var.admin_username
@@ -101,14 +125,18 @@ resource "aws_rds_cluster" "this" {
   preferred_maintenance_window = var.preferred_maintenance_window
 
   deletion_protection = var.deletion_protection
+  apply_immediately   = var.apply_immediately
 
   # Serverless v2 scaling (engine_mode remains "provisioned" with this block)
-  serverlessv2_scaling_configuration {
-    min_capacity = var.serverless_min_acu
-    max_capacity = var.serverless_max_acu
+  dynamic "serverlessv2_scaling_configuration" {
+    for_each = var.serverless_v2 ? [1] : []
+    content {
+      min_capacity = var.serverless_min_acu
+      max_capacity = var.serverless_max_acu
+    }
   }
 
-  copy_tags_to_snapshot     = true
+  copy_tags_to_snapshot     = var.copy_tags_to_snapshot
   skip_final_snapshot       = var.skip_final_snapshot
   final_snapshot_identifier = "${var.name}-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
 
@@ -117,14 +145,19 @@ resource "aws_rds_cluster" "this" {
 
 # At least one instance for the cluster (Serverless v2)
 resource "aws_rds_cluster_instance" "this" {
-  identifier          = "${var.name}-aurora-1"
-  cluster_identifier  = aws_rds_cluster.this.id
-  instance_class      = "db.serverless"
-  engine              = aws_rds_cluster.this.engine
-  engine_version      = aws_rds_cluster.this.engine_version
+  count              = var.serverless_v2 ? 1 : var.provisioned_replica_count
+  identifier         = "${var.name}-aurora-${count.index + 1}"
+  cluster_identifier = aws_rds_cluster.this.id
+  instance_class     = var.serverless_v2 ? "db.serverless" : var.instance_class
+  engine             = aws_rds_cluster.this.engine
+  engine_version     = aws_rds_cluster.this.engine_version
   publicly_accessible = false
+  apply_immediately   = var.apply_immediately
 
-  tags = merge(var.tags, { Name = "${var.name}-aurora-1" })
+  performance_insights_enabled    = var.serverless_v2 ? null : var.performance_insights_enabled
+  performance_insights_kms_key_id = var.serverless_v2 || !var.performance_insights_enabled ? null : var.performance_insights_kms_key_arn
+
+  tags = merge(var.tags, { Name = "${var.name}-aurora-${count.index + 1}" })
 }
 
 #############################################
@@ -152,9 +185,28 @@ resource "aws_backup_plan" "aurora" {
     lifecycle {
       delete_after = var.backup_delete_after_days
     }
+    dynamic "copy_action" {
+      for_each = local.backup_copy_enabled ? [1] : []
+      content {
+        destination_vault_arn = local.backup_copy_destination_vault_arn
+        lifecycle {
+          delete_after = var.backup_cross_region_copy.delete_after_days
+        }
+      }
+    }
   }
 
   tags = var.tags
+
+  lifecycle {
+    precondition {
+      condition = !local.backup_copy_enabled || (
+        var.backup_cross_region_copy.destination_vault_name != "" &&
+        var.backup_cross_region_copy.destination_region != ""
+      )
+      error_message = "When backup_cross_region_copy.enabled is true, set destination_vault_name and destination_region."
+    }
+  }
 }
 
 # Selection by explicit resource ARN (cluster)

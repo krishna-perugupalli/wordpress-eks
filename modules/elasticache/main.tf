@@ -1,14 +1,6 @@
-#############################################
-# Inputs & derived
-#############################################
-data "aws_caller_identity" "current" {}
-data "aws_region" "current" {}
-
 locals {
   allow_any_ingress  = length(var.node_sg_source_ids) + length(var.allowed_cidr_blocks) > 0
   node_sg_source_map = { for idx, sg_id in var.node_sg_source_ids : tostring(idx) => sg_id }
-  # replicas_per_node_group: how many replicas per shard (exclude the primary)
-  rpng = var.replicas_per_node_group
 }
 
 #############################################

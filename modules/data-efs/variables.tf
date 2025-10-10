@@ -3,11 +3,6 @@ variable "name" {
   type        = string
 }
 
-variable "region" {
-  description = "AWS region"
-  type        = string
-}
-
 variable "vpc_id" {
   description = "VPC ID for EFS SG"
   type        = string
@@ -91,27 +86,6 @@ variable "ap_owner_gid" {
   description = "POSIX GID for AP owner (www-data=33)"
   type        = number
   default     = 33
-}
-
-variable "controller_namespace" {
-  description = "Namespace to install EFS CSI controller"
-  type        = string
-  default     = "kube-system"
-}
-
-variable "cluster_name" {
-  description = "EKS cluster name (for Helm chart wiring)"
-  type        = string
-}
-
-variable "oidc_provider_arn" {
-  description = "EKS OIDC provider ARN (IRSA)"
-  type        = string
-}
-
-variable "cluster_oidc_issuer_url" {
-  description = "Cluster OIDC issuer URL (https://...)"
-  type        = string
 }
 
 variable "enable_backup" {

@@ -13,7 +13,6 @@ locals {
   single_nat = var.nat_gateway_mode == "single"
   per_az_nat = var.nat_gateway_mode == "per_az"
 
-  media_bucket = var.media_bucket_name != "" ? var.media_bucket_name : "${var.name}-media"
 }
 
 #############################################
@@ -235,7 +234,7 @@ resource "aws_s3_bucket_public_access_block" "logs" {
 }
 
 resource "aws_s3_bucket" "media" {
-  bucket        = "${var.name}-media-${local.bucket_suffix}"
+  bucket        = var.media_bucket_name != "" ? var.media_bucket_name : "${var.name}-media-${local.bucket_suffix}"
   force_destroy = false
   tags          = var.tags
 }

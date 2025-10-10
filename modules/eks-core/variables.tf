@@ -70,22 +70,6 @@ variable "secrets_kms_key_arn" {
   default     = null
 }
 
-variable "addon_versions" {
-  description = "Pin versions for EKS managed addons"
-  type = object({
-    vpc_cni    = string
-    kube_proxy = string
-    coredns    = string
-    ebs_csi    = string
-  })
-  default = {
-    vpc_cni    = "v1.16.3-eksbuild.1"
-    kube_proxy = "v1.30.0-eksbuild.1"
-    coredns    = "v1.11.1-eksbuild.4"
-    ebs_csi    = "v1.30.0-eksbuild.1"
-  }
-}
-
 variable "enable_cni_prefix_delegation" {
   description = "Enable prefix delegation to increase pod density"
   type        = bool

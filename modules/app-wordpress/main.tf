@@ -88,11 +88,6 @@ resource "kubectl_manifest" "wp_admin_es" {
 # Deterministic naming for Service/Ingress
 #############################################
 locals {
-  name_overrides = merge(
-    var.fullname_override != "" ? { fullnameOverride = var.fullname_override } : {},
-    (var.fullname_override == "" && var.name_override != "") ? { nameOverride = var.name_override } : {}
-  )
-
   effective_fullname = var.fullname_override != "" ? var.fullname_override : (
     var.name_override != "" ? var.name_override : var.name
   )
@@ -123,6 +118,13 @@ locals {
       "alb.ingress.kubernetes.io/tags" = local.alb_tags_csv
     } : {}
   )
+
+  extra_env_vars = [
+    for k, v in var.env_extra : {
+      name  = k
+      value = v
+    }
+  ]
 }
 
 #############################################
@@ -286,6 +288,15 @@ resource "helm_release" "wordpress" {
     name  = "containerSecurityContext.runAsGroup"
     value = "1001"
   }
+
+  values = compact([
+    yamlencode({
+      phpConfiguration = "max_input_vars = ${var.php_max_input_vars}"
+    }),
+    length(var.env_extra) > 0 ? yamlencode({
+      extraEnvVars = local.extra_env_vars
+    }) : null
+  ])
 
   depends_on = [
     kubernetes_namespace.ns,

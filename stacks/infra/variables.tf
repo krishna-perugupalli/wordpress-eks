@@ -264,30 +264,6 @@ variable "efs_backup_delete_after_days" {
 # ---------------------------
 # Security baseline
 # ---------------------------
-variable "security_trail_bucket_name" {
-  description = "Optional fixed S3 bucket name for CloudTrail logs; leave empty for generated"
-  type        = string
-  default     = ""
-}
-
-variable "create_budget" {
-  description = "Create AWS Budget"
-  type        = bool
-  default     = true
-}
-
-variable "budget_amount" {
-  description = "Monthly budget amount"
-  type        = number
-  default     = 500
-}
-
-variable "budget_emails" {
-  description = "Email recipients for budget alerts"
-  type        = list(string)
-  default     = ["alerts@example.com"]
-}
-
 variable "create_cloudtrail" {
   description = "Create a multi-region account-level CloudTrail."
   type        = bool

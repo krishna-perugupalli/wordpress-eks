@@ -20,9 +20,6 @@ resource "null_resource" "input_guard" {
   }
 }
 
-# If Option B, create a least-privilege policy locally
-data "aws_caller_identity" "current" {}
-
 data "aws_iam_policy_document" "eso_inline" {
   count = local._has_allowed_arns ? 1 : 0
 

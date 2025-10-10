@@ -19,7 +19,6 @@ locals {
 module "foundation" {
   source           = "../../modules/foundation"
   name             = local.name
-  region           = var.region
   vpc_cidr         = var.vpc_cidr
   private_cidrs    = var.private_cidrs
   public_cidrs     = var.public_cidrs
@@ -95,7 +94,6 @@ module "aws_auth" {
 module "data_aurora" {
   source             = "../../modules/data-aurora"
   name               = local.name
-  region             = var.region
   vpc_id             = module.foundation.vpc_id
   private_subnet_ids = module.foundation.private_subnet_ids
 
@@ -124,7 +122,6 @@ module "data_aurora" {
   backup_schedule_cron     = var.db_backup_cron
   backup_delete_after_days = var.db_backup_delete_after_days
 
-  # cross-region copy intentionally omitted for now
   tags = local.tags
 }
 
@@ -134,7 +131,6 @@ module "data_aurora" {
 module "data_efs" {
   source             = "../../modules/data-efs"
   name               = local.name
-  region             = var.region
   vpc_id             = module.foundation.vpc_id
   private_subnet_ids = module.foundation.private_subnet_ids
 
@@ -149,10 +145,6 @@ module "data_efs" {
   ap_path                   = var.efs_ap_path
   ap_owner_uid              = var.efs_ap_owner_uid
   ap_owner_gid              = var.efs_ap_owner_gid
-
-  cluster_name            = module.eks_core.cluster_name
-  oidc_provider_arn       = module.eks_core.oidc_provider_arn
-  cluster_oidc_issuer_url = module.eks_core.cluster_oidc_issuer_url
 
   enable_backup            = var.efs_enable_backup
   backup_vault_name        = var.backup_vault_name

@@ -6,12 +6,8 @@ variable "name" {
 variable "engine_version" {
   description = "Aurora MySQL engine version (v3.x uses MySQL 8.0 compatibility)"
   type        = string
-  default     = "8.0.mysql_aurora.3.05.2"
-}
-
-variable "region" {
-  description = "AWS region"
-  type        = string
+  default     = null
+  nullable    = true
 }
 
 variable "vpc_id" {
@@ -92,6 +88,7 @@ variable "copy_tags_to_snapshot" {
 
 variable "skip_final_snapshot" {
   description = "Skip creating a final snapshot when destroying the cluster."
+  type        = bool
   default     = false
 }
 

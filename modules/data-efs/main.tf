@@ -1,9 +1,4 @@
 #############################################
-# Data: caller/account/region
-#############################################
-data "aws_caller_identity" "current" {}
-
-#############################################
 # Inputs guardrails
 #############################################
 locals {
@@ -70,6 +65,7 @@ resource "aws_efs_file_system" "this" {
   creation_token   = "${var.name}-efs"
   performance_mode = var.performance_mode
   throughput_mode  = var.throughput_mode
+  provisioned_throughput_in_mibps = var.throughput_mode == "provisioned" ? var.provisioned_throughput_mibps : null
 
   encrypted  = true
   kms_key_id = var.kms_key_arn != null ? var.kms_key_arn : null
@@ -85,6 +81,13 @@ resource "aws_efs_file_system" "this" {
     Name   = "${var.name}-efs"
     Backup = var.enable_backup ? "daily" : "none"
   })
+
+  lifecycle {
+    precondition {
+      condition     = var.throughput_mode != "provisioned" || var.provisioned_throughput_mibps > 0
+      error_message = "When throughput_mode is provisioned, set provisioned_throughput_mibps to a value greater than 0."
+    }
+  }
 }
 
 #############################################
