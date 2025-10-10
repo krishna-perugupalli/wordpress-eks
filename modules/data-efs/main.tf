@@ -62,9 +62,9 @@ resource "aws_security_group_rule" "efs_egress_all" {
 # EFS File System
 #############################################
 resource "aws_efs_file_system" "this" {
-  creation_token   = "${var.name}-efs"
-  performance_mode = var.performance_mode
-  throughput_mode  = var.throughput_mode
+  creation_token                  = "${var.name}-efs"
+  performance_mode                = var.performance_mode
+  throughput_mode                 = var.throughput_mode
   provisioned_throughput_in_mibps = var.throughput_mode == "provisioned" ? var.provisioned_throughput_mibps : null
 
   encrypted  = true

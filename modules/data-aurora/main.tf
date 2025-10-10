@@ -14,11 +14,11 @@ data "aws_rds_engine_version" "aurora_mysql" {
 # Security Group (Aurora)
 #############################################
 locals {
-  _aurora_has_any_ingress = var.enable_source_node_sg_rule || length(var.allowed_cidr_blocks) > 0 || length(var.allowed_security_group_ids) > 0
-  aurora_port             = var.port
-  allowed_security_group_ids_map = { for idx, sg_id in var.allowed_security_group_ids : tostring(idx) => sg_id }
-  engine_version_effective        = coalesce(var.engine_version, data.aws_rds_engine_version.aurora_mysql.version)
-  backup_copy_enabled             = var.backup_cross_region_copy.enabled
+  _aurora_has_any_ingress           = var.enable_source_node_sg_rule || length(var.allowed_cidr_blocks) > 0 || length(var.allowed_security_group_ids) > 0
+  aurora_port                       = var.port
+  allowed_security_group_ids_map    = { for idx, sg_id in var.allowed_security_group_ids : tostring(idx) => sg_id }
+  engine_version_effective          = coalesce(var.engine_version, data.aws_rds_engine_version.aurora_mysql.version)
+  backup_copy_enabled               = var.backup_cross_region_copy.enabled
   backup_copy_destination_vault_arn = local.backup_copy_enabled ? "arn:aws:backup:${var.backup_cross_region_copy.destination_region}:${data.aws_caller_identity.current.account_id}:backup-vault:${var.backup_cross_region_copy.destination_vault_name}" : null
 }
 
@@ -145,12 +145,12 @@ resource "aws_rds_cluster" "this" {
 
 # At least one instance for the cluster (Serverless v2)
 resource "aws_rds_cluster_instance" "this" {
-  count              = var.serverless_v2 ? 1 : var.provisioned_replica_count
-  identifier         = "${var.name}-aurora-${count.index + 1}"
-  cluster_identifier = aws_rds_cluster.this.id
-  instance_class     = var.serverless_v2 ? "db.serverless" : var.instance_class
-  engine             = aws_rds_cluster.this.engine
-  engine_version     = aws_rds_cluster.this.engine_version
+  count               = var.serverless_v2 ? 1 : var.provisioned_replica_count
+  identifier          = "${var.name}-aurora-${count.index + 1}"
+  cluster_identifier  = aws_rds_cluster.this.id
+  instance_class      = var.serverless_v2 ? "db.serverless" : var.instance_class
+  engine              = aws_rds_cluster.this.engine
+  engine_version      = aws_rds_cluster.this.engine_version
   publicly_accessible = false
   apply_immediately   = var.apply_immediately
 
