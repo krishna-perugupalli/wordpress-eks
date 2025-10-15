@@ -228,3 +228,60 @@ variable "wp_admin_bootstrap_enabled" {
   type        = bool
   default     = true
 }
+
+# ---------------------------
+# Infra integration overrides
+# ---------------------------
+variable "infra_cluster_name" {
+  description = "Override EKS cluster name when remote state is unavailable."
+  type        = string
+  default     = null
+}
+
+variable "infra_cluster_oidc_issuer_url" {
+  description = "Override cluster OIDC issuer URL when remote state is unavailable."
+  type        = string
+  default     = null
+}
+
+variable "infra_oidc_provider_arn" {
+  description = "Override OIDC provider ARN when remote state is unavailable."
+  type        = string
+  default     = null
+}
+
+variable "infra_vpc_id" {
+  description = "Override VPC ID when remote state is unavailable."
+  type        = string
+  default     = null
+}
+
+variable "infra_secrets_read_policy_arn" {
+  description = "Override Secrets Manager read policy ARN when remote state is unavailable."
+  type        = string
+  default     = null
+}
+
+variable "infra_kms_logs_arn" {
+  description = "Override KMS key ARN for logs when remote state is unavailable."
+  type        = string
+  default     = null
+}
+
+variable "db_writer_endpoint" {
+  description = "Aurora writer endpoint to use when remote state is unavailable."
+  type        = string
+  default     = null
+}
+
+variable "wpapp_db_secret_arn" {
+  description = "Secrets Manager ARN for the WordPress DB credentials when remote state is unavailable."
+  type        = string
+  default     = null
+}
+
+variable "wp_admin_secret_arn" {
+  description = "Secrets Manager ARN for the WordPress admin bootstrap credentials when remote state is unavailable."
+  type        = string
+  default     = null
+}

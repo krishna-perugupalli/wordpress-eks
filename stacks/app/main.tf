@@ -8,6 +8,18 @@ locals {
     },
     var.tags
   )
+
+  infra_outputs = try(data.terraform_remote_state.infra.outputs, {})
+
+  cluster_name            = lookup(local.infra_outputs, "cluster_name", var.infra_cluster_name)
+  cluster_oidc_issuer_url = lookup(local.infra_outputs, "cluster_oidc_issuer_url", var.infra_cluster_oidc_issuer_url)
+  oidc_provider_arn       = lookup(local.infra_outputs, "oidc_provider_arn", var.infra_oidc_provider_arn)
+  vpc_id                  = lookup(local.infra_outputs, "vpc_id", var.infra_vpc_id)
+  secrets_read_policy_arn = lookup(local.infra_outputs, "secrets_read_policy_arn", var.infra_secrets_read_policy_arn)
+  kms_logs_arn            = lookup(local.infra_outputs, "kms_logs_arn", var.infra_kms_logs_arn)
+  writer_endpoint         = lookup(local.infra_outputs, "writer_endpoint", var.db_writer_endpoint)
+  wpapp_db_secret_arn     = lookup(local.infra_outputs, "wpapp_db_secret_arn", var.wpapp_db_secret_arn)
+  wp_admin_secret_arn     = lookup(local.infra_outputs, "wp_admin_secret_arn", var.wp_admin_secret_arn)
 }
 
 # ---------------------------
@@ -16,11 +28,11 @@ locals {
 module "secrets_operator" {
   source                  = "../../modules/secrets-operator"
   name                    = local.name
-  cluster_oidc_issuer_url = data.terraform_remote_state.infra.outputs.cluster_oidc_issuer_url
-  oidc_provider_arn       = data.terraform_remote_state.infra.outputs.oidc_provider_arn
+  cluster_oidc_issuer_url = local.cluster_oidc_issuer_url
+  oidc_provider_arn       = local.oidc_provider_arn
 
   # Option A: use module-managed read policy (recommended via secrets-iam)
-  secrets_read_policy_arn = data.terraform_remote_state.infra.outputs.secrets_read_policy_arn
+  secrets_read_policy_arn = local.secrets_read_policy_arn
 
   tags = local.tags
 }
@@ -33,10 +45,10 @@ module "edge_ingress" {
   name   = local.name
   region = var.region
 
-  cluster_name            = data.terraform_remote_state.infra.outputs.cluster_name
-  oidc_provider_arn       = data.terraform_remote_state.infra.outputs.oidc_provider_arn
-  cluster_oidc_issuer_url = data.terraform_remote_state.infra.outputs.cluster_oidc_issuer_url
-  vpc_id                  = data.terraform_remote_state.infra.outputs.vpc_id
+  cluster_name            = local.cluster_name
+  oidc_provider_arn       = local.oidc_provider_arn
+  cluster_oidc_issuer_url = local.cluster_oidc_issuer_url
+  vpc_id                  = local.vpc_id
 
   create_regional_certificate = var.create_regional_certificate
   alb_domain_name             = var.alb_domain_name
@@ -56,9 +68,9 @@ module "edge_ingress" {
 module "karpenter" {
   source                  = "../../modules/karpenter"
   name                    = local.name
-  cluster_name            = data.terraform_remote_state.infra.outputs.cluster_name
-  oidc_provider_arn       = data.terraform_remote_state.infra.outputs.oidc_provider_arn
-  cluster_oidc_issuer_url = data.terraform_remote_state.infra.outputs.cluster_oidc_issuer_url
+  cluster_name            = local.cluster_name
+  oidc_provider_arn       = local.oidc_provider_arn
+  cluster_oidc_issuer_url = local.cluster_oidc_issuer_url
 
   subnet_selector_tags = {
     "kubernetes.io/cluster/${local.name}" = "shared"
@@ -89,12 +101,12 @@ module "observability" {
   source                  = "../../modules/observability"
   name                    = local.name
   region                  = var.region
-  cluster_name            = data.terraform_remote_state.infra.outputs.cluster_name
-  cluster_oidc_issuer_url = data.terraform_remote_state.infra.outputs.cluster_oidc_issuer_url
-  oidc_provider_arn       = data.terraform_remote_state.infra.outputs.oidc_provider_arn
+  cluster_name            = local.cluster_name
+  cluster_oidc_issuer_url = local.cluster_oidc_issuer_url
+  oidc_provider_arn       = local.oidc_provider_arn
 
   namespace         = var.observability_namespace
-  kms_logs_key_arn  = data.terraform_remote_state.infra.outputs.kms_logs_arn
+  kms_logs_key_arn  = local.kms_logs_arn
   cw_retention_days = var.cw_retention_days
 
   install_cloudwatch_agent = var.install_cloudwatch_agent
@@ -127,12 +139,12 @@ module "app_wordpress" {
   storage_class_name = var.wp_storage_class
   pvc_size           = var.wp_pvc_size
 
-  db_host       = data.terraform_remote_state.infra.outputs.writer_endpoint
+  db_host       = local.writer_endpoint
   db_name       = var.db_name
   db_user       = var.db_user
-  db_secret_arn = data.terraform_remote_state.infra.outputs.wpapp_db_secret_arn
+  db_secret_arn = local.wpapp_db_secret_arn
 
-  admin_secret_arn        = data.terraform_remote_state.infra.outputs.wp_admin_secret_arn
+  admin_secret_arn        = local.wp_admin_secret_arn
   admin_user              = var.wp_admin_user
   admin_email             = var.wp_admin_email
   admin_bootstrap_enabled = var.wp_admin_bootstrap_enabled

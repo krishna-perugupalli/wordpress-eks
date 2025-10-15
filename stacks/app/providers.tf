@@ -22,11 +22,11 @@ provider "aws" {
 # EKS cluster data (to wire kubernetes/helm/kubectl providers)
 ###############################################################################
 data "aws_eks_cluster" "this" {
-  name = data.terraform_remote_state.infra.outputs.cluster_name
+  name = local.cluster_name
 }
 
 data "aws_eks_cluster_auth" "this" {
-  name = data.terraform_remote_state.infra.outputs.cluster_name
+  name = local.cluster_name
 }
 
 ###############################################################################
