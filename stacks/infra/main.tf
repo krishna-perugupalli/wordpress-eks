@@ -101,8 +101,8 @@ module "data_aurora" {
   admin_username         = var.db_admin_username
   create_random_password = var.db_create_random_password
 
-  storage_kms_key_arn         = module.foundation.kms_rds_arn
-  secrets_manager_kms_key_arn = module.secrets_iam.kms_secrets_arn
+  storage_kms_key_arn = module.foundation.kms_rds_arn
+  # secrets_manager_kms_key_arn = module.secrets_iam.kms_secrets_arn
 
   source_node_sg_id   = module.eks_core.node_security_group_id
   allowed_cidr_blocks = [] # or ["x.x.x.x/32"] temporarily for migrations
