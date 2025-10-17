@@ -361,7 +361,7 @@ resource "aws_wafv2_web_acl" "regional" {
   # --- Rate limit /wp-login.php ---
   rule {
     name     = "RateLimitLogin"
-    priority = 10
+    priority = 12
     action {
       block {}
     }
