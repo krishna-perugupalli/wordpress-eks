@@ -98,9 +98,9 @@ variable "karpenter_capacity_types" {
 }
 
 variable "karpenter_ami_family" {
-  description = "AMI family (AL2, Bottlerocket)"
+  description = "AMI family (AL2023, Bottlerocket)"
   type        = string
-  default     = "AL2"
+  default     = "AL2023"
 }
 
 variable "karpenter_consolidation_policy" {

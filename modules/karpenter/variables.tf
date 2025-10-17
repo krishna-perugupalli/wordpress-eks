@@ -65,12 +65,12 @@ variable "capacity_types" {
 }
 
 variable "ami_family" {
-  description = "AMI family for nodes: AL2 or Bottlerocket"
+  description = "AMI family for nodes: AL2023 or Bottlerocket"
   type        = string
-  default     = "AL2"
+  default     = "AL2023"
   validation {
-    condition     = contains(["AL2", "Bottlerocket"], var.ami_family)
-    error_message = "ami_family must be AL2 or Bottlerocket."
+    condition     = contains(["AL2023", "Bottlerocket"], var.ami_family)
+    error_message = "ami_family must be AL2023 or Bottlerocket."
   }
 }
 

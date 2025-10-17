@@ -49,6 +49,15 @@ data "aws_iam_policy_document" "controller_policy" {
   }
 
   statement {
+    sid     = "GetInstanceProfile"
+    effect  = "Allow"
+    actions = ["iam:GetInstanceProfile"]
+    resources = [
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:instance-profile/${aws_iam_instance_profile.node.name}"
+    ]
+  }
+
+  statement {
     sid     = "EKSDescribeCluster"
     effect  = "Allow"
     actions = ["eks:DescribeCluster"]
@@ -315,17 +324,18 @@ resource "kubectl_manifest" "ec2_nodeclass" {
       name = "web-linux"
     }
     spec = {
+      # EKS 1.33 => use AL2023 SSM paths
       amiFamily = var.ami_family
       role      = aws_iam_role.node.name
+      # Tell Karpenter to use the existing instance profile (so it won't try to make one)
+      instanceProfile = aws_iam_instance_profile.node.name
 
       subnetSelectorTerms = [
         { tags = var.subnet_selector_tags }
       ]
-
       securityGroupSelectorTerms = [
         { tags = var.security_group_selector_tags }
       ]
-
       tags = var.tags
     }
   })
