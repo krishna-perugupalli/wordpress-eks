@@ -297,3 +297,13 @@ variable "eks_admin_user_arns" {
   type        = list(string)
   default     = []
 }
+
+# --------------------
+# EFS Access Point
+# --------------------
+
+variable "efs_id" {
+  description = "EFS File System ID"
+  type        = string
+  default     = "efs-ap"
+}

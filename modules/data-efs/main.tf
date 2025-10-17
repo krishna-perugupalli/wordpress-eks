@@ -195,22 +195,3 @@ resource "aws_iam_role_policy_attachment" "backup_service_attach" {
   role       = aws_iam_role.backup_service[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup"
 }
-
-resource "kubernetes_storage_class_v1" "efs_ap" {
-  metadata { name = var.efs_id }
-
-  storage_provisioner = "efs.csi.aws.com"
-
-  parameters = {
-    provisioningMode = var.efs_id
-    fileSystemId     = aws_efs_file_system.this.id
-    directoryPerms   = "0770"
-    gidRangeStart    = "1000"
-    gidRangeEnd      = "2000"
-    basePath         = "/k8s" # optional
-  }
-
-  reclaim_policy         = "Retain"
-  volume_binding_mode    = "WaitForFirstConsumer"
-  allow_volume_expansion = true
-}
