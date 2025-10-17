@@ -47,6 +47,8 @@ module "secrets_operator" {
   secrets_read_policy_arn = local.secrets_read_policy_arn
 
   tags = local.tags
+
+  depends_on = [module.edge_ingress]
 }
 
 # ---------------------------
@@ -166,4 +168,5 @@ module "app_wordpress" {
   image_tag           = var.wp_image_tag
   target_cpu_percent  = var.wp_target_cpu_percent
   target_memory_value = var.wp_target_memory_value
+  depends_on          = [module.secrets_operator]
 }

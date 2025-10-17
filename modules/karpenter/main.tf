@@ -216,14 +216,30 @@ resource "kubernetes_service_account" "controller" {
 }
 
 #############################################
-# Helm chart: Karpenter
+# Helm charts: CRDs first, then controller (OCI)
 #############################################
+resource "helm_release" "karpenter_crds" {
+  name       = "karpenter-crd"
+  repository = "oci://public.ecr.aws/karpenter"
+  chart      = "karpenter-crd"
+  version    = var.controller_chart_version
+  namespace  = local.ns
+  wait       = true
+  timeout    = 600
+
+  depends_on = [
+    kubernetes_namespace.karpenter
+  ]
+}
+
 resource "helm_release" "karpenter" {
   name       = "karpenter"
   namespace  = local.ns
-  repository = "https://charts.karpenter.sh"
+  repository = "oci://public.ecr.aws/karpenter"
   chart      = "karpenter"
   version    = var.controller_chart_version
+  wait       = true
+  timeout    = 600
 
   # Use our pre-created IRSA SA
   set {
@@ -269,20 +285,20 @@ resource "helm_release" "karpenter" {
   }
 
   depends_on = [
-    kubernetes_service_account.controller
+    kubernetes_service_account.controller,
+    helm_release.karpenter_crds
   ]
 }
 
 #############################################
-# Karpenter CRDs: EC2NodeClass + NodePool
+# Karpenter CRDs: EC2NodeClass + NodePool (cluster-scoped)
 #############################################
 resource "kubectl_manifest" "ec2_nodeclass" {
   yaml_body = yamlencode({
     apiVersion = "karpenter.k8s.aws/v1beta1"
     kind       = "EC2NodeClass"
     metadata = {
-      name      = "web-linux"
-      namespace = local.ns
+      name = "web-linux"
     }
     spec = {
       amiFamily = var.ami_family
@@ -310,8 +326,7 @@ resource "kubectl_manifest" "nodepool" {
     apiVersion = "karpenter.sh/v1"
     kind       = "NodePool"
     metadata = {
-      name      = "web-pooled"
-      namespace = local.ns
+      name = "web-pooled"
     }
     spec = {
       template = {
