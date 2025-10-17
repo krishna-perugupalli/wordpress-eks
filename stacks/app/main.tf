@@ -21,7 +21,7 @@ locals {
   wpapp_db_secret_arn     = local.infra_outputs.wpapp_db_secret_arn
   wp_admin_secret_arn     = local.infra_outputs.wp_admin_secret_arn
 
-  _ensure_infra_ready = length(keys(locals.infra_outputs)) > 0
+  _ensure_infra_ready = length(keys(local.infra_outputs)) > 0
 }
 
 resource "null_resource" "require_infra_state" {
