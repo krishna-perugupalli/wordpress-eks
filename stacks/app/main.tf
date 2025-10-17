@@ -112,6 +112,7 @@ module "karpenter" {
 # Observability (CW Agent + Fluent Bit + ALB alarms)
 # ---------------------------
 module "observability" {
+  count                   = var.enable_wordpress ? 1 : 0
   source                  = "../../modules/observability"
   name                    = local.name
   region                  = var.region
