@@ -123,3 +123,12 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+# --------------------
+# EKS Admin Access Config
+# --------------------
+variable "access_entries" {
+  description = "Map of EKS access entries to create (forwarded to terraform-aws-modules/eks/aws)."
+  type        = map(any)
+  default     = {}
+}

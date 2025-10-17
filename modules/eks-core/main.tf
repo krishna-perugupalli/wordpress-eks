@@ -50,7 +50,10 @@ module "eks" {
   cluster_endpoint_public_access_cidrs = var.endpoint_public_access ? var.public_access_cidrs : null
   cluster_enabled_log_types            = local.cp_logs
 
-  iam_role_arn = var.cluster_role_arn
+  iam_role_arn        = var.cluster_role_arn
+  authentication_mode = "API_AND_CONFIG_MAP"
+
+  access_entries = var.access_entries
 
   # ----- Managed Add-ons (un-pinned; let AWS pick valid versions) -----
   cluster_addons = {

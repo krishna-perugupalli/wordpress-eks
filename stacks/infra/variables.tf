@@ -281,3 +281,19 @@ variable "create_guardduty" {
   type        = bool
   default     = false
 }
+
+# --------------------
+# EKS Admin Users/Roles
+# --------------------
+
+variable "eks_admin_role_arns" {
+  description = "IAM Role ARNs (incl. SSO permission-set roles) to grant EKS cluster-admin."
+  type        = list(string)
+  default     = []
+}
+
+variable "eks_admin_user_arns" {
+  description = "IAM User ARNs to grant EKS cluster-admin."
+  type        = list(string)
+  default     = []
+}

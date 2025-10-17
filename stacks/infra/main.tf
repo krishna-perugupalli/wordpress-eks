@@ -13,6 +13,37 @@ locals {
   )
 }
 
+##############################################
+# EKS Admin Access Entries
+##############################################
+locals {
+  eks_access_entries_roles = {
+    for idx, arn in var.eks_admin_role_arns :
+    "admin_role_${idx}" => {
+      principal_arn = arn
+      type          = "STANDARD"
+      policy_associations = [{
+        policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+        access_scope = { type = "cluster" }
+      }]
+    }
+  }
+
+  eks_access_entries_users = {
+    for idx, arn in var.eks_admin_user_arns :
+    "admin_user_${idx}" => {
+      principal_arn = arn
+      type          = "STANDARD"
+      policy_associations = [{
+        policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+        access_scope = { type = "cluster" }
+      }]
+    }
+  }
+
+  eks_access_entries = merge(local.eks_access_entries_roles, local.eks_access_entries_users)
+}
+
 #############################################
 # Foundation (VPC, subnets, NAT, KMS base)
 #############################################
@@ -54,13 +85,15 @@ module "eks_core" {
   system_node_type             = var.system_node_type
   system_node_min              = var.system_node_min
   system_node_max              = var.system_node_max
+  access_entries               = local.eks_access_entries
   tags                         = local.tags
 }
 
 #############################################
 # Minimal k8s provider for aws-auth only
+# Note: Replaced with aws eks module auth mechanism (autentication_mode = "API_AND_CONFIG_MAP")
 #############################################
-provider "kubernetes" {
+/* provider "kubernetes" {
   host                   = module.eks_core.cluster_endpoint
   cluster_ca_certificate = base64decode(module.eks_core.cluster_ca)
 
@@ -69,7 +102,7 @@ provider "kubernetes" {
     command     = "aws"
     args        = ["eks", "get-token", "--cluster-name", module.eks_core.cluster_name, "--region", var.region]
   }
-}
+} 
 
 resource "time_sleep" "wait_for_eks" {
   depends_on      = [module.eks_core]
@@ -86,7 +119,7 @@ module "aws_auth" {
   admin_role_arns = var.admin_role_arns
 
   depends_on = [module.eks_core]
-}
+} */
 
 #############################################
 # Aurora MySQL (Serverless v2)
