@@ -166,7 +166,7 @@ resource "helm_release" "wordpress" {
     value = var.image_tag
   }
 
-  set = {
+  set {
     name  = "image.repository"
     value = "bitnami/wordpress"
   }
