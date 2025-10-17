@@ -138,6 +138,9 @@ resource "helm_release" "wordpress" {
   # Optional: pin the chart
   version = var.wordpress_chart_version
 
+  timeout = 600 # 10 minutes timeout
+  wait    = true
+
   # Deterministic names (Service/Ingress)
   dynamic "set" {
     for_each = var.fullname_override != "" ? [1] : []
@@ -266,15 +269,6 @@ resource "helm_release" "wordpress" {
     name  = "containerSecurityContext.runAsGroup"
     value = "1001"
   }
-
-  values = compact([
-    yamlencode({
-      phpConfiguration = "max_input_vars = ${var.php_max_input_vars}"
-    }),
-    length(var.env_extra) > 0 ? yamlencode({
-      extraEnvVars = local.extra_env_vars
-    }) : null
-  ])
 
   depends_on = [
     kubernetes_namespace.ns,
