@@ -105,7 +105,7 @@ locals {
       "alb.ingress.kubernetes.io/scheme"           = "internet-facing"
       "alb.ingress.kubernetes.io/target-type"      = "ip"
       "alb.ingress.kubernetes.io/healthcheck-path" = "/"
-      "alb.ingress.kubernetes.io/listen-ports"     = jsonencode([{ "HTTP" = 80 }, { "HTTPS" = 443 }])
+      "alb.ingress.kubernetes.io/listen-ports"     = "[{\"HTTP\":80},{\"HTTPS\":443}]"
       "alb.ingress.kubernetes.io/ssl-redirect"     = "443"
     },
     var.alb_certificate_arn != "" ? {
@@ -213,23 +213,10 @@ resource "helm_release" "wordpress" {
     value = var.domain_name
   }
   dynamic "set" {
-    for_each = {
-      for k, v in local.ingress_annotations : k => v
-      if !contains(["alb.ingress.kubernetes.io/listen-ports"], k)
-    }
+    for_each = local.ingress_annotations
     content {
       name  = "ingress.annotations.${set.key}"
       value = set.value
-    }
-  }
-
-  dynamic "set_json" {
-    for_each = contains(keys(local.ingress_annotations), "alb.ingress.kubernetes.io/listen-ports") ? {
-      "alb.ingress.kubernetes.io/listen-ports" = local.ingress_annotations["alb.ingress.kubernetes.io/listen-ports"]
-    } : {}
-    content {
-      name  = "ingress.annotations.${set_json.key}"
-      value = set_json.value
     }
   }
 
