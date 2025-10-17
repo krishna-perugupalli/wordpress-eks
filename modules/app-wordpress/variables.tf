@@ -63,7 +63,7 @@ variable "pvc_size" {
 variable "image_tag" {
   description = "WordPress image tag (Bitnami)"
   type        = string
-  default     = "latest"
+  default     = "sha256-08a8a1c86a0ea118986d629c1c41d15d5a3a45cffa48aea010033e7dad404201"
 }
 
 variable "wordpress_chart_version" {

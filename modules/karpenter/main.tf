@@ -299,7 +299,8 @@ resource "helm_release" "karpenter" {
 
   depends_on = [
     kubernetes_service_account.controller,
-    helm_release.karpenter_crds
+    helm_release.karpenter_crds,
+    aws_sqs_queue.interruptions
   ]
 }
 
