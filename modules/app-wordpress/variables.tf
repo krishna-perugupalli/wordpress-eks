@@ -140,15 +140,15 @@ variable "replicas_max" {
 }
 
 variable "target_cpu_percent" {
-  description = "HPA target CPU utilization percentage"
+  description = "Target CPU utilization percentage for HPA"
   type        = number
-  default     = 60
+  default     = 80
 }
 
-variable "target_memory_value" {
-  description = "HPA target average memory value (e.g., 600Mi); empty disables memory target"
-  type        = string
-  default     = ""
+variable "target_memory_percent" {
+  description = "Target memory utilization percentage for HPA (integer, e.g., 80)"
+  type        = number
+  default     = 80
 }
 
 variable "resources_requests_cpu" {

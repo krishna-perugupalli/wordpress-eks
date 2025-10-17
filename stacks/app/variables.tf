@@ -106,7 +106,7 @@ variable "karpenter_ami_family" {
 variable "karpenter_consolidation_policy" {
   description = "Consolidation policy"
   type        = string
-  default     = "WhenUnderutilized"
+  default     = "WhenEmptyOrUnderutilized"
 }
 
 variable "karpenter_expire_after" {

@@ -128,6 +128,22 @@ locals {
 }
 
 #############################################
+# HPA values (ensure ints, not strings)
+#############################################
+locals {
+  autoscaling_values = merge(
+    {
+      enabled     = true
+      minReplicas = var.replicas_min
+      maxReplicas = var.replicas_max
+    },
+    var.target_cpu_percent != null ? { targetCPU = tonumber(var.target_cpu_percent) } : {},
+    var.target_memory_percent != null ? { targetMemory = tonumber(var.target_memory_percent) } : {}
+  )
+}
+
+
+#############################################
 # Helm: Bitnami/wordpress (external DB, ESO env, EFS PVC, ALB ingress, HPA)
 #############################################
 resource "helm_release" "wordpress" {
@@ -135,11 +151,9 @@ resource "helm_release" "wordpress" {
   namespace  = var.namespace
   repository = "oci://registry-1.docker.io/bitnamicharts"
   chart      = "wordpress"
-  # Optional: pin the chart
-  version = var.wordpress_chart_version
-
-  timeout = 600 # 10 minutes timeout
-  wait    = true
+  version    = var.wordpress_chart_version
+  timeout    = 600
+  wait       = true
 
   # Deterministic names (Service/Ingress)
   dynamic "set" {
@@ -203,18 +217,7 @@ resource "helm_release" "wordpress" {
     }
   }
 
-  # Ingress (ALB via AWS LBC)
-  values = [
-    yamlencode({
-      ingress = {
-        enabled     = true
-        hostname    = var.domain_name
-        annotations = local.ingress_annotations
-      }
-    })
-  ]
-
-  # Resources (requests/limits)
+  # Resources (requests only — keep as strings, that’s fine)
   set {
     name  = "resources.requests.cpu"
     value = var.resources_requests_cpu
@@ -224,49 +227,28 @@ resource "helm_release" "wordpress" {
     value = var.resources_requests_memory
   }
 
-  # HPA
-  set {
-    name  = "replicaCount"
-    value = tostring(var.replicas_min)
-  }
-  set {
-    name  = "autoscaling.enabled"
-    value = "true"
-  }
-  set {
-    name  = "autoscaling.minReplicas"
-    value = tostring(var.replicas_min)
-  }
-  set {
-    name  = "autoscaling.maxReplicas"
-    value = tostring(var.replicas_max)
-  }
-  set {
-    name  = "autoscaling.targetCPU"
-    value = tostring(var.target_cpu_percent)
-  }
-  set {
-    name  = "autoscaling.targetMemory"
-    value = var.target_memory_value
-  }
+  ###########################################
+  # Use VALUES (not --set) for ingress + HPA
+  ###########################################
+  values = [
+    # Ingress (annotations include listen-ports JSON as a string)
+    yamlencode({
+      ingress = {
+        enabled     = true
+        hostname    = var.domain_name
+        annotations = local.ingress_annotations
+      }
+    }),
 
-  # Bitnami chart specifics (security context sane defaults)
-  set {
-    name  = "podSecurityContext.fsGroup"
-    value = "1001"
-  }
-  set {
-    name  = "containerSecurityContext.runAsUser"
-    value = "1001"
-  }
-  set {
-    name  = "containerSecurityContext.runAsGroup"
-    value = "1001"
-  }
+    # HPA + replicaCount with proper numbers (no quotes)
+    yamlencode({
+      replicaCount = var.replicas_min
+      autoscaling  = local.autoscaling_values
+    })
+  ]
 
   depends_on = [
     kubernetes_namespace.ns,
     kubectl_manifest.wp_env_es
-    # Do NOT hard-depend on wp_admin_es because it may have count=0
   ]
 }
