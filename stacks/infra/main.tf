@@ -46,7 +46,7 @@ module "eks_core" {
   private_subnet_ids           = module.foundation.private_subnet_ids
   cluster_role_arn             = module.iam_eks.cluster_role_arn
   node_role_arn                = module.iam_eks.node_role_arn
-  secrets_kms_key_arn          = module.foundation.kms_logs_arn
+  secrets_kms_key_arn          = module.secrets_iam.kms_secrets_arn
   cluster_version              = var.cluster_version
   endpoint_public_access       = var.endpoint_public_access
   enable_irsa                  = var.enable_irsa
@@ -101,8 +101,8 @@ module "data_aurora" {
   admin_username         = var.db_admin_username
   create_random_password = var.db_create_random_password
 
-  storage_kms_key_arn         = module.foundation.kms_logs_arn
-  secrets_manager_kms_key_arn = module.foundation.kms_logs_arn
+  storage_kms_key_arn         = module.foundation.kms_rds_arn
+  secrets_manager_kms_key_arn = module.secrets_iam.kms_secrets_arn
 
   source_node_sg_id   = module.eks_core.node_security_group_id
   allowed_cidr_blocks = [] # or ["x.x.x.x/32"] temporarily for migrations

@@ -9,17 +9,17 @@ locals {
     var.tags
   )
 
-  infra_outputs = try(data.terraform_remote_state.infra.outputs, {})
+  infra_outputs = data.terraform_remote_state.infra.outputs
 
-  cluster_name            = lookup(local.infra_outputs, "cluster_name", var.infra_cluster_name)
-  cluster_oidc_issuer_url = lookup(local.infra_outputs, "cluster_oidc_issuer_url", var.infra_cluster_oidc_issuer_url)
-  oidc_provider_arn       = lookup(local.infra_outputs, "oidc_provider_arn", var.infra_oidc_provider_arn)
-  vpc_id                  = lookup(local.infra_outputs, "vpc_id", var.infra_vpc_id)
-  secrets_read_policy_arn = lookup(local.infra_outputs, "secrets_read_policy_arn", var.infra_secrets_read_policy_arn)
-  kms_logs_arn            = lookup(local.infra_outputs, "kms_logs_arn", var.infra_kms_logs_arn)
-  writer_endpoint         = lookup(local.infra_outputs, "writer_endpoint", var.db_writer_endpoint)
-  wpapp_db_secret_arn     = lookup(local.infra_outputs, "wpapp_db_secret_arn", var.wpapp_db_secret_arn)
-  wp_admin_secret_arn     = lookup(local.infra_outputs, "wp_admin_secret_arn", var.wp_admin_secret_arn)
+  cluster_name            = local.infra_outputs.cluster_name
+  cluster_oidc_issuer_url = local.infra_outputs.cluster_oidc_issuer_url
+  oidc_provider_arn       = local.infra_outputs.oidc_provider_arn
+  vpc_id                  = local.infra_outputs.vpc_id
+  secrets_read_policy_arn = local.infra_outputs.secrets_read_policy_arn
+  kms_logs_arn            = local.infra_outputs.kms_logs_arn
+  writer_endpoint         = local.infra_outputs.writer_endpoint
+  wpapp_db_secret_arn     = local.infra_outputs.wpapp_db_secret_arn
+  wp_admin_secret_arn     = local.infra_outputs.wp_admin_secret_arn
 }
 
 # ---------------------------
@@ -30,6 +30,7 @@ module "secrets_operator" {
   name                    = local.name
   cluster_oidc_issuer_url = local.cluster_oidc_issuer_url
   oidc_provider_arn       = local.oidc_provider_arn
+  aws_region              = var.region
 
   # Option A: use module-managed read policy (recommended via secrets-iam)
   secrets_read_policy_arn = local.secrets_read_policy_arn

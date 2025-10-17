@@ -285,3 +285,18 @@ variable "wp_admin_secret_arn" {
   type        = string
   default     = null
 }
+
+# ---------------------------
+# Remote state (Terraform Cloud)
+# ---------------------------
+variable "remote_state_organization" {
+  description = "Terraform Cloud organization for remote state"
+  type        = string
+  default     = "WpOrbit"
+}
+
+variable "remote_state_infra_workspace" {
+  description = "Terraform Cloud workspace name for infra remote state"
+  type        = string
+  default     = "wp-app"
+}

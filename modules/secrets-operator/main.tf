@@ -1,13 +1,11 @@
 locals {
-  ns            = var.namespace
-  sa_name       = "external-secrets"
-  oidc_hostpath = replace(var.cluster_oidc_issuer_url, "https://", "")
-}
-
-# Validate input: exactly one of (policy ARN) or (allowed ARNs) must be set
-locals {
-  _has_policy_arn   = var.secrets_read_policy_arn != ""
-  _has_allowed_arns = length(var.allowed_secret_arns) > 0
+  ns                  = var.namespace
+  sa_name             = "external-secrets"
+  oidc_hostpath       = replace(var.cluster_oidc_issuer_url, "https://", "")
+  _policy_arn_input   = var.secrets_read_policy_arn == null ? "" : var.secrets_read_policy_arn
+  _allowed_arns_input = var.allowed_secret_arns == null ? [] : var.allowed_secret_arns
+  _has_policy_arn     = trimspace(local._policy_arn_input) != ""
+  _has_allowed_arns   = length(local._allowed_arns_input) > 0
 }
 
 # This throws during plan if neither/both are set
@@ -27,7 +25,7 @@ data "aws_iam_policy_document" "eso_inline" {
     sid       = "ReadAllowedSecrets"
     effect    = "Allow"
     actions   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
-    resources = var.allowed_secret_arns
+    resources = local._allowed_arns_input
   }
 }
 
@@ -64,7 +62,7 @@ resource "aws_iam_role" "eso" {
 # Attach either provided policy ARN (Option A) or the inline-created (Option B)
 resource "aws_iam_role_policy_attachment" "eso_attach" {
   role       = aws_iam_role.eso.name
-  policy_arn = local._has_policy_arn ? var.secrets_read_policy_arn : aws_iam_policy.eso_inline[0].arn
+  policy_arn = local._has_policy_arn ? local._policy_arn_input : aws_iam_policy.eso_inline[0].arn
 }
 
 # Namespace + ServiceAccount with IRSA

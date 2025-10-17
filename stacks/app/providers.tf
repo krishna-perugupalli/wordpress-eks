@@ -1,12 +1,13 @@
 ###############################################################################
-# Remote state: read infra outputs (EKS, VPC, secrets, endpoints, etc.)
+# Remote state (Configured for Terraform Cloud)
 ###############################################################################
 data "terraform_remote_state" "infra" {
   backend = "remote"
+
   config = {
-    organization = "WpOrbit" # <-- CHANGE THIS
+    organization = var.remote_state_organization
     workspaces = {
-      name = "wp-infra" # <-- CHANGE THIS (your infra workspace)
+      name = var.remote_state_infra_workspace
     }
   }
 }

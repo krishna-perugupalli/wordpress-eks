@@ -2,6 +2,10 @@ variable "name" {
   description = "Logical name/prefix (usually your cluster name)"
   type        = string
 }
+variable "aws_region" {
+  description = "AWS region used by External Secrets' ClusterSecretStore"
+  type        = string
+}
 
 variable "cluster_oidc_issuer_url" {
   description = "EKS OIDC issuer URL (https://...)"
