@@ -298,5 +298,5 @@ variable "remote_state_organization" {
 variable "remote_state_infra_workspace" {
   description = "Terraform Cloud workspace name for infra remote state"
   type        = string
-  default     = "wp-app"
+  default     = "wp-infra"
 }
