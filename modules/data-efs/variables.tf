@@ -126,3 +126,9 @@ variable "backup_service_role_arn" {
   type        = string
   default     = null
 }
+
+variable "efs_id" {
+  description = "EFS File System ID"
+  type        = string
+  default     = "efs-ap"
+}
