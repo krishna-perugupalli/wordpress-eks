@@ -318,7 +318,7 @@ resource "helm_release" "karpenter" {
 #############################################
 resource "kubectl_manifest" "ec2_nodeclass" {
   yaml_body = yamlencode({
-    apiVersion = "karpenter.k8s.aws/v1beta1"
+    apiVersion = "karpenter.k8s.aws/v1"
     kind       = "EC2NodeClass"
     metadata = {
       name = "web-linux"
