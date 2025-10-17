@@ -204,21 +204,15 @@ resource "helm_release" "wordpress" {
   }
 
   # Ingress (ALB via AWS LBC)
-  set {
-    name  = "ingress.enabled"
-    value = "true"
-  }
-  set {
-    name  = "ingress.hostname"
-    value = var.domain_name
-  }
-  dynamic "set" {
-    for_each = local.ingress_annotations
-    content {
-      name  = "ingress.annotations.${set.key}"
-      value = set.value
-    }
-  }
+  values = [
+    yamlencode({
+      ingress = {
+        enabled     = true
+        hostname    = var.domain_name
+        annotations = local.ingress_annotations
+      }
+    })
+  ]
 
   # Resources (requests/limits)
   set {

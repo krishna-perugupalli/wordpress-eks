@@ -346,7 +346,11 @@ resource "kubectl_manifest" "nodepool" {
       template = {
         metadata = { labels = var.labels }
         spec = {
-          nodeClassRef = { name = "web-linux" }
+          nodeClassRef = {
+            name  = "web-linux"
+            kind  = "EC2NodeClass"
+            group = "karpenter.k8s.aws"
+          }
           taints = [
             for t in var.taints : {
               key    = t.key
@@ -373,10 +377,15 @@ resource "kubectl_manifest" "nodepool" {
           ]
         }
       }
+
+      # UPDATED: disruption block per v0.37 api
       disruption = {
         consolidationPolicy = var.consolidation_policy
-        expireAfter         = var.expire_after
+        consolidateAfter    = var.consolidate_after
+        # expireAfter is still supported (optional)
+        # only include if provided
       }
+
       limits = {
         cpu = var.cpu_limit
       }
@@ -387,3 +396,4 @@ resource "kubectl_manifest" "nodepool" {
     kubectl_manifest.ec2_nodeclass
   ]
 }
+

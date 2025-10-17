@@ -80,12 +80,6 @@ variable "node_role_additional_policy_arns" {
   default     = []
 }
 
-variable "consolidation_policy" {
-  description = "Consolidation policy for NodePool (None or WhenUnderutilized)"
-  type        = string
-  default     = "WhenUnderutilized"
-}
-
 variable "expire_after" {
   description = "Max node lifetime (e.g., 720h)"
   type        = string
@@ -118,4 +112,16 @@ variable "tags" {
   description = "Common tags for AWS resources"
   type        = map(string)
   default     = {}
+}
+
+variable "consolidation_policy" {
+  description = "Karpenter NodePool consolidation policy"
+  type        = string
+  default     = "WhenEmptyOrUnderutilized" # valid: WhenEmpty, WhenEmptyOrUnderutilized
+}
+
+variable "consolidate_after" {
+  description = "Time to wait before consolidating underutilized nodes (e.g., 30s, 2m)"
+  type        = string
+  default     = "30s"
 }
