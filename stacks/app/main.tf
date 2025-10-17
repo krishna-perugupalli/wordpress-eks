@@ -139,7 +139,7 @@ module "observability" {
 # ---------------------------
 # WordPress (Bitnami) + ESO-fed Secrets + EFS
 # ---------------------------
-module "app_wordpress" {
+/* module "app_wordpress" {
   source = "../../modules/app-wordpress"
 
   name        = local.name
@@ -169,4 +169,4 @@ module "app_wordpress" {
   target_cpu_percent    = var.wp_target_cpu_percent
   target_memory_percent = var.wp_target_memory_value
   depends_on            = [module.secrets_operator]
-}
+} */
