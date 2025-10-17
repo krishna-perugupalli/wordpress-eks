@@ -326,7 +326,6 @@ resource "kubectl_manifest" "ec2_nodeclass" {
     spec = {
       # EKS 1.33 => use AL2023 SSM paths
       amiFamily = var.ami_family
-      role      = aws_iam_role.node.name
       # Tell Karpenter to use the existing instance profile (so it won't try to make one)
       instanceProfile = aws_iam_instance_profile.node.name
 
