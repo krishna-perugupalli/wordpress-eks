@@ -66,6 +66,12 @@ variable "image_tag" {
   default     = "latest"
 }
 
+variable "wordpress_chart_version" {
+  description = "Bitnami WordPress Helm chart version"
+  type        = string
+  default     = "27.0.10"
+}
+
 variable "php_max_input_vars" {
   description = "php.ini max_input_vars appended via phpConfiguration"
   type        = number

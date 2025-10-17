@@ -10,6 +10,9 @@ locals {
   instance_profile_name = "${var.name}-karpenter-node"
 }
 
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 #############################################
 # Karpenter Controller IRSA (IAM Role + Policy)
 #############################################
@@ -43,6 +46,15 @@ data "aws_iam_policy_document" "controller_policy" {
       "ec2:Describe*"
     ]
     resources = ["*"]
+  }
+
+  statement {
+    sid     = "EKSDescribeCluster"
+    effect  = "Allow"
+    actions = ["eks:DescribeCluster"]
+    resources = [
+      "arn:aws:eks:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:cluster/${var.cluster_name}"
+    ]
   }
 
   statement {

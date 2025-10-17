@@ -136,7 +136,7 @@ resource "helm_release" "wordpress" {
   repository = "https://charts.bitnami.com/bitnami"
   chart      = "wordpress"
   # Optional: pin the chart
-  # version    = "22.3.5"
+  version = var.wordpress_chart_version
 
   # Deterministic names (Service/Ingress)
   dynamic "set" {

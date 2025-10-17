@@ -165,32 +165,14 @@ resource "kubernetes_service_account" "fluentbit" {
 #############################################
 # Helm: CloudWatch Agent (Container Insights)
 #############################################
-resource "helm_release" "cloudwatch_agent" {
-  count      = var.install_cloudwatch_agent ? 1 : 0
-  name       = "cloudwatch-agent"
-  namespace  = local.ns
-  repository = "https://aws.github.io/eks-charts"
-  chart      = "cloudwatch-agent"
-  version    = "2.0.9"
-
-  set {
-    name  = "serviceAccount.create"
-    value = "false"
-  }
-  set {
-    name  = "serviceAccount.name"
-    value = "cloudwatch-agent"
-  }
-  set {
-    name  = "clusterName"
-    value = var.cluster_name
-  }
-  set {
-    name  = "region"
-    value = var.region
-  }
-
-  depends_on = [kubernetes_service_account.cwagent]
+# EKS managed add-on for CloudWatch Observability
+resource "aws_eks_addon" "cloudwatch_observability" {
+  cluster_name                = var.cluster_name # pass this into the module
+  addon_name                  = "amazon-cloudwatch-observability"
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+  # addon_version               = var.cloudwatch_addon_version  # optional: pin if you want
+  tags = var.tags
 }
 
 #############################################
