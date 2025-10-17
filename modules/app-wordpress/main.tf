@@ -133,7 +133,7 @@ locals {
 resource "helm_release" "wordpress" {
   name       = "${var.name}-wordpress"
   namespace  = var.namespace
-  repository = "https://charts.bitnami.com/bitnami"
+  repository = "oci://registry-1.docker.io/bitnamicharts"
   chart      = "wordpress"
   # Optional: pin the chart
   version = var.wordpress_chart_version
