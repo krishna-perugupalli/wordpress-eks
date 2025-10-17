@@ -111,7 +111,7 @@ module "karpenter" {
 # ---------------------------
 # Observability (CW Agent + Fluent Bit + ALB alarms)
 # ---------------------------
-/* module "observability" {
+module "observability" {
   source                  = "../../modules/observability"
   name                    = local.name
   region                  = var.region
@@ -169,4 +169,4 @@ module "app_wordpress" {
   target_cpu_percent    = var.wp_target_cpu_percent
   target_memory_percent = var.wp_target_memory_value
   depends_on            = [module.secrets_operator]
-} */
+}
