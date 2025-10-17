@@ -206,9 +206,9 @@ variable "wp_target_cpu_percent" {
 }
 
 variable "wp_target_memory_value" {
-  description = "HPA target memory value"
+  description = "HPA target memory %"
   type        = string
-  default     = "600Mi"
+  default     = "80"
 }
 
 variable "wp_admin_user" {

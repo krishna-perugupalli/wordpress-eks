@@ -163,10 +163,10 @@ module "app_wordpress" {
   admin_email             = var.wp_admin_email
   admin_bootstrap_enabled = var.wp_admin_bootstrap_enabled
 
-  replicas_min        = var.wp_replicas_min
-  replicas_max        = var.wp_replicas_max
-  image_tag           = var.wp_image_tag
-  target_cpu_percent  = var.wp_target_cpu_percent
-  target_memory_value = var.wp_target_memory_value
-  depends_on          = [module.secrets_operator]
+  replicas_min          = var.wp_replicas_min
+  replicas_max          = var.wp_replicas_max
+  image_tag             = var.wp_image_tag
+  target_cpu_percent    = var.wp_target_cpu_percent
+  target_memory_percent = var.wp_target_memory_value
+  depends_on            = [module.secrets_operator]
 }
