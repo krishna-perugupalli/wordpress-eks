@@ -20,6 +20,17 @@ locals {
   writer_endpoint         = local.infra_outputs.writer_endpoint
   wpapp_db_secret_arn     = local.infra_outputs.wpapp_db_secret_arn
   wp_admin_secret_arn     = local.infra_outputs.wp_admin_secret_arn
+
+  _ensure_infra_ready = length(keys(locals.infra_outputs)) > 0
+}
+
+resource "null_resource" "require_infra_state" {
+  lifecycle {
+    precondition {
+      condition     = local._ensure_infra_ready
+      error_message = "Infra remote state has no outputs. Apply the Infra workspace first, then re-run the App workspace."
+    }
+  }
 }
 
 # ---------------------------

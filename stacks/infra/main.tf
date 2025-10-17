@@ -181,6 +181,8 @@ module "secrets_iam" {
   region = var.region
   tags   = local.tags
 
+  wpapp_db_host = module.data_aurora.writer_endpoint
+
   cluster_oidc_provider_arn = module.eks_core.oidc_provider_arn
   eso_namespace             = "external-secrets"
   eso_service_account_name  = "external-secrets"
@@ -194,6 +196,8 @@ module "secrets_iam" {
 
   create_redis_auth_secret = true
   redis_auth_secret_name   = "${local.name}-redis-auth"
+
+  depends_on = [module.data_aurora]
 }
 
 #############################################
