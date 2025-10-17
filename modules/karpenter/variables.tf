@@ -37,7 +37,7 @@ variable "karpenter_namespace" {
 variable "controller_chart_version" {
   description = "Karpenter Helm chart version"
   type        = string
-  default     = "0.37.3"
+  default     = "1.5.0"
 }
 
 variable "enable_interruption_queue" {
