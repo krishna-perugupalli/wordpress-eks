@@ -86,6 +86,7 @@ data "aws_iam_policy_document" "controller_policy" {
       sid    = "SQSInterruption"
       effect = "Allow"
       actions = [
+        "sqs:GetQueueUrl",
         "sqs:DeleteMessage",
         "sqs:ReceiveMessage",
         "sqs:GetQueueAttributes",
