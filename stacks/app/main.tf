@@ -111,7 +111,7 @@ module "karpenter" {
 # ---------------------------
 # Observability (CW Agent + Fluent Bit + ALB alarms)
 # ---------------------------
-module "observability" {
+/* module "observability" {
   source                  = "../../modules/observability"
   name                    = local.name
   region                  = var.region
@@ -139,7 +139,7 @@ module "observability" {
 # ---------------------------
 # WordPress (Bitnami) + ESO-fed Secrets + EFS
 # ---------------------------
-/* module "app_wordpress" {
+module "app_wordpress" {
   source = "../../modules/app-wordpress"
 
   name        = local.name
