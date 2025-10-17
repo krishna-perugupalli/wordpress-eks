@@ -216,14 +216,6 @@ resource "helm_release" "wordpress" {
       value = set.value
     }
   }
-  # (optional) force the ingress object name to match fullname
-  dynamic "set" {
-    for_each = [1]
-    content {
-      name  = "ingress.name"
-      value = local.effective_fullname
-    }
-  }
 
   # Resources (requests/limits)
   set {
@@ -233,14 +225,6 @@ resource "helm_release" "wordpress" {
   set {
     name  = "resources.requests.memory"
     value = var.resources_requests_memory
-  }
-  set {
-    name  = "resources.limits.cpu"
-    value = var.resources_limits_cpu
-  }
-  set {
-    name  = "resources.limits.memory"
-    value = var.resources_limits_memory
   }
 
   # HPA
