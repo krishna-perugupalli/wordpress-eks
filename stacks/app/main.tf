@@ -111,8 +111,7 @@ module "karpenter" {
 # ---------------------------
 # Observability (CW Agent + Fluent Bit + ALB alarms)
 # ---------------------------
-/* module "observability" {
-  count                   = var.enable_wordpress ? 1 : 0
+module "observability" {
   source                  = "../../modules/observability"
   name                    = local.name
   region                  = var.region
@@ -141,7 +140,6 @@ module "karpenter" {
 # WordPress (Bitnami) + ESO-fed Secrets + EFS
 # ---------------------------
 module "app_wordpress" {
-  count  = var.enable_wordpress ? 1 : 0
   source = "../../modules/app-wordpress"
 
   name        = local.name
@@ -171,4 +169,4 @@ module "app_wordpress" {
   target_cpu_percent    = var.wp_target_cpu_percent
   target_memory_percent = var.wp_target_memory_value
   depends_on            = [module.secrets_operator]
-} */
+}

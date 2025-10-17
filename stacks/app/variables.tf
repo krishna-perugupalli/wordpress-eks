@@ -243,9 +243,3 @@ variable "remote_state_infra_workspace" {
   type        = string
   default     = "wp-infra"
 }
-
-variable "enable_wordpress" {
-  description = "When true, deploy the WordPress application"
-  type        = bool
-  default     = true
-}
