@@ -316,18 +316,24 @@ resource "helm_release" "karpenter" {
 #############################################
 # Karpenter CRDs: EC2NodeClass + NodePool (cluster-scoped)
 #############################################
+# modules/karpenter/main.tf  (only the EC2NodeClass block shown)
 resource "kubectl_manifest" "ec2_nodeclass" {
   yaml_body = yamlencode({
-    apiVersion = "karpenter.k8s.aws/v1"
+    apiVersion = "karpenter.k8s.aws/v1" # v1 requires amiSelectorTerms
     kind       = "EC2NodeClass"
     metadata = {
       name = "web-linux"
     }
     spec = {
-      # EKS 1.33 => use AL2023 SSM paths
-      amiFamily = var.ami_family
-      # Tell Karpenter to use the existing instance profile (so it won't try to make one)
+      amiFamily       = var.ami_family
       instanceProfile = aws_iam_instance_profile.node.name
+
+      # NEW: required in v1
+      amiSelectorTerms = [
+        {
+          ssmParameter = "/aws/service/eks/optimized-ami/${var.cluster_version}/amazon-linux-2023/${var.arch}/standard/recommended/image_id"
+        }
+      ]
 
       subnetSelectorTerms = [
         { tags = var.subnet_selector_tags }

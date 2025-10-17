@@ -243,3 +243,15 @@ variable "remote_state_infra_workspace" {
   type        = string
   default     = "wp-infra"
 }
+
+variable "cluster_version" {
+  description = "EKS cluster minor (e.g., 1.33)"
+  type        = string
+  default     = "1.33"
+}
+
+variable "arch" {
+  description = "EC2 architecture for workers"
+  type        = string
+  default     = "x86_64" # or "arm64"
+}
