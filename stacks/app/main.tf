@@ -140,6 +140,7 @@ module "observability" {
 # WordPress (Bitnami) + ESO-fed Secrets + EFS
 # ---------------------------
 module "app_wordpress" {
+  count  = var.enable_wordpress ? 1 : 0
   source = "../../modules/app-wordpress"
 
   name        = local.name
