@@ -44,6 +44,39 @@ module "eks" {
     resources        = ["secrets"]
     provider_key_arn = coalesce(var.secrets_kms_key_arn, local.default_kms_key_arn)
   }
+  node_security_group_additional_rules = {
+    nodes_istiod_port = {
+      description                   = "Cluster API to Node group for istiod webhook"
+      protocol                      = "tcp"
+      from_port                     = 15017
+      to_port                       = 15017
+      type                          = "ingress"
+      source_cluster_security_group = true
+    }
+    node_to_node_communication = {
+      description = "Allow full access for cross-node communication"
+      protocol    = "tcp"
+      from_port   = 0
+      to_port     = 65535
+      type        = "ingress"
+      self        = true
+    }
+  }
+
+  node_security_group_tags = {
+    # NOTE - if creating multiple security groups with this module, only tag the
+    # security group that Karpenter should utilize with the following tag
+    # (i.e. - at most, only one security group should have this tag in your account)
+    "karpenter.sh/discovery" = var.name
+  }
+
+  eks_managed_node_group_defaults = {
+    # We are using the IRSA created below for permissions
+    # However, we have to provision a new cluster with the policy attached FIRST
+    # before we can disable. Without this initial policy,
+    # the VPC CNI fails to assign IPs and nodes cannot join the new cluster
+    iam_role_attach_cni_policy = true
+  }
 
   cluster_endpoint_public_access       = var.endpoint_public_access
   cluster_endpoint_private_access      = true
@@ -58,8 +91,9 @@ module "eks" {
   # ----- Managed Add-ons (un-pinned; let AWS pick valid versions) -----
   cluster_addons = {
     vpc-cni = {
-      most_recent       = true
-      resolve_conflicts = "OVERWRITE"
+      most_recent              = true
+      resolve_conflicts        = "OVERWRITE"
+      service_account_role_arn = var.service_account_role_arn_vpc_cni
       configuration_values = var.enable_cni_prefix_delegation ? jsonencode({
         env = {
           ENABLE_PREFIX_DELEGATION = "true"
@@ -76,10 +110,19 @@ module "eks" {
     coredns = {
       most_recent       = true
       resolve_conflicts = "OVERWRITE"
+      timeouts = {
+        create = "25m"
+        delete = "10m"
+      }
     }
 
     # We use EFS for wp-content; install the EFS CSI driver as an add-on.
     aws-efs-csi-driver = {
+      most_recent              = true
+      resolve_conflicts        = "OVERWRITE"
+      service_account_role_arn = var.service_account_role_arn_efs_csi
+    }
+    aws-ebs-csi-driver = {
       most_recent       = true
       resolve_conflicts = "OVERWRITE"
     }
@@ -109,43 +152,4 @@ module "eks" {
   }
 
   tags = var.tags
-}
-
-#############################################
-# IRSA for EBS CSI (for aws-ebs-csi-driver add-on)
-#############################################
-
-# Use OIDC issuer directly from the EKS module output (no data source reads)
-locals {
-  oidc_issuer_url      = module.eks.cluster_oidc_issuer_url             # e.g., https://oidc.eks.<region>.amazonaws.com/id/<uuid>
-  oidc_issuer_hostpath = replace(local.oidc_issuer_url, "https://", "") # host/path without scheme
-}
-
-data "aws_iam_policy_document" "ebs_csi_trust" {
-  statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRoleWithWebIdentity"]
-
-    principals {
-      type        = "Federated"
-      identifiers = [module.eks.oidc_provider_arn]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "${local.oidc_issuer_hostpath}:sub"
-      values   = ["system:serviceaccount:kube-system:ebs-csi-controller-sa"]
-    }
-  }
-}
-
-resource "aws_iam_role" "ebs_csi" {
-  name               = "${var.name}-ebs-csi"
-  assume_role_policy = data.aws_iam_policy_document.ebs_csi_trust.json
-  tags               = var.tags
-}
-
-resource "aws_iam_role_policy_attachment" "ebs_csi_policy" {
-  role       = aws_iam_role.ebs_csi.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
 }

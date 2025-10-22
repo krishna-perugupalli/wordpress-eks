@@ -70,6 +70,16 @@ variable "secrets_kms_key_arn" {
   default     = null
 }
 
+variable "service_account_role_arn_vpc_cni" {
+  description = "IAM Role ARN for the VPC CNI Service Account (IRSA)"
+  type        = string
+}
+
+variable "service_account_role_arn_efs_csi" {
+  description = "IAM Role ARN for the EFS CSI Service Account (IRSA)"
+  type        = string
+}
+
 variable "enable_cni_prefix_delegation" {
   description = "Enable prefix delegation to increase pod density"
   type        = bool
