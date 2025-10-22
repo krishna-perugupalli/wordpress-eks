@@ -13,6 +13,9 @@ locals {
   )
 }
 
+## Get current AWS account ID
+data "aws_caller_identity" "current" {}
+
 ##############################################
 # EKS Admin Access Entries
 ##############################################
@@ -64,7 +67,7 @@ module "iam_eks" {
   source         = "../../modules/iam-eks"
   name           = local.name
   tags           = local.tags
-  account_number = var.account_number
+  account_number = data.aws_caller_identity.current.account_id
   cluster_name   = local.name
   region         = var.region
 }
