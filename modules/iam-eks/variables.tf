@@ -33,3 +33,13 @@ variable "region" {
   description = "AWS Region"
   type        = string
 }
+
+variable "oidc_provider_arn" {
+  type        = string
+  description = "EKS cluster OIDC provider ARN (for IRSA)."
+}
+
+variable "oidc_issuer_url" {
+  type        = string
+  description = "EKS cluster OIDC issuer URL (for IRSA)."
+}

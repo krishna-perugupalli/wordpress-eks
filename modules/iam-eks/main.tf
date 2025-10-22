@@ -91,12 +91,12 @@ resource "aws_iam_role" "ebs_csi_role" {
       Action = "sts:AssumeRoleWithWebIdentity"
       Effect = "Allow"
       Principal = {
-        Federated = "arn:aws:iam::${var.account_number}:oidc-provider/${module.eks[0].oidc_provider}"
+        Federated = "arn:aws:iam::${var.account_number}:oidc-provider/${module.eks_core.oidc_provider}"
       }
       Condition = {
         "StringEquals" : {
-          "${module.eks[0].oidc_provider}:sub" : "system:serviceaccount:kube-system:ebs-csi-controller-sa",
-          "${module.eks[0].oidc_provider}:aud" : "sts.amazonaws.com"
+          "${module.eks_core.oidc_provider}:sub" : "system:serviceaccount:kube-system:ebs-csi-controller-sa",
+          "${module.eks_core.oidc_provider}:aud" : "sts.amazonaws.com"
         }
       }
     }]
@@ -132,25 +132,25 @@ resource "aws_iam_role_policy" "ebs_csi_device_encryption" {
 resource "aws_iam_role_policy_attachment" "eks_cluster_policy-attachment" {
   # count      = var.enable_eks ? 1 : 0
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-  role       = aws_iam_role.eks_cluster_role[0].name
+  role       = aws_iam_role.eks_cluster_role.name
 }
 
 resource "aws_iam_role_policy_attachment" "eks_cluster_vpc_policy-attachment" {
   # count      = var.enable_eks ? 1 : 0
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSVPCResourceController"
-  role       = aws_iam_role.eks_cluster_role[0].name
+  role       = aws_iam_role.eks_cluster_role.name
 }
 
 resource "aws_iam_role_policy_attachment" "eks_cluster_cni_policy-attachment" {
   # count      = var.enable_eks ? 1 : 0
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-  role       = aws_iam_role.eks_cluster_role[0].name
+  role       = aws_iam_role.eks_cluster_role.name
 }
 
 resource "aws_iam_role_policy_attachment" "ebs_csi_policy-attachment" {
   # count      = var.enable_eks ? 1 : 0
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
-  role       = aws_iam_role.ebs_csi_role[0].name
+  role       = aws_iam_role.ebs_csi_role.name
 }
 
 ### End EKS Cluster Role ###
@@ -175,43 +175,43 @@ resource "aws_iam_role" "eks_node_group_role" {
 resource "aws_iam_role_policy_attachment" "eks_worker_node_policy-attachment" {
   # count      = var.enable_eks ? 1 : 0
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-  role       = aws_iam_role.eks_node_group_role[0].name
+  role       = aws_iam_role.eks_node_group_role.name
 }
 
 resource "aws_iam_role_policy_attachment" "ebs_csi_driver_policy-attachment" {
   # count      = var.enable_eks ? 1 : 0
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
-  role       = aws_iam_role.eks_node_group_role[0].name
+  role       = aws_iam_role.eks_node_group_role.name
 }
 
 resource "aws_iam_role_policy_attachment" "eks_cni_policy-attachment" {
   # count      = var.enable_eks ? 1 : 0
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-  role       = aws_iam_role.eks_node_group_role[0].name
+  role       = aws_iam_role.eks_node_group_role.name
 }
 
 resource "aws_iam_role_policy_attachment" "ecr_readonly-attachment" {
   # count      = var.enable_eks ? 1 : 0
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-  role       = aws_iam_role.eks_node_group_role[0].name
+  role       = aws_iam_role.eks_node_group_role.name
 }
 
 resource "aws_iam_role_policy_attachment" "efs_readonly_policy-attachment" {
   # count      = var.enable_eks ? 1 : 0
   policy_arn = "arn:aws:iam::aws:policy/AmazonElasticFileSystemReadOnlyAccess"
-  role       = aws_iam_role.eks_node_group_role[0].name
+  role       = aws_iam_role.eks_node_group_role.name
 }
 
 resource "aws_iam_role_policy_attachment" "AmazonSSMManagedInstanceCore-attachment" {
   # count      = var.enable_eks ? 1 : 0
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-  role       = aws_iam_role.eks_node_group_role[0].name
+  role       = aws_iam_role.eks_node_group_role.name
 }
 
 resource "aws_iam_role_policy" "kube2iam_access_policy" {
   # count = var.enable_eks ? 1 : 0
   name = "${var.name}-kube2iam-access-policy"
-  role = aws_iam_role.eks_node_group_role[0].id
+  role = aws_iam_role.eks_node_group_role.id
   policy = jsonencode({
     "Version" = "2012-10-17",
     "Statement" = [
@@ -227,7 +227,7 @@ resource "aws_iam_role_policy" "kube2iam_access_policy" {
 resource "aws_iam_role_policy" "eks_node_group_role_kms_policy" {
   # count = var.enable_eks ? 1 : 0
   name = "${var.name}-eks-node-kms-policy"
-  role = aws_iam_role.eks_node_group_role[0].id
+  role = aws_iam_role.eks_node_group_role.id
   policy = jsonencode({
     "Version" = "2012-10-17",
     "Statement" = [
@@ -338,17 +338,16 @@ resource "aws_iam_role_policy" "cluster_management_logs_policy" {
 resource "aws_eks_access_entry" "cluster_manager" {
   # count         = var.enable_eks ? 1 : 0
   cluster_name  = var.cluster_name
-  principal_arn = aws_iam_role.cluster_management_role[0].arn
+  principal_arn = aws_iam_role.cluster_management_role.arn
   type          = "STANDARD"
-  depends_on    = [module.eks[0]]
 }
 resource "aws_eks_access_policy_association" "cluster_manager_policy" {
   # count         = var.enable_eks ? 1 : 0
   cluster_name  = var.cluster_name
   policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-  principal_arn = aws_iam_role.cluster_management_role[0].arn
+  principal_arn = aws_iam_role.cluster_management_role.arn
   access_scope {
     type = "cluster"
   }
-  depends_on = [aws_eks_access_entry.cluster_manager[0]]
+  depends_on = [aws_eks_access_entry.cluster_manager]
 }

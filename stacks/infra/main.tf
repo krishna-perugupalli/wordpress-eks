@@ -64,12 +64,15 @@ module "foundation" {
 # IAM roles for EKS control plane and nodes
 #############################################
 module "iam_eks" {
-  source         = "../../modules/iam-eks"
-  name           = local.name
-  tags           = local.tags
-  account_number = data.aws_caller_identity.current.account_id
-  cluster_name   = local.name
-  region         = var.region
+  source            = "../../modules/iam-eks"
+  name              = local.name
+  tags              = local.tags
+  account_number    = data.aws_caller_identity.current.account_id
+  region            = var.region
+  oidc_provider_arn = module.eks_core.oidc_provider_arn
+  oidc_issuer_url   = module.eks_core.oidc_provider_url
+  cluster_name      = module.eks_core.cluster_name
+  depends_on        = [module.eks_core]
 }
 
 #############################################
