@@ -93,6 +93,7 @@ module "eks" {
     vpc-cni = {
       most_recent       = true
       resolve_conflicts = "OVERWRITE"
+      # service_account_role_arn = var.service_account_role_arn_vpc_cni
       configuration_values = var.enable_cni_prefix_delegation ? jsonencode({
         env = {
           ENABLE_PREFIX_DELEGATION = "true"
@@ -119,6 +120,7 @@ module "eks" {
     aws-efs-csi-driver = {
       most_recent       = true
       resolve_conflicts = "OVERWRITE"
+      # service_account_role_arn = var.service_account_role_arn_efs_csi
     }
     aws-ebs-csi-driver = {
       most_recent       = true

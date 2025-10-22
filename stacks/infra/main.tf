@@ -79,25 +79,25 @@ module "iam_eks" {
 # EKS cluster (terraform-aws-modules/eks via our wrapper)
 #############################################
 module "eks_core" {
-  source                           = "../../modules/eks-core"
-  name                             = local.name
-  region                           = var.region
-  vpc_id                           = module.foundation.vpc_id
-  private_subnet_ids               = module.foundation.private_subnet_ids
-  service_account_role_arn_vpc_cni = module.iam_eks.vpc_cni_irsa[0].iam_role_arn
-  service_account_role_arn_efs_csi = module.iam_eks.efs_csi_irsa[0].iam_role_arn
-  cluster_role_arn                 = module.iam_eks.cluster_role_arn
-  node_role_arn                    = module.iam_eks.node_role_arn
-  secrets_kms_key_arn              = module.secrets_iam.kms_secrets_arn
-  cluster_version                  = var.cluster_version
-  endpoint_public_access           = var.endpoint_public_access
-  enable_irsa                      = var.enable_irsa
-  enable_cni_prefix_delegation     = var.enable_cni_prefix_delegation
-  system_node_type                 = var.system_node_type
-  system_node_min                  = var.system_node_min
-  system_node_max                  = var.system_node_max
-  access_entries                   = local.eks_access_entries
-  tags                             = local.tags
+  source             = "../../modules/eks-core"
+  name               = local.name
+  region             = var.region
+  vpc_id             = module.foundation.vpc_id
+  private_subnet_ids = module.foundation.private_subnet_ids
+  # service_account_role_arn_vpc_cni = module.iam_eks.vpc_cni_irsa[0].iam_role_arn
+  # service_account_role_arn_efs_csi = module.iam_eks.efs_csi_irsa[0].iam_role_arn
+  cluster_role_arn             = module.iam_eks.cluster_role_arn
+  node_role_arn                = module.iam_eks.node_role_arn
+  secrets_kms_key_arn          = module.secrets_iam.kms_secrets_arn
+  cluster_version              = var.cluster_version
+  endpoint_public_access       = var.endpoint_public_access
+  enable_irsa                  = var.enable_irsa
+  enable_cni_prefix_delegation = var.enable_cni_prefix_delegation
+  system_node_type             = var.system_node_type
+  system_node_min              = var.system_node_min
+  system_node_max              = var.system_node_max
+  access_entries               = local.eks_access_entries
+  tags                         = local.tags
 }
 
 #############################################
