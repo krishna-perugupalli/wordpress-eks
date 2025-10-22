@@ -43,3 +43,8 @@ variable "oidc_issuer_url" {
   type        = string
   description = "EKS cluster OIDC issuer URL (for IRSA)."
 }
+
+variable "kms_key_arn" {
+  type        = string
+  description = "KMS Key ARN for encrypting"
+}

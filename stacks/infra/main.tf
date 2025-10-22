@@ -72,6 +72,7 @@ module "iam_eks" {
   oidc_provider_arn = module.eks_core.oidc_provider_arn
   oidc_issuer_url   = module.eks_core.oidc_provider_url
   cluster_name      = module.eks_core.cluster_name
+  kms_key_arn       = module.secrets_iam.kms_secrets_arn
 }
 
 #############################################

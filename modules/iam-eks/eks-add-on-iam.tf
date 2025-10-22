@@ -8,7 +8,7 @@ module "vpc_cni_irsa" {
 
   oidc_providers = {
     main = {
-      provider_arn               = module.eks_core.oidc_provider_arn
+      provider_arn               = var.oidc_provider_arn
       namespace_service_accounts = ["kube-system:aws-node"]
     }
   }
@@ -27,7 +27,7 @@ module "ebs_csi_irsa" {
 
   oidc_providers = {
     main = {
-      provider_arn               = module.eks_core.oidc_provider_arn
+      provider_arn               = var.oidc_provider_arn
       namespace_service_accounts = ["kube-system:ebs-csi-controller-sa"]
     }
   }
@@ -44,7 +44,7 @@ module "efs_csi_irsa" {
 
   oidc_providers = {
     main = {
-      provider_arn               = module.eks_core.oidc_provider_arn
+      provider_arn               = var.oidc_provider_arn
       namespace_service_accounts = ["kube-system:efs-csi-controller-sa"]
     }
   }

@@ -91,12 +91,12 @@ resource "aws_iam_role" "ebs_csi_role" {
       Action = "sts:AssumeRoleWithWebIdentity"
       Effect = "Allow"
       Principal = {
-        Federated = "arn:aws:iam::${var.account_number}:oidc-provider/${module.eks_core.oidc_provider}"
+        Federated = "arn:aws:iam::${var.account_number}:oidc-provider/${var.oidc_provider_arn}"
       }
       Condition = {
         "StringEquals" : {
-          "${module.eks_core.oidc_provider}:sub" : "system:serviceaccount:kube-system:ebs-csi-controller-sa",
-          "${module.eks_core.oidc_provider}:aud" : "sts.amazonaws.com"
+          "${var.oidc_provider_arn}:sub" : "system:serviceaccount:kube-system:ebs-csi-controller-sa",
+          "${var.oidc_provider_arn}:aud" : "sts.amazonaws.com"
         }
       }
     }]
@@ -245,7 +245,7 @@ resource "aws_iam_role_policy" "eks_node_group_role_kms_policy" {
           "kms:ListGrants",
           "kms:RevokeGrant"
         ],
-        "Resource" = "${module.kms_key.arn}"
+        "Resource" = "${var.kms_key_arn}"
       }
     ]
   })
