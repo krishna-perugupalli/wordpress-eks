@@ -70,7 +70,7 @@ module "iam_eks" {
   account_number    = data.aws_caller_identity.current.account_id
   region            = var.region
   oidc_provider_arn = module.eks_core.oidc_provider_arn
-  oidc_issuer_url   = module.eks_core.oidc_provider_url
+  oidc_issuer_url   = module.eks_core.cluster_oidc_issuer_url
   cluster_name      = module.eks_core.cluster_name
   kms_key_arn       = module.secrets_iam.kms_secrets_arn
 }
