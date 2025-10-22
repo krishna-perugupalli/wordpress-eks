@@ -91,9 +91,8 @@ module "eks" {
   # ----- Managed Add-ons (un-pinned; let AWS pick valid versions) -----
   cluster_addons = {
     vpc-cni = {
-      most_recent              = true
-      resolve_conflicts        = "OVERWRITE"
-      service_account_role_arn = var.service_account_role_arn_vpc_cni
+      most_recent       = true
+      resolve_conflicts = "OVERWRITE"
       configuration_values = var.enable_cni_prefix_delegation ? jsonencode({
         env = {
           ENABLE_PREFIX_DELEGATION = "true"
@@ -118,9 +117,8 @@ module "eks" {
 
     # We use EFS for wp-content; install the EFS CSI driver as an add-on.
     aws-efs-csi-driver = {
-      most_recent              = true
-      resolve_conflicts        = "OVERWRITE"
-      service_account_role_arn = var.service_account_role_arn_efs_csi
+      most_recent       = true
+      resolve_conflicts = "OVERWRITE"
     }
     aws-ebs-csi-driver = {
       most_recent       = true
