@@ -22,10 +22,6 @@ variable "owner_email" {
   default     = "admin@example.com"
 }
 
-variable "account_number" {
-  description = "The AWS Account number where the resources will be provisioned. This account will be used for billing and access control."
-}
-
 variable "tags" {
   description = "Extra tags merged into all resources"
   type        = map(string)
