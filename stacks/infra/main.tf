@@ -84,8 +84,8 @@ module "eks_core" {
   region                           = var.region
   vpc_id                           = module.foundation.vpc_id
   private_subnet_ids               = module.foundation.private_subnet_ids
-  service_account_role_arn_vpc_cni = module.vpc_cni_irsa[0].iam_role_arn
-  service_account_role_arn_efs_csi = module.efs_csi_irsa[0].iam_role_arn
+  service_account_role_arn_vpc_cni = module.iam_eks.vpc_cni_irsa[0].iam_role_arn
+  service_account_role_arn_efs_csi = module.iam_eks.efs_csi_irsa[0].iam_role_arn
   cluster_role_arn                 = module.iam_eks.cluster_role_arn
   node_role_arn                    = module.iam_eks.node_role_arn
   secrets_kms_key_arn              = module.secrets_iam.kms_secrets_arn
