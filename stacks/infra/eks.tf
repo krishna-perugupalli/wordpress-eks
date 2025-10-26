@@ -117,9 +117,9 @@ module "eks" {
   # ----- Managed Add-ons (un-pinned; let AWS pick valid versions) -----
   cluster_addons = {
     vpc-cni = {
-      most_recent       = true
-      resolve_conflicts = "OVERWRITE"
-      # service_account_role_arn = module.vpc_cni_irsa[0].iam_role_arn
+      most_recent              = true
+      resolve_conflicts        = "OVERWRITE"
+      service_account_role_arn = module.vpc_cni_irsa.iam_role_arn
       configuration_values = var.enable_cni_prefix_delegation ? jsonencode({
         env = {
           ENABLE_PREFIX_DELEGATION = "true"
@@ -146,7 +146,7 @@ module "eks" {
     aws-efs-csi-driver = {
       most_recent              = true
       resolve_conflicts        = "OVERWRITE"
-      service_account_role_arn = module.efs_csi_irsa[0].iam_role_arn
+      service_account_role_arn = module.efs_csi_irsa.iam_role_arn
     }
     aws-ebs-csi-driver = {
       most_recent       = true
