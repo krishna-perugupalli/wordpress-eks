@@ -63,8 +63,6 @@ locals {
 # EKS (terraform-aws-modules/eks/aws v20)
 #############################################
 
-data "aws_caller_identity" "current" {}
-
 locals {
   default_kms_key_arn = "arn:aws:kms:${var.region}:${data.aws_caller_identity.current.account_id}:alias/aws/secretsmanager"
 }

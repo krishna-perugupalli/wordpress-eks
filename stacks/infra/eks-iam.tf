@@ -62,7 +62,6 @@ resource "aws_iam_role_policy_attachment" "node_extra" {
   policy_arn = each.value
 } */
 
-data "aws_caller_identity" "current" {}
 locals {
   account_number    = data.aws_caller_identity.current.account_id
   oidc_provider_arn = module.eks.oidc_provider_arn

@@ -16,37 +16,6 @@ locals {
 ## Get current AWS account ID
 data "aws_caller_identity" "current" {}
 
-##############################################
-# EKS Admin Access Entries
-##############################################
-locals {
-  eks_access_entries_roles = {
-    for idx, arn in var.eks_admin_role_arns :
-    "admin_role_${idx}" => {
-      principal_arn = arn
-      type          = "STANDARD"
-      policy_associations = [{
-        policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-        access_scope = { type = "cluster" }
-      }]
-    }
-  }
-
-  eks_access_entries_users = {
-    for idx, arn in var.eks_admin_user_arns :
-    "admin_user_${idx}" => {
-      principal_arn = arn
-      type          = "STANDARD"
-      policy_associations = [{
-        policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-        access_scope = { type = "cluster" }
-      }]
-    }
-  }
-
-  eks_access_entries = merge(local.eks_access_entries_roles, local.eks_access_entries_users)
-}
-
 #############################################
 # Foundation (VPC, subnets, NAT, KMS base)
 #############################################
