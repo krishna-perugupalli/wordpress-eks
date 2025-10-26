@@ -59,6 +59,12 @@ variable "nat_gateway_mode" {
   }
 }
 
+variable "public_access_cidrs" {
+  description = "Allowed CIDRs for public endpoint"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
 # ---------------------------
 # EKS Core
 # ---------------------------
@@ -106,6 +112,40 @@ variable "system_node_max" {
 
 variable "admin_role_arns" {
   type    = list(string)
+  default = []
+}
+
+variable "node_ami_type" {
+  description = "EKS AMI type (e.g., AL2023_x86_64_STANDARD, BOTTLEROCKET_x86_64)"
+  type        = string
+  default     = "AL2023_x86_64_STANDARD"
+}
+
+variable "node_capacity_type" {
+  description = "ON_DEMAND or SPOT (keep ON_DEMAND for system NG)"
+  type        = string
+  default     = "ON_DEMAND"
+}
+
+variable "node_disk_size_gb" {
+  description = "Root disk size for system node group"
+  type        = number
+  default     = 50
+}
+
+variable "enable_cluster_logs" {
+  description = "Enable control plane logs"
+  type        = bool
+  default     = true
+}
+
+variable "control_plane_log_retention_days" {
+  description = "CloudWatch retention for control plane logs"
+  type        = number
+  default     = 30
+}
+
+variable "eks_cluster_management_role_trust_principals" {
   default = []
 }
 

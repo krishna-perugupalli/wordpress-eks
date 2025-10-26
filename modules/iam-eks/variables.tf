@@ -16,10 +16,6 @@ variable "extra_cluster_policy_arns" {
   default = []
 }
 
-variable "account_number" {
-  description = "The AWS Account number where the resources will be provisioned. This account will be used for billing and access control."
-}
-
 variable "eks_cluster_management_role_trust_principals" {
   default = []
 }

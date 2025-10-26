@@ -2,7 +2,7 @@
 # Cluster IAM role
 #############################################
 /* resource "aws_iam_role" "cluster" {
-  name = "${var.name}-cluster-role"
+  name = "${local.name}-cluster-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -33,7 +33,7 @@ resource "aws_iam_role_policy_attachment" "cluster_extra" {
 # Nodegroup IAM role
 #############################################
 /* resource "aws_iam_role" "node" {
-  name = "${var.name}-nodegroup-role"
+  name = "${local.name}-nodegroup-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -63,7 +63,11 @@ resource "aws_iam_role_policy_attachment" "node_extra" {
 } */
 
 data "aws_caller_identity" "current" {}
-locals { account_number = data.aws_caller_identity.current.account_id }
+locals {
+  account_number    = data.aws_caller_identity.current.account_id
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  kms_key_arn       = module.secrets_iam.kms_secrets_arn
+}
 
 #############################################
 # EKS Roles (Completly new) - Starts from here.
@@ -71,7 +75,7 @@ locals { account_number = data.aws_caller_identity.current.account_id }
 ### EKS Cluster Role ###
 resource "aws_iam_role" "eks_cluster_role" {
   ## count = var.enable_eks ? 1 : 0
-  name = "${var.name}-eks_cluster_role"
+  name = "${local.name}-eks_cluster_role"
   tags = var.tags
   assume_role_policy = jsonencode({
     Statement = [{
@@ -87,19 +91,19 @@ resource "aws_iam_role" "eks_cluster_role" {
 
 resource "aws_iam_role" "ebs_csi_role" {
   # count = var.enable_eks ? 1 : 0
-  name = "${var.name}-eks_ebs_csi_role"
+  name = "${local.name}-eks_ebs_csi_role"
   tags = var.tags
   assume_role_policy = jsonencode({
     Statement = [{
       Action = "sts:AssumeRoleWithWebIdentity"
       Effect = "Allow"
       Principal = {
-        Federated = "arn:aws:iam::${local.account_number}:oidc-provider/${var.oidc_provider_arn}"
+        Federated = "arn:aws:iam::${local.account_number}:oidc-provider/${local.oidc_provider_arn}"
       }
       Condition = {
         "StringEquals" : {
-          "${var.oidc_provider_arn}:sub" : "system:serviceaccount:kube-system:ebs-csi-controller-sa",
-          "${var.oidc_provider_arn}:aud" : "sts.amazonaws.com"
+          "${local.oidc_provider_arn}:sub" : "system:serviceaccount:kube-system:ebs-csi-controller-sa",
+          "${local.oidc_provider_arn}:aud" : "sts.amazonaws.com"
         }
       }
     }]
@@ -161,7 +165,7 @@ resource "aws_iam_role_policy_attachment" "ebs_csi_policy-attachment" {
 ### EKS Node Group Role ###
 resource "aws_iam_role" "eks_node_group_role" {
   # count = var.enable_eks ? 1 : 0
-  name = "${var.name}-eks-node-group-role"
+  name = "${local.name}-eks-node-group-role"
 
   assume_role_policy = jsonencode({
     Statement = [{
@@ -213,7 +217,7 @@ resource "aws_iam_role_policy_attachment" "AmazonSSMManagedInstanceCore-attachme
 
 resource "aws_iam_role_policy" "kube2iam_access_policy" {
   # count = var.enable_eks ? 1 : 0
-  name = "${var.name}-kube2iam-access-policy"
+  name = "${local.name}-kube2iam-access-policy"
   role = aws_iam_role.eks_node_group_role.id
   policy = jsonencode({
     "Version" = "2012-10-17",
@@ -229,7 +233,7 @@ resource "aws_iam_role_policy" "kube2iam_access_policy" {
 
 resource "aws_iam_role_policy" "eks_node_group_role_kms_policy" {
   # count = var.enable_eks ? 1 : 0
-  name = "${var.name}-eks-node-kms-policy"
+  name = "${local.name}-eks-node-kms-policy"
   role = aws_iam_role.eks_node_group_role.id
   policy = jsonencode({
     "Version" = "2012-10-17",
@@ -248,7 +252,7 @@ resource "aws_iam_role_policy" "eks_node_group_role_kms_policy" {
           "kms:ListGrants",
           "kms:RevokeGrant"
         ],
-        "Resource" = "${var.kms_key_arn}"
+        "Resource" = "${local.kms_key_arn}"
       }
     ]
   })
@@ -259,8 +263,8 @@ resource "aws_iam_role_policy" "eks_node_group_role_kms_policy" {
 
 resource "aws_iam_role" "cluster_management_role" {
   # count = var.enable_eks ? 1 : 0
-  name = "${var.name}-eks-cluster-management-role"
-  tags = merge(var.tags, { Name = "${var.name}-eks-cluster-management-role" })
+  name = "${local.name}-eks-cluster-management-role"
+  tags = merge(var.tags, { Name = "${local.name}-eks-cluster-management-role" })
   assume_role_policy = jsonencode({
     Statement = [{
       Action = "sts:AssumeRole"
@@ -275,7 +279,7 @@ resource "aws_iam_role" "cluster_management_role" {
 }
 
 resource "aws_iam_role_policy" "cluster_management_access_policy" {
-  name = "${var.name}-eks-access-policy"
+  name = "${local.name}-eks-access-policy"
   role = aws_iam_role.cluster_management_role.id
   policy = jsonencode({
     Version = "2012-10-17"
@@ -296,14 +300,14 @@ resource "aws_iam_role_policy" "cluster_management_access_policy" {
           "eks:UpdateClusterVersion",
           "eks:UpdateNodegroupConfig"
         ]
-        Resource = ["arn:aws:eks:${var.region}:${local.account_number}:cluster/${var.cluster_name}"]
+        Resource = ["arn:aws:eks:${var.region}:${local.account_number}:cluster/${local.name}"]
       },
     ]
   })
 }
 
 resource "aws_iam_role_policy" "cluster_management_oidc_policy" {
-  name = "${var.name}-get-oidc-provider-access"
+  name = "${local.name}-get-oidc-provider-access"
   role = aws_iam_role.cluster_management_role.id
   policy = jsonencode({
     Version = "2012-10-17"
@@ -320,7 +324,7 @@ resource "aws_iam_role_policy" "cluster_management_oidc_policy" {
 }
 
 resource "aws_iam_role_policy" "cluster_management_logs_policy" {
-  name = "${var.name}-logs-policy"
+  name = "${local.name}-logs-policy"
   role = aws_iam_role.cluster_management_role.id
   policy = jsonencode({
     Version = "2012-10-17"
@@ -340,13 +344,13 @@ resource "aws_iam_role_policy" "cluster_management_logs_policy" {
 
 resource "aws_eks_access_entry" "cluster_manager" {
   # count         = var.enable_eks ? 1 : 0
-  cluster_name  = var.cluster_name
+  cluster_name  = local.name
   principal_arn = aws_iam_role.cluster_management_role.arn
   type          = "STANDARD"
 }
 resource "aws_eks_access_policy_association" "cluster_manager_policy" {
   # count         = var.enable_eks ? 1 : 0
-  cluster_name  = var.cluster_name
+  cluster_name  = local.name
   policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
   principal_arn = aws_iam_role.cluster_management_role.arn
   access_scope {

@@ -63,22 +63,21 @@ module "foundation" {
 #############################################
 # IAM roles for EKS control plane and nodes
 #############################################
-module "iam_eks" {
+/* module "iam_eks" {
   source            = "../../modules/iam-eks"
   name              = local.name
   tags              = local.tags
-  account_number    = data.aws_caller_identity.current.account_id
   region            = var.region
-  oidc_provider_arn = module.eks_core.oidc_provider_arn
-  oidc_issuer_url   = module.eks_core.cluster_oidc_issuer_url
-  cluster_name      = module.eks_core.cluster_name
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  oidc_issuer_url   = module.eks.cluster_oidc_issuer_url
+  cluster_name      = module.eks.cluster_name
   kms_key_arn       = module.secrets_iam.kms_secrets_arn
-}
+} */
 
 #############################################
 # EKS cluster (terraform-aws-modules/eks via our wrapper)
 #############################################
-module "eks_core" {
+/* module "eks_core" {
   source             = "../../modules/eks-core"
   name               = local.name
   region             = var.region
@@ -86,8 +85,8 @@ module "eks_core" {
   private_subnet_ids = module.foundation.private_subnet_ids
   # service_account_role_arn_vpc_cni = module.iam_eks.vpc_cni_irsa[0].iam_role_arn
   # service_account_role_arn_efs_csi = module.iam_eks.efs_csi_irsa[0].iam_role_arn
-  cluster_role_arn             = module.iam_eks.cluster_role_arn
-  node_role_arn                = module.iam_eks.node_role_arn
+  cluster_role_arn             = aws_iam_role.eks_cluster_role.arn
+  node_role_arn                = aws_iam_role.eks_node_group_role.arn
   secrets_kms_key_arn          = module.secrets_iam.kms_secrets_arn
   cluster_version              = var.cluster_version
   endpoint_public_access       = var.endpoint_public_access
@@ -98,25 +97,25 @@ module "eks_core" {
   system_node_max              = var.system_node_max
   access_entries               = local.eks_access_entries
   tags                         = local.tags
-}
+} */
 
 #############################################
 # Minimal k8s provider for aws-auth only
 # Note: Replaced with aws eks module auth mechanism (autentication_mode = "API_AND_CONFIG_MAP")
 #############################################
 /* provider "kubernetes" {
-  host                   = module.eks_core.cluster_endpoint
-  cluster_ca_certificate = base64decode(module.eks_core.cluster_ca)
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_ca)
 
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
-    args        = ["eks", "get-token", "--cluster-name", module.eks_core.cluster_name, "--region", var.region]
+    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name, "--region", var.region]
   }
 } 
 
 resource "time_sleep" "wait_for_eks" {
-  depends_on      = [module.eks_core]
+  depends_on      = [module.eks]
   create_duration = "30s"
 }
 
@@ -129,7 +128,7 @@ module "aws_auth" {
   node_role_arn   = module.iam_eks.node_role_arn
   admin_role_arns = var.admin_role_arns
 
-  depends_on = [module.eks_core]
+  depends_on = [module.eks]
 } */
 
 #############################################
@@ -148,7 +147,7 @@ module "data_aurora" {
   storage_kms_key_arn = module.foundation.kms_rds_arn
   # secrets_manager_kms_key_arn = module.secrets_iam.kms_secrets_arn
 
-  source_node_sg_id   = module.eks_core.node_security_group_id
+  source_node_sg_id   = module.eks.node_security_group_id
   allowed_cidr_blocks = [] # or ["x.x.x.x/32"] temporarily for migrations
 
   serverless_v2      = true
@@ -178,7 +177,7 @@ module "data_efs" {
   vpc_id             = module.foundation.vpc_id
   private_subnet_ids = module.foundation.private_subnet_ids
 
-  allowed_security_group_ids = [module.eks_core.node_security_group_id]
+  allowed_security_group_ids = [module.eks.node_security_group_id]
 
   kms_key_arn         = var.efs_kms_key_arn
   performance_mode    = var.efs_performance_mode
@@ -227,7 +226,7 @@ module "secrets_iam" {
 
   wpapp_db_host = module.data_aurora.writer_endpoint
 
-  cluster_oidc_provider_arn = module.eks_core.oidc_provider_arn
+  cluster_oidc_provider_arn = module.eks.oidc_provider_arn
   eso_namespace             = "external-secrets"
   eso_service_account_name  = "external-secrets"
   eso_validate_audience     = true
@@ -252,7 +251,7 @@ module "elasticache" {
   name                     = local.name
   vpc_id                   = module.foundation.vpc_id
   subnet_ids               = module.foundation.private_subnet_ids
-  node_sg_source_ids       = [module.eks_core.node_security_group_id]
+  node_sg_source_ids       = [module.eks.node_security_group_id]
   enable_auth_token_secret = true
   auth_token_secret_arn    = module.secrets_iam.redis_auth_secret_arn
   tags                     = local.tags
@@ -301,7 +300,7 @@ resource "kubernetes_storage_class_v1" "efs_ap" {
 
   # Make sure the cluster and EFS exist before creating the SC
   depends_on = [
-    module.eks_core,
+    module.eks,
     module.data_efs
   ]
 }

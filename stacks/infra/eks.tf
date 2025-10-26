@@ -13,11 +13,50 @@ locals {
 
 resource "aws_cloudwatch_log_group" "eks_cp" {
   for_each          = toset(local.cp_logs)
-  name              = "/aws/eks/${var.name}/cluster/${each.value}"
+  name              = "/aws/eks/${local.name}/cluster/${each.value}"
   retention_in_days = var.control_plane_log_retention_days
   tags              = var.tags
 }
 
+locals {
+  name = var.project
+  tags = merge(
+    {
+      Project = var.project
+      Env     = var.env
+      Owner   = var.owner_email
+    },
+    var.tags
+  )
+}
+
+locals {
+  eks_access_entries_roles = {
+    for idx, arn in var.eks_admin_role_arns :
+    "admin_role_${idx}" => {
+      principal_arn = arn
+      type          = "STANDARD"
+      policy_associations = [{
+        policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+        access_scope = { type = "cluster" }
+      }]
+    }
+  }
+
+  eks_access_entries_users = {
+    for idx, arn in var.eks_admin_user_arns :
+    "admin_user_${idx}" => {
+      principal_arn = arn
+      type          = "STANDARD"
+      policy_associations = [{
+        policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+        access_scope = { type = "cluster" }
+      }]
+    }
+  }
+
+  eks_access_entries = merge(local.eks_access_entries_roles, local.eks_access_entries_users)
+}
 
 
 #############################################
@@ -34,16 +73,16 @@ module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 20.11"
 
-  cluster_name    = var.name
+  cluster_name    = local.name
   cluster_version = var.cluster_version
-  vpc_id          = var.vpc_id
-  subnet_ids      = var.private_subnet_ids
+  vpc_id          = module.foundation.vpc_id
+  subnet_ids      = module.foundation.private_subnet_ids
   enable_irsa     = var.enable_irsa
 
   create_kms_key = false
   cluster_encryption_config = {
     resources        = ["secrets"]
-    provider_key_arn = coalesce(var.secrets_kms_key_arn, local.default_kms_key_arn)
+    provider_key_arn = coalesce(module.secrets_iam.kms_secrets_arn, local.default_kms_key_arn)
   }
   node_security_group_additional_rules = {
     nodes_istiod_port = {
@@ -68,7 +107,7 @@ module "eks" {
     # NOTE - if creating multiple security groups with this module, only tag the
     # security group that Karpenter should utilize with the following tag
     # (i.e. - at most, only one security group should have this tag in your account)
-    "karpenter.sh/discovery" = var.name
+    "karpenter.sh/discovery" = local.name
   }
 
   eks_managed_node_group_defaults = {
@@ -84,21 +123,21 @@ module "eks" {
   cluster_endpoint_public_access_cidrs = var.endpoint_public_access ? var.public_access_cidrs : null
   cluster_enabled_log_types            = local.cp_logs
 
-  iam_role_arn        = var.cluster_role_arn
+  iam_role_arn        = aws_iam_role.eks_cluster_role.arn
   authentication_mode = "API_AND_CONFIG_MAP"
 
-  access_entries = var.access_entries
+  access_entries = local.eks_access_entries
 
   # ----- Managed Add-ons (un-pinned; let AWS pick valid versions) -----
   cluster_addons = {
     vpc-cni = {
       most_recent       = true
       resolve_conflicts = "OVERWRITE"
-      # service_account_role_arn = var.service_account_role_arn_vpc_cni
+      # service_account_role_arn = module.vpc_cni_irsa[0].iam_role_arn
       configuration_values = var.enable_cni_prefix_delegation ? jsonencode({
         env = {
           ENABLE_PREFIX_DELEGATION = "true"
-          WARM_PREFIX_TARGET       = tostring(var.cni_prefix_warm_target)
+          WARM_PREFIX_TARGET       = 1
         }
       }) : null
     }
@@ -119,9 +158,9 @@ module "eks" {
 
     # We use EFS for wp-content; install the EFS CSI driver as an add-on.
     aws-efs-csi-driver = {
-      most_recent       = true
-      resolve_conflicts = "OVERWRITE"
-      # service_account_role_arn = var.service_account_role_arn_efs_csi
+      most_recent              = true
+      resolve_conflicts        = "OVERWRITE"
+      service_account_role_arn = module.efs_csi_irsa[0].iam_role_arn
     }
     aws-ebs-csi-driver = {
       most_recent       = true
@@ -133,7 +172,7 @@ module "eks" {
   eks_managed_node_groups = {
     system = {
       name           = "system"
-      iam_role_arn   = var.node_role_arn
+      iam_role_arn   = aws_iam_role.eks_node_group_role.arn
       instance_types = [var.system_node_type]
       ami_type       = var.node_ami_type
       capacity_type  = var.node_capacity_type
@@ -155,43 +194,5 @@ module "eks" {
   tags = var.tags
 }
 
-#############################################
-# IRSA helpers (OIDC hostpath)
-#############################################
-locals {
-  oidc_issuer_url      = module.eks.cluster_oidc_issuer_url
-  oidc_issuer_hostpath = replace(local.oidc_issuer_url, "https://", "")
-}
 
-#############################################
-# IRSA: VPC CNI  (kube-system/aws-node)
-#############################################
-data "aws_iam_policy_document" "vpc_cni_trust" {
-  statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRoleWithWebIdentity"]
-
-    principals {
-      type        = "Federated"
-      identifiers = [module.eks.oidc_provider_arn]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "${local.oidc_issuer_hostpath}:sub"
-      values   = ["system:serviceaccount:kube-system:aws-node"]
-    }
-  }
-}
-
-resource "aws_iam_role" "vpc_cni" {
-  name               = "${var.name}-vpc-cni"
-  assume_role_policy = data.aws_iam_policy_document.vpc_cni_trust.json
-  tags               = var.tags
-}
-
-resource "aws_iam_role_policy_attachment" "vpc_cni" {
-  role       = aws_iam_role.vpc_cni.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-}
 

@@ -1,22 +1,22 @@
 # EKS
 output "cluster_name" {
-  value = module.eks_core.cluster_name
+  value = module.eks.cluster_name
 }
 
 output "cluster_endpoint" {
-  value = module.eks_core.cluster_endpoint
+  value = module.eks.cluster_endpoint
 }
 
 output "cluster_oidc_issuer_url" {
-  value = module.eks_core.cluster_oidc_issuer_url
+  value = module.eks.cluster_oidc_issuer_url
 }
 
 output "oidc_provider_arn" {
-  value = module.eks_core.oidc_provider_arn
+  value = module.eks.oidc_provider_arn
 }
 
 output "node_security_group_id" {
-  value = module.eks_core.node_security_group_id
+  value = module.eks.node_security_group_id
 }
 
 # Networking/KMS
@@ -63,4 +63,11 @@ output "region" {
 output "secrets_read_policy_arn" {
   description = "IAM policy ARN that grants External Secrets Operator read access."
   value       = module.secrets_iam.secrets_read_policy_arn
+}
+
+output "cluster_role_arn" {
+  value = aws_iam_role.eks_cluster_role.arn
+}
+output "node_role_arn" {
+  value = aws_iam_role.eks_node_group_role.arn
 }
