@@ -19,18 +19,6 @@ resource "aws_cloudwatch_log_group" "eks_cp" {
 }
 
 locals {
-  name = var.project
-  tags = merge(
-    {
-      Project = var.project
-      Env     = var.env
-      Owner   = var.owner_email
-    },
-    var.tags
-  )
-}
-
-locals {
   eks_access_entries_roles = {
     for idx, arn in var.eks_admin_role_arns :
     "admin_role_${idx}" => {
