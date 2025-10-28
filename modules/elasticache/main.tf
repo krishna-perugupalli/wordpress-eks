@@ -86,17 +86,15 @@ data "aws_secretsmanager_secret_version" "auth" {
   # Avoid referencing values that may be unknown (e.g., ARN passed from a resource).
   count = var.enable_auth_token_secret ? 1 : 0
 
-  secret_id = var.auth_token_secret_arn
+  secret_id     = var.auth_token_secret_arn
+  version_stage = "AWSCURRENT"
 }
 
 locals {
-  redis_auth_token_raw = var.auth_token != "" ? var.auth_token : (
-    var.enable_auth_token_secret ?
-    try(jsondecode(data.aws_secretsmanager_secret_version.auth[0].secret_string).token, null) :
-    null
-  )
-
-  redis_auth_token = local.redis_auth_token_raw == null ? null : replace(replace(replace(local.redis_auth_token_raw, "@", ""), "\"", ""), "/", "")
+  _secret_string   = try(data.aws_secretsmanager_secret_version.auth.secret_string, null)
+  _secret_json     = try(jsondecode(local._secret_string), null)
+  _raw_token       = local._secret_json != null ? try(local._secret_json.token, null) : local._secret_string
+  redis_auth_token = trim(coalesce(local._raw_token, "")) != "" ? trim(local._raw_token) : null
 }
 
 #############################################
