@@ -149,6 +149,12 @@ variable "eks_cluster_management_role_trust_principals" {
   default = []
 }
 
+variable "cni_prefix_warm_target" {
+  description = "WARM_PREFIX_TARGET for VPC CNI when prefix delegation is enabled"
+  type        = number
+  default     = 1
+}
+
 # ---------------------------
 # Aurora MySQL (Serverless v2)
 # ---------------------------

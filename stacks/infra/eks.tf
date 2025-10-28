@@ -123,7 +123,7 @@ module "eks" {
       configuration_values = var.enable_cni_prefix_delegation ? jsonencode({
         env = {
           ENABLE_PREFIX_DELEGATION = "true"
-          WARM_PREFIX_TARGET       = 1
+          WARM_PREFIX_TARGET       = tostring(var.cni_prefix_warm_target)
         }
       }) : null
     }
@@ -149,13 +149,14 @@ module "eks" {
       service_account_role_arn = module.efs_csi_irsa.iam_role_arn
     }
     aws-ebs-csi-driver = {
-      most_recent       = true
-      resolve_conflicts = "OVERWRITE"
+      most_recent              = true
+      resolve_conflicts        = "OVERWRITE"
+      service_account_role_arn = module.ebs_csi_irsa.iam_role_arn
     }
   }
 
   # ----- System Managed Node Group -----
-  eks_managed_node_groups = {
+  /* eks_managed_node_groups = {
     system = {
       name           = "system"
       iam_role_arn   = aws_iam_role.eks_node_group_role.arn
@@ -175,9 +176,64 @@ module "eks" {
 
       tags = var.tags
     }
+  } */
+
+  eks_managed_node_groups = {
+
+    default = {
+      name                    = "${local.name}-default"
+      subnet_ids              = module.foundation.private_subnet_ids
+      min_size                = 2
+      max_size                = 2
+      desired_size            = 2
+      force_update_version    = true
+      ami_type                = var.node_ami_type
+      instance_types          = [var.system_node_type]
+      description             = "${local.name} - EKS managed node group launch template"
+      ebs_optimized           = true
+      disable_api_termination = false
+      enable_monitoring       = true
+      create_security_group   = false
+      create_iam_role         = false
+      use_name_prefix         = false
+      iam_role_arn            = aws_iam_role.eks_node_group_role.arn
+      tags                    = merge({ "service" = "ec2", "EksClusterName" = local.name }, local.tags)
+
+      # Increase default timeouts to reduce likelihood of timeout errors on upgrades
+      timeouts = {
+        create = "120m"
+        update = "120m"
+        delete = "60m"
+      }
+
+      update_config = {
+        max_unavailable_percentage = 50 # or set `max_unavailable`
+      }
+      block_device_mappings = {
+        xvda = {
+          device_name = "/dev/xvda"
+          ebs = {
+            volume_size           = 75
+            volume_type           = "gp3"
+            iops                  = 3000
+            throughput            = 150
+            encrypted             = true
+            delete_on_termination = true
+            #kms_key_id            = module.kms_key.arn
+          }
+        }
+      }
+
+      metadata_options = {
+        http_endpoint               = "enabled"
+        http_tokens                 = "required"
+        http_put_response_hop_limit = 2
+        instance_metadata_tags      = "disabled"
+      }
+    }
   }
 
-  tags = var.tags
+  tags = merge({ "service" = "eks", "Name" = local.name }, local.tags)
 }
 
 

@@ -346,7 +346,9 @@ resource "aws_eks_access_entry" "cluster_manager" {
   cluster_name  = local.name
   principal_arn = aws_iam_role.cluster_management_role.arn
   type          = "STANDARD"
+  depends_on    = [moduke.eks]
 }
+
 resource "aws_eks_access_policy_association" "cluster_manager_policy" {
   # count         = var.enable_eks ? 1 : 0
   cluster_name  = local.name
