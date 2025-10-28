@@ -346,7 +346,7 @@ resource "aws_eks_access_entry" "cluster_manager" {
   cluster_name  = local.name
   principal_arn = aws_iam_role.cluster_management_role.arn
   type          = "STANDARD"
-  depends_on    = [moduke.eks]
+  depends_on    = [module.eks]
 }
 
 resource "aws_eks_access_policy_association" "cluster_manager_policy" {
