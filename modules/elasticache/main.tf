@@ -81,19 +81,24 @@ resource "aws_elasticache_parameter_group" "this" {
 #############################################
 # Auth token (from Secrets Manager) — optional
 #############################################
+# Read the secret only when enabled + ARN provided
 data "aws_secretsmanager_secret_version" "auth" {
-  # Make count depend only on a static boolean so it's known at plan time.
-  # Avoid referencing values that may be unknown (e.g., ARN passed from a resource).
-  count = var.enable_auth_token_secret ? 1 : 0
-
+  count         = var.enable_auth_token_secret && var.auth_token_secret_arn != "" ? 1 : 0
   secret_id     = var.auth_token_secret_arn
   version_stage = "AWSCURRENT"
 }
 
 locals {
-  _secret_string   = try(data.aws_secretsmanager_secret_version.auth.secret_string, null)
-  _secret_json     = try(jsondecode(local._secret_string), null)
-  _raw_token       = local._secret_json != null ? try(local._secret_json.token, null) : local._secret_string
+  use_secret = var.enable_auth_token_secret && var.auth_token_secret_arn != ""
+
+  # Safely fetch the string when count == 1
+  _secret_string = local.use_secret ? data.aws_secretsmanager_secret_version.auth[0].secret_string : null
+
+  # If the secret is JSON like {"token":"..."} parse it; otherwise treat as raw string
+  _secret_json = local._secret_string != null ? try(jsondecode(local._secret_string), null) : null
+  _raw_token   = local._secret_json != null ? try(local._secret_json.token, null) : local._secret_string
+
+  # Final token (trimmed); null if empty so TF won’t churn
   redis_auth_token = trim(coalesce(local._raw_token, "")) != "" ? trim(local._raw_token) : null
 }
 
