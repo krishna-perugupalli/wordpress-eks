@@ -145,7 +145,7 @@ resource "aws_cloudfront_distribution" "this" {
 
     # Inject the secret header CF -> ALB
     dynamic "custom_header" {
-      for_each = local.origin_secret != null && trim(local.origin_secret) != "" ? [1] : []
+      for_each = local.origin_secret != null && length(trimspace(local.origin_secret)) > 0 ? [1] : []
       content {
         name  = "X-Origin-Secret"
         value = local.origin_secret
