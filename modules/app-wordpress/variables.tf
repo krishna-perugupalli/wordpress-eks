@@ -96,6 +96,12 @@ variable "db_user" {
   default     = "wpapp"
 }
 
+variable "db_port" {
+  description = "DB port"
+  type        = number
+  default     = 3306
+}
+
 variable "db_secret_arn" {
   description = "Secrets Manager ARN that contains {password} for the DB user"
   type        = string
