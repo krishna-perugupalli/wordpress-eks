@@ -12,9 +12,9 @@ locals {
 resource "aws_cloudfront_cache_policy" "bypass_auth" {
   name = "${var.name}-bypass-auth"
   # Treat as a no-cache policy for dynamic WP routes
-  default_ttl = 0
-  max_ttl     = 0
-  min_ttl     = 0
+  default_ttl = 50
+  max_ttl     = 100
+  min_ttl     = 1
 
   parameters_in_cache_key_and_forwarded_to_origin {
     enable_accept_encoding_brotli = true
