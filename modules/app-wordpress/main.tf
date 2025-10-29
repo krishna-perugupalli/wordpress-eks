@@ -286,19 +286,6 @@ resource "helm_release" "wordpress" {
     value = var.resources_requests_memory
   }
 
-  set {
-    name  = "volumePermissions.enabled"
-    value = "true"
-  }
-  set {
-    name  = "podSecurityContext.fsGroup"
-    value = "1001"
-  }
-  set {
-    name  = "podSecurityContext.fsGroupChangePolicy"
-    value = "OnRootMismatch"
-  }
-
   ###########################################
   # Use VALUES (not --set) for ingress + HPA
   ###########################################
