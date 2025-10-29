@@ -249,6 +249,7 @@ resource "helm_release" "wordpress" {
 
   depends_on = [
     kubernetes_namespace.ns,
-    kubectl_manifest.wp_env_es
+    kubectl_manifest.wp_env_es,
+    kubectl_manifest.wp_admin_es
   ]
 }
