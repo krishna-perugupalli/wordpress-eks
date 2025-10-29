@@ -46,6 +46,7 @@ module "secrets_operator" {
 
   # Option A: use module-managed read policy (recommended via secrets-iam)
   secrets_read_policy_arn = local.secrets_read_policy_arn
+  eso_role_arn            = local.infra_outputs.eso_role_arn
 
   tags = local.tags
 

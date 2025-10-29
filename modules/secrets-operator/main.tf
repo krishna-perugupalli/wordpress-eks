@@ -18,53 +18,6 @@ resource "null_resource" "input_guard" {
   }
 }
 
-data "aws_iam_policy_document" "eso_inline" {
-  count = local._has_allowed_arns ? 1 : 0
-
-  statement {
-    sid       = "ReadAllowedSecrets"
-    effect    = "Allow"
-    actions   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
-    resources = local._allowed_arns_input
-  }
-}
-
-resource "aws_iam_policy" "eso_inline" {
-  count  = local._has_allowed_arns ? 1 : 0
-  name   = "${var.name}-eso-read"
-  policy = data.aws_iam_policy_document.eso_inline[0].json
-  tags   = var.tags
-}
-
-# IRSA trust for ESO controller
-data "aws_iam_policy_document" "trust" {
-  statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRoleWithWebIdentity"]
-    principals {
-      type        = "Federated"
-      identifiers = [var.oidc_provider_arn]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "${local.oidc_hostpath}:sub"
-      values   = ["system:serviceaccount:${local.ns}:${local.sa_name}"]
-    }
-  }
-}
-
-resource "aws_iam_role" "eso" {
-  name               = "${var.name}-eso"
-  assume_role_policy = data.aws_iam_policy_document.trust.json
-  tags               = var.tags
-}
-
-# Attach either provided policy ARN (Option A) or the inline-created (Option B)
-resource "aws_iam_role_policy_attachment" "eso_attach" {
-  role       = aws_iam_role.eso.name
-  policy_arn = local._has_policy_arn ? local._policy_arn_input : aws_iam_policy.eso_inline[0].arn
-}
-
 # Namespace + ServiceAccount with IRSA
 resource "kubernetes_namespace" "ns" {
   metadata { name = local.ns }
@@ -75,7 +28,7 @@ resource "kubernetes_service_account" "eso" {
     name      = local.sa_name
     namespace = local.ns
     annotations = {
-      "eks.amazonaws.com/role-arn" = aws_iam_role.eso.arn
+      "eks.amazonaws.com/role-arn" = var.eso_role_arn
     }
   }
   automount_service_account_token = true

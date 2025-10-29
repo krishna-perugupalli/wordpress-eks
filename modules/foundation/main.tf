@@ -209,7 +209,8 @@ resource "aws_s3_bucket" "logs" {
 }
 resource "aws_s3_bucket_ownership_controls" "logs" {
   bucket = aws_s3_bucket.logs.id
-  rule { object_ownership = "BucketOwnerEnforced" }
+  # CloudFront standard logs require ACLs; use Preferred, not Enforced
+  rule { object_ownership = "BucketOwnerPreferred" }
 }
 resource "aws_s3_bucket_versioning" "logs" {
   bucket = aws_s3_bucket.logs.id
@@ -219,11 +220,17 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   bucket = aws_s3_bucket.logs.id
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.s3.arn
+      # Use SSE-S3 for compatibility with CloudFront log delivery
+      sse_algorithm = "AES256"
     }
-    bucket_key_enabled = true
   }
+}
+
+# Grant ACL permissions required for log delivery
+resource "aws_s3_bucket_acl" "logs" {
+  bucket     = aws_s3_bucket.logs.id
+  acl        = "log-delivery-write"
+  depends_on = [aws_s3_bucket_ownership_controls.logs]
 }
 resource "aws_s3_bucket_public_access_block" "logs" {
   bucket                  = aws_s3_bucket.logs.id

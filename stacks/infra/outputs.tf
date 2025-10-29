@@ -76,3 +76,8 @@ output "log_bucket_name" {
   description = "CloudFront log S3 bucket name"
   value       = module.foundation.logs_bucket
 }
+
+output "eso_role_arn" {
+  description = "IAM Role ARN for the External Secrets Operator (IRSA)."
+  value       = module.secrets_iam.eso_role_arn
+}

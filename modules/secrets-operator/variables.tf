@@ -23,6 +23,11 @@ variable "namespace" {
   default     = "external-secrets"
 }
 
+variable "eso_role_arn" {
+  description = "External Secrets Service Account ESO ARN"
+  type        = string
+}
+
 # ---- Choose ONE of the following two inputs ----
 
 variable "secrets_read_policy_arn" {
