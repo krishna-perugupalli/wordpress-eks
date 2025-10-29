@@ -25,12 +25,9 @@ resource "aws_cloudfront_cache_policy" "bypass_auth" {
       cookie_behavior = "all"
     }
 
-    # Forward required headers; keep cache key simple
+    # When caching is disabled (TTL=0), headers cannot be part of the cache key
     headers_config {
-      header_behavior = "whitelist"
-      headers {
-        items = ["Host", "CloudFront-Viewer-Country"]
-      }
+      header_behavior = "none"
     }
 
     # Forward all query strings; needed for WP routes like ?p=, ?s=, etc.
