@@ -1,10 +1,16 @@
 #############################################
+# Caller identity
+#############################################
+data "aws_caller_identity" "current" {}
+
+#############################################
 # KMS: Secrets Manager CMK (+ alias)
 #############################################
 resource "aws_kms_key" "secrets" {
   description             = "CMK for Secrets Manager (${var.name})"
   enable_key_rotation     = true
   deletion_window_in_days = 30
+
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -16,7 +22,7 @@ resource "aws_kms_key" "secrets" {
         Action    = "kms:*",
         Resource  = "*"
       },
-      # Allow Secrets Manager to use this key via S3/Direct service (ViaService)
+      # Allow Secrets Manager to use this key (service-side usage)
       {
         Sid       = "AllowSecretsManagerUse",
         Effect    = "Allow",
@@ -33,6 +39,7 @@ resource "aws_kms_key" "secrets" {
       }
     ]
   })
+
   tags = var.tags
 }
 
@@ -40,8 +47,6 @@ resource "aws_kms_alias" "secrets" {
   name          = "alias/${var.name}-secrets"
   target_key_id = aws_kms_key.secrets.key_id
 }
-
-data "aws_caller_identity" "current" {}
 
 #############################################
 # Optional: KMS for SSM Parameter Store
@@ -51,6 +56,7 @@ resource "aws_kms_key" "ssm" {
   description             = "CMK for SSM Parameter Store (${var.name})"
   enable_key_rotation     = true
   deletion_window_in_days = 30
+
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -77,6 +83,7 @@ resource "aws_kms_key" "ssm" {
       }
     ]
   })
+
   tags = var.tags
 }
 
@@ -87,9 +94,10 @@ resource "aws_kms_alias" "ssm" {
 }
 
 #############################################
-# Optional: create Secrets Manager secrets
+# Optional: create module-owned Secrets Manager secrets
 #############################################
-# DB app secret
+
+# --- WP App DB Secret ---
 resource "random_password" "wpapp" {
   count   = var.create_wpapp_db_secret && var.wpapp_db_password == "" ? 1 : 0
   length  = 32
@@ -121,7 +129,7 @@ resource "aws_secretsmanager_secret_version" "wpapp" {
   secret_string = local.wpapp_secret_value_json
 }
 
-# WP admin secret
+# --- WP Admin Secret ---
 resource "random_password" "wpadmin" {
   count   = var.create_wp_admin_secret && var.wp_admin_password == "" ? 1 : 0
   length  = 24
@@ -151,16 +159,52 @@ resource "aws_secretsmanager_secret_version" "wpadmin" {
   secret_string = local.wpadmin_secret_value_json
 }
 
-#############################################
-# IAM: Least-privilege reader policies
-#############################################
-# Reader policy for Secrets Manager (attach to ESO or an app role)
-# Reader policy for Secrets Manager (ESO) — NO KMS permissions
+# --- Redis AUTH secret (optional, JSON: {"token":"..."}) ---
+resource "random_password" "redis_token" {
+  count   = var.create_redis_auth_secret && var.existing_redis_auth_secret_arn == "" ? 1 : 0
+  length  = var.redis_auth_token_length
+  special = false
+}
 
-# Build the effective list of ARNs ESO can read:
-# - any external ARNs passed in via var.readable_secret_arns
-# - plus the ARNs of secrets we created here (if created)
+# choose CMK for redis: prefer caller-provided; else module CMK
 locals {
+  redis_kms_arn = var.kms_key_arn != "" ? var.kms_key_arn : aws_kms_key.secrets.arn
+}
+
+resource "aws_secretsmanager_secret" "redis_auth" {
+  count                   = var.create_redis_auth_secret && var.existing_redis_auth_secret_arn == "" ? 1 : 0
+  name                    = coalesce(var.redis_auth_secret_name, "${var.name}/redis/auth")
+  kms_key_id              = local.redis_kms_arn
+  recovery_window_in_days = 7
+  tags                    = var.tags
+}
+
+resource "aws_secretsmanager_secret_version" "redis_auth" {
+  count     = var.create_redis_auth_secret && var.existing_redis_auth_secret_arn == "" ? 1 : 0
+  secret_id = aws_secretsmanager_secret.redis_auth[0].id
+  secret_string = jsonencode({
+    token = random_password.redis_token[0].result
+  })
+}
+
+# Safe locals for created/existing redis secret reference
+locals {
+  redis_auth_secret_arn  = var.existing_redis_auth_secret_arn != "" ? var.existing_redis_auth_secret_arn : try(aws_secretsmanager_secret.redis_auth[0].arn, "")
+  redis_auth_token_value = var.existing_redis_auth_secret_arn != "" ? "" : try(random_password.redis_token[0].result, "")
+}
+
+#############################################
+# Build the list of secrets ESO may read
+#############################################
+locals {
+  # What this module created:
+  module_created_secret_arns = concat(
+    var.create_wpapp_db_secret ? [aws_secretsmanager_secret.wpapp[0].arn] : [],
+    var.create_wp_admin_secret ? [aws_secretsmanager_secret.wpadmin[0].arn] : [],
+    (var.create_redis_auth_secret && var.existing_redis_auth_secret_arn == "") ? [aws_secretsmanager_secret.redis_auth[0].arn] : []
+  )
+
+  # Caller-provided + module-created + redis (either existing or created)
   readable_secret_arns_candidate = concat(
     var.readable_secret_arns,
     var.create_wpapp_db_secret ? [aws_secretsmanager_secret.wpapp[0].arn] : [],
@@ -170,10 +214,40 @@ locals {
 
   readable_secret_arns_effective = distinct(compact(local.readable_secret_arns_candidate))
 
-  has_readable_secrets = length(var.readable_secret_arns) > 0 || var.create_wpapp_db_secret || var.create_wp_admin_secret || var.create_redis_auth_secret || var.existing_redis_auth_secret_arn != ""
+  has_readable_secrets = length(local.readable_secret_arns_effective) > 0
+
+  # External secrets = readable but not created here
+  external_readable_secret_arns = toset(setsubtract(
+    local.readable_secret_arns_effective,
+    compact(local.module_created_secret_arns)
+  ))
 }
 
+# Discover KMS key for each external secret (if any)
+data "aws_secretsmanager_secret" "external" {
+  for_each = { for arn in local.external_readable_secret_arns : arn => arn }
+  arn      = each.value
+}
+
+# Distinct set of CMK ARNs needed for decryption:
+# - module CMK for module-created secrets
+# - chosen redis CMK for module-created redis
+# - kms_key_id discovered for external secrets (nulls removed)
+locals {
+  kms_arns_for_read = distinct(compact(concat(
+    (var.create_wpapp_db_secret ? [aws_kms_key.secrets.arn] : []),
+    (var.create_wp_admin_secret ? [aws_kms_key.secrets.arn] : []),
+    (var.create_redis_auth_secret && var.existing_redis_auth_secret_arn == "" ? [local.redis_kms_arn] : []),
+    [for s in data.aws_secretsmanager_secret.external : s.kms_key_id]
+  )))
+}
+
+#############################################
+# IAM: Secrets read policy (ESO/app) — NO KMS here
+#############################################
 data "aws_iam_policy_document" "secrets_read" {
+  count = local.has_readable_secrets ? 1 : 0
+
   statement {
     sid    = "ReadAllowedSecrets"
     effect = "Allow"
@@ -206,11 +280,41 @@ data "aws_iam_policy_document" "secrets_read" {
 resource "aws_iam_policy" "secrets_read" {
   count  = local.has_readable_secrets ? 1 : 0
   name   = "${var.name}-secrets-read"
-  policy = data.aws_iam_policy_document.secrets_read.json
+  policy = data.aws_iam_policy_document.secrets_read[0].json
   tags   = var.tags
 }
 
-# Reader policy for specific SSM Parameters (optional)
+#############################################
+# IAM: KMS decrypt policy (derived CMKs) for ESO
+#############################################
+data "aws_iam_policy_document" "secrets_kms" {
+  count = length(local.kms_arns_for_read) > 0 ? 1 : 0
+
+  statement {
+    sid       = "KmsDecryptForSecretsManager"
+    effect    = "Allow"
+    actions   = ["kms:Decrypt", "kms:DescribeKey"]
+    resources = local.kms_arns_for_read
+
+    # Constrain to Secrets Manager path in this region
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["secretsmanager.${var.region}.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_policy" "secrets_kms" {
+  count  = length(local.kms_arns_for_read) > 0 ? 1 : 0
+  name   = "${var.name}-secrets-kms-decrypt"
+  policy = data.aws_iam_policy_document.secrets_kms[0].json
+  tags   = var.tags
+}
+
+#############################################
+# Optional: SSM read policy (includes KMS decrypt)
+#############################################
 data "aws_iam_policy_document" "ssm_read" {
   count = length(var.readable_ssm_parameter_arns) > 0 ? 1 : 0
 
@@ -236,47 +340,13 @@ resource "aws_iam_policy" "ssm_read" {
   tags   = var.tags
 }
 
-# Optional: generate a Redis AUTH token and store in Secrets Manager as JSON: {"token":"..."}
-resource "random_password" "redis_token" {
-  count   = var.create_redis_auth_secret && var.existing_redis_auth_secret_arn == "" ? 1 : 0
-  length  = var.redis_auth_token_length
-  special = false
-}
-
-resource "aws_secretsmanager_secret" "redis_auth" {
-  count                   = var.create_redis_auth_secret && var.existing_redis_auth_secret_arn == "" ? 1 : 0
-  name                    = coalesce(var.redis_auth_secret_name, "${var.name}/redis/auth")
-  kms_key_id              = var.kms_key_arn
-  recovery_window_in_days = 7
-  tags                    = var.tags
-}
-
-resource "aws_secretsmanager_secret_version" "redis_auth" {
-  count     = var.create_redis_auth_secret && var.existing_redis_auth_secret_arn == "" ? 1 : 0
-  secret_id = aws_secretsmanager_secret.redis_auth[0].id
-  secret_string = jsonencode({
-    token = random_password.redis_token[0].result
-  })
-}
-
-# Safe local to expose either the existing ARN or the created one (without evaluating missing indexes)
-locals {
-  redis_auth_secret_arn  = var.existing_redis_auth_secret_arn != "" ? var.existing_redis_auth_secret_arn : try(aws_secretsmanager_secret.redis_auth[0].arn, "")
-  redis_auth_token_value = var.existing_redis_auth_secret_arn != "" ? "" : try(random_password.redis_token[0].result, "")
-}
-
 #############################################
 # IRSA role for External Secrets Operator
-# - Trusts only the ESO controller SA via OIDC "sub"
-# - Attaches the least-privilege secrets_read policy you already defined
 #############################################
-
-# Read OIDC provider to get issuer URL (hostpath used in "sub" condition)
 data "aws_iam_openid_connect_provider" "eks" {
   arn = var.cluster_oidc_provider_arn
 }
 
-# Build trust policy conditions
 locals {
   oidc_hostpath = replace(data.aws_iam_openid_connect_provider.eks.url, "https://", "")
   eso_sub       = "system:serviceaccount:${var.eso_namespace}:${var.eso_service_account_name}"
@@ -287,15 +357,18 @@ data "aws_iam_policy_document" "eso_trust" {
     sid     = "ESOWebIdentityTrust"
     effect  = "Allow"
     actions = ["sts:AssumeRoleWithWebIdentity"]
+
     principals {
       type        = "Federated"
       identifiers = [data.aws_iam_openid_connect_provider.eks.arn]
     }
+
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_hostpath}:sub"
       values   = [local.eso_sub]
     }
+
     dynamic "condition" {
       for_each = var.eso_validate_audience ? [1] : []
       content {
@@ -313,9 +386,48 @@ resource "aws_iam_role" "eso" {
   tags               = var.tags
 }
 
-# Attach the read policy to the ESO role (created earlier in your file)
+# Attach policies to ESO IRSA role
 resource "aws_iam_role_policy_attachment" "eso_attach_read" {
   count      = local.has_readable_secrets ? 1 : 0
   role       = aws_iam_role.eso.name
   policy_arn = aws_iam_policy.secrets_read[0].arn
+}
+
+resource "aws_iam_role_policy_attachment" "eso_attach_kms" {
+  count      = length(local.kms_arns_for_read) > 0 ? 1 : 0
+  role       = aws_iam_role.eso.name
+  policy_arn = aws_iam_policy.secrets_kms[0].arn
+}
+
+resource "aws_iam_role_policy_attachment" "eso_attach_ssm" {
+  count      = length(var.readable_ssm_parameter_arns) > 0 ? 1 : 0
+  role       = aws_iam_role.eso.name
+  policy_arn = aws_iam_policy.ssm_read[0].arn
+}
+
+#############################################
+# (Optional) Versions helper for ESO
+#############################################
+data "aws_iam_policy_document" "secrets_versions" {
+  count = local.has_readable_secrets ? 1 : 0
+
+  statement {
+    sid       = "ListSecretVersions"
+    effect    = "Allow"
+    actions   = ["secretsmanager:ListSecretVersionIds"]
+    resources = local.readable_secret_arns_effective
+  }
+}
+
+resource "aws_iam_policy" "secrets_versions" {
+  count  = local.has_readable_secrets ? 1 : 0
+  name   = "${var.name}-secrets-version-list"
+  policy = data.aws_iam_policy_document.secrets_versions[0].json
+  tags   = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "eso_attach_versions" {
+  count      = local.has_readable_secrets ? 1 : 0
+  role       = aws_iam_role.eso.name
+  policy_arn = aws_iam_policy.secrets_versions[0].arn
 }
