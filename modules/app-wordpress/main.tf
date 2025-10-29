@@ -42,9 +42,15 @@ resource "kubectl_manifest" "wp_env_es" {
     spec = {
       refreshInterval = "1h"
       secretStoreRef  = { name = "aws-sm", kind = "ClusterSecretStore" }
-      target          = { name = "wp-env", creationPolicy = "Owner" }
-      data            = local.wp_env_data
-      template        = { type = "Opaque", data = local.wp_env_template_data }
+      target = {
+        name           = "wp-env"
+        creationPolicy = "Owner"
+        template = {
+          type = "Opaque"
+          data = local.wp_env_template_data
+        }
+      }
+      data = local.wp_env_data
     }
   })
 
