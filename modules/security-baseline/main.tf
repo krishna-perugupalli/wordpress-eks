@@ -317,7 +317,7 @@ resource "aws_config_configuration_recorder" "this" {
 resource "aws_config_delivery_channel" "this" {
   count          = var.create_config ? 1 : 0
   name           = "default"
-  s3_bucket_name = aws_s3_bucket.security_logs.bucket
+  s3_bucket_name = local.security_logs_bucket_name
   s3_key_prefix  = "config"
   depends_on     = [aws_config_configuration_recorder.this]
 }
