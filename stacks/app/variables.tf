@@ -88,6 +88,12 @@ variable "acm_certificate_arn" {
   default     = ""
 }
 
+variable "cf_acm_certificate_arn" {
+  description = "Pre-created ACM certificate ARN for the CloudFront (regional). If set, ACM creation/validation is skipped."
+  type        = string
+  default     = ""
+}
+
 variable "cf_aliases" {
   description = "Additional CNAMEs."
   type        = list(string)

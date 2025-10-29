@@ -88,7 +88,7 @@ module "edge_cdn" {
   domain_name         = var.alb_domain_name
   aliases             = var.cf_aliases
   alb_dns_name        = var.alb_domain_name
-  acm_certificate_arn = var.acm_certificate_arn
+  acm_certificate_arn = var.cf_acm_certificate_arn
   waf_web_acl_arn     = ""
   log_bucket_name     = local.cf_log_bucket_name
   origin_secret_value = ""

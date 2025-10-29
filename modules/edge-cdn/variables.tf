@@ -22,6 +22,19 @@ variable "alb_dns_name" {
 variable "acm_certificate_arn" {
   description = "ACM certificate ARN in us-east-1 for CloudFront."
   type        = string
+  validation {
+    condition     = can(regex("^arn:aws(-[a-z]+)?:acm:us-east-1:[0-9]{12}:certificate/.+$", var.acm_certificate_arn))
+    error_message = "CloudFront requires an ACM certificate in us-east-1. Provide a us-east-1 ACM certificate ARN."
+  }
+}
+
+variable "cf_acm_certificate_arn" {
+  description = "ACM certificate ARN in us-east-1 for CloudFront."
+  type        = string
+  validation {
+    condition     = can(regex("^arn:aws(-[a-z]+)?:acm:us-east-1:[0-9]{12}:certificate/.+$", var.cf_acm_certificate_arn))
+    error_message = "CloudFront requires an ACM certificate in us-east-1. Provide a us-east-1 ACM certificate ARN."
+  }
 }
 
 variable "waf_web_acl_arn" {
