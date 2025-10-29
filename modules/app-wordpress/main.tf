@@ -14,15 +14,15 @@ resource "kubernetes_namespace" "ns" {
 #############################################
 locals {
   wp_env_template_data = {
-    WORDPRESS_DB_HOST = var.db_host
-    WORDPRESS_DB_NAME = var.db_name
-    WORDPRESS_DB_USER = var.db_user
-    WORDPRESS_DB_PORT = "3306"
+    WORDPRESS_DATABASE_HOST = var.db_host
+    WORDPRESS_DATABASE_NAME = var.db_name
+    WORDPRESS_DATABASE_USER = var.db_user
+    WORDPRESS_DATABASE_PORT = "3306"
   }
 
   wp_env_data = [
     {
-      secretKey = "WORDPRESS_DB_PASSWORD"
+      secretKey = "WORDPRESS_DATABASE_PASSWORD"
       remoteRef = {
         key      = var.db_secret_arn
         property = "password"
