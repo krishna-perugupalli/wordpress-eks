@@ -57,6 +57,26 @@ resource "kubectl_manifest" "wp_env_es" {
   depends_on = [kubernetes_namespace.ns]
 }
 
+resource "kubectl_manifest" "wp_db_es" {
+  yaml_body = yamlencode({
+    apiVersion = "external-secrets.io/v1beta1"
+    kind       = "ExternalSecret"
+    metadata   = { name = "wp-db", namespace = var.namespace }
+    spec = {
+      refreshInterval = "1h"
+      secretStoreRef  = { name = "aws-sm", kind = "ClusterSecretStore" }
+      target          = { name = "wp-db", creationPolicy = "Owner" }
+      data = [
+        {
+          secretKey = "password"
+          remoteRef = { key = var.db_secret_arn, property = "password" }
+        }
+      ]
+    }
+  })
+  depends_on = [kubernetes_namespace.ns]
+}
+
 #############################################
 # Optional: ESO ExternalSecret 'wp-admin' for admin bootstrap
 # - Only password is pulled; username/email via Helm values
@@ -178,12 +198,45 @@ resource "helm_release" "wordpress" {
   }
 
   # External DB (disable bundled MariaDB)
+  # Disable the bundled MariaDB
   set {
     name  = "mariadb.enabled"
     value = "false"
   }
 
-  # Inject envs from ESO-built secret
+  # Tell the chart about your Aurora DB (host/user/name/port)
+  set {
+    name  = "externalDatabase.host"
+    value = var.db_host
+  }
+  set {
+    name  = "externalDatabase.port"
+    value = tostring(var.db_port)
+  }
+  set {
+    name  = "externalDatabase.user"
+    value = var.db_user
+  }
+  set {
+    name  = "externalDatabase.database"
+    value = var.db_name
+  }
+
+  # Point the chart to the ESO-created password Secret (key must be "password")
+  set {
+    name  = "externalDatabase.existingSecret"
+    value = "wp-db"
+  }
+  # (Optional, if your chart version supports it)
+  # set { name = "externalDatabase.existingSecretPasswordKey", value = "password" }
+
+  # Do NOT let it fall back to empty passwords
+  set {
+    name  = "allowEmptyPassword"
+    value = "false"
+  }
+
+  # Keep this for non-DB envs only (remove DB keys from wp-env to avoid clashes)
   set {
     name  = "extraEnvVarsSecret"
     value = "wp-env"
@@ -233,6 +286,19 @@ resource "helm_release" "wordpress" {
     value = var.resources_requests_memory
   }
 
+  set {
+    name  = "volumePermissions.enabled"
+    value = "true"
+  }
+  set {
+    name  = "podSecurityContext.fsGroup"
+    value = "1001"
+  }
+  set {
+    name  = "podSecurityContext.fsGroupChangePolicy"
+    value = "OnRootMismatch"
+  }
+
   ###########################################
   # Use VALUES (not --set) for ingress + HPA
   ###########################################
@@ -256,6 +322,7 @@ resource "helm_release" "wordpress" {
   depends_on = [
     kubernetes_namespace.ns,
     kubectl_manifest.wp_env_es,
+    kubectl_manifest.wp_db_es,
     kubectl_manifest.wp_admin_es
   ]
 }
