@@ -10,32 +10,36 @@ locals {
 # Cache policies
 #############################################
 resource "aws_cloudfront_cache_policy" "bypass_auth" {
-  name        = "${var.name}-bypass-auth"
-  default_ttl = var.default_ttl
-  max_ttl     = var.max_ttl
-  min_ttl     = var.min_ttl
+  name = "${var.name}-bypass-auth"
+  # Treat as a no-cache policy for dynamic WP routes
+  default_ttl = 0
+  max_ttl     = 0
+  min_ttl     = 0
 
   parameters_in_cache_key_and_forwarded_to_origin {
     enable_accept_encoding_brotli = true
     enable_accept_encoding_gzip   = true
 
+    # Forward all cookies so auth/session works; effectively disables caching
     cookies_config {
-      cookie_behavior = "none"
+      cookie_behavior = "all"
     }
 
+    # Forward required headers; keep cache key simple
     headers_config {
       header_behavior = "whitelist"
       headers {
-        items = ["Host", "Origin", "CloudFront-Viewer-Country"]
+        items = ["Host", "CloudFront-Viewer-Country"]
       }
     }
 
+    # Forward all query strings; needed for WP routes like ?p=, ?s=, etc.
     query_strings_config {
-      query_string_behavior = "none"
+      query_string_behavior = "all"
     }
   }
 
-  comment = "Bypass auth/cookies for public pages (attach to default)."
+  comment = "No-cache policy for dynamic WordPress paths; forwards cookies and query strings."
 }
 
 resource "aws_cloudfront_cache_policy" "static_long" {
@@ -140,9 +144,12 @@ resource "aws_cloudfront_distribution" "this" {
     origin_id   = "alb-origin"
 
     # Inject the secret header CF -> ALB
-    custom_header {
-      name  = "X-Origin-Secret"
-      value = local.origin_secret
+    dynamic "custom_header" {
+      for_each = local.origin_secret != null && trim(local.origin_secret) != "" ? [1] : []
+      content {
+        name  = "X-Origin-Secret"
+        value = local.origin_secret
+      }
     }
 
     custom_origin_config {

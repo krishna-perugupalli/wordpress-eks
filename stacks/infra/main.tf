@@ -173,7 +173,7 @@ module "security_baseline" {
   source = "../../modules/security-baseline"
 
   name                          = local.name
-  trail_bucket_name             = ""
+  trail_bucket_name             = module.foundation.logs_bucket
   logs_expire_after_days        = 365
   cloudtrail_cwl_retention_days = 90
 

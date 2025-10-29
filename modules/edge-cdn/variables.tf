@@ -78,9 +78,10 @@ variable "enable_http3" {
 }
 
 variable "origin_secret_value" {
-  description = "Shared secret header value (X-Origin-Secret) injected by CloudFront and validated at the origin."
+  description = "Optional shared secret header value (X-Origin-Secret) injected by CloudFront and validated at the origin, if configured. Leave empty to disable."
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "tags" {

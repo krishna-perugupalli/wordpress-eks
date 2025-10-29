@@ -10,7 +10,7 @@ output "kms_key_arn" {
 
 output "security_logs_bucket" {
   description = "S3 bucket for security logs"
-  value       = aws_s3_bucket.security_logs.bucket
+  value       = local.security_logs_bucket_name
 }
 
 output "guardduty_detector_id" {

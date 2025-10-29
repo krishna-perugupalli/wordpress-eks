@@ -27,3 +27,8 @@ output "restricted_to_cloudfront" {
   description = "True if ALB ingress was restricted to CloudFront prefix list"
   value       = var.restrict_alb_to_cloudfront
 }
+
+output "waf_cloudfront_arn" {
+  description = "WAFv2 Web ACL ARN (CLOUDFRONT) to use in CloudFront distribution"
+  value       = try(aws_wafv2_web_acl.cloudfront[0].arn, null)
+}

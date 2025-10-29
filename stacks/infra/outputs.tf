@@ -71,3 +71,8 @@ output "cluster_role_arn" {
 output "node_role_arn" {
   value = aws_iam_role.eks_node_group_role.arn
 }
+
+output "log_bucket_name" {
+  description = "CloudFront log S3 bucket name"
+  value       = module.foundation.logs_bucket
+}

@@ -55,27 +55,37 @@ resource "random_id" "suffix" {
   byte_length = 3
 }
 
+# If caller provides an existing bucket name, do not create bucket resources; just reference it.
+data "aws_s3_bucket" "existing" {
+  count  = var.trail_bucket_name != "" ? 1 : 0
+  bucket = var.trail_bucket_name
+}
+
 locals {
-  logs_bucket_name = var.trail_bucket_name != "" ? var.trail_bucket_name : "${var.name}-sec-logs-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}-${random_id.suffix.hex}"
+  computed_logs_bucket_name = var.trail_bucket_name != "" ? var.trail_bucket_name : "${var.name}-sec-logs-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}-${random_id.suffix.hex}"
 }
 
 resource "aws_s3_bucket" "security_logs" {
-  bucket = local.logs_bucket_name
+  count  = var.trail_bucket_name == "" ? 1 : 0
+  bucket = local.computed_logs_bucket_name
   tags   = var.tags
 }
 
 resource "aws_s3_bucket_ownership_controls" "security_logs" {
-  bucket = aws_s3_bucket.security_logs.id
+  count  = var.trail_bucket_name == "" ? 1 : 0
+  bucket = aws_s3_bucket.security_logs[0].id
   rule { object_ownership = "BucketOwnerPreferred" }
 }
 
 resource "aws_s3_bucket_versioning" "security_logs" {
-  bucket = aws_s3_bucket.security_logs.id
+  count  = var.trail_bucket_name == "" ? 1 : 0
+  bucket = aws_s3_bucket.security_logs[0].id
   versioning_configuration { status = "Enabled" }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "security_logs" {
-  bucket = aws_s3_bucket.security_logs.id
+  count  = var.trail_bucket_name == "" ? 1 : 0
+  bucket = aws_s3_bucket.security_logs[0].id
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm     = "aws:kms"
@@ -87,7 +97,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "security_logs" {
 
 # Lifecycle with a required filter (provider needs either prefix or filter)
 resource "aws_s3_bucket_lifecycle_configuration" "security_logs" {
-  bucket = aws_s3_bucket.security_logs.id
+  count  = var.trail_bucket_name == "" ? 1 : 0
+  bucket = aws_s3_bucket.security_logs[0].id
 
   rule {
     id     = "ExpireOldObjects"
@@ -102,6 +113,12 @@ resource "aws_s3_bucket_lifecycle_configuration" "security_logs" {
   }
 }
 
+# Effective bucket identifiers (resource or data)
+locals {
+  security_logs_bucket_name = var.trail_bucket_name != "" ? data.aws_s3_bucket.existing[0].bucket : aws_s3_bucket.security_logs[0].bucket
+  security_logs_bucket_arn  = var.trail_bucket_name != "" ? data.aws_s3_bucket.existing[0].arn : aws_s3_bucket.security_logs[0].arn
+}
+
 # Allow services to write & enforce TLS-only access
 data "aws_iam_policy_document" "security_logs_policy" {
   statement {
@@ -112,7 +129,7 @@ data "aws_iam_policy_document" "security_logs_policy" {
       type        = "Service"
       identifiers = ["cloudtrail.amazonaws.com"]
     }
-    resources = ["${aws_s3_bucket.security_logs.arn}/*"]
+    resources = ["${local.security_logs_bucket_arn}/*"]
     condition {
       test     = "StringEquals"
       variable = "s3:x-amz-acl"
@@ -128,7 +145,7 @@ data "aws_iam_policy_document" "security_logs_policy" {
       type        = "Service"
       identifiers = ["cloudtrail.amazonaws.com"]
     }
-    resources = [aws_s3_bucket.security_logs.arn]
+    resources = [local.security_logs_bucket_arn]
   }
 
   statement {
@@ -139,7 +156,7 @@ data "aws_iam_policy_document" "security_logs_policy" {
       type        = "Service"
       identifiers = ["logdelivery.elasticloadbalancing.amazonaws.com"]
     }
-    resources = ["${aws_s3_bucket.security_logs.arn}/*"]
+    resources = ["${local.security_logs_bucket_arn}/*"]
   }
 
   statement {
@@ -151,8 +168,8 @@ data "aws_iam_policy_document" "security_logs_policy" {
       identifiers = ["*"]
     }
     resources = [
-      aws_s3_bucket.security_logs.arn,
-      "${aws_s3_bucket.security_logs.arn}/*"
+      local.security_logs_bucket_arn,
+      "${local.security_logs_bucket_arn}/*"
     ]
     condition {
       test     = "Bool"
@@ -163,7 +180,7 @@ data "aws_iam_policy_document" "security_logs_policy" {
 }
 
 resource "aws_s3_bucket_policy" "security_logs" {
-  bucket = aws_s3_bucket.security_logs.id
+  bucket = local.security_logs_bucket_name
   policy = data.aws_iam_policy_document.security_logs_policy.json
 }
 
@@ -183,7 +200,7 @@ resource "aws_cloudwatch_log_group" "trail" {
 resource "aws_cloudtrail" "this" {
   count                         = var.create_cloudtrail ? 1 : 0
   name                          = var.name
-  s3_bucket_name                = aws_s3_bucket.security_logs.id
+  s3_bucket_name                = local.security_logs_bucket_name
   s3_key_prefix                 = "cloudtrail"
   include_global_service_events = true
   is_multi_region_trail         = true

@@ -82,6 +82,18 @@ variable "waf_ruleset_level" {
   default     = "baseline"
 }
 
+variable "acm_certificate_arn" {
+  description = "Pre-created ACM certificate ARN for the ALB (regional). If set, ACM creation/validation is skipped."
+  type        = string
+  default     = ""
+}
+
+variable "cf_aliases" {
+  description = "Additional CNAMEs."
+  type        = list(string)
+  default     = []
+}
+
 # ---------------------------
 # Karpenter
 # ---------------------------

@@ -20,6 +20,7 @@ locals {
   writer_endpoint         = local.infra_outputs.writer_endpoint
   wpapp_db_secret_arn     = local.infra_outputs.wpapp_db_secret_arn
   wp_admin_secret_arn     = local.infra_outputs.wp_admin_secret_arn
+  cf_log_bucket_name      = local.infra_outputs.logs_bucket
 
   _ensure_infra_ready = length(keys(local.infra_outputs)) > 0
 }
@@ -72,6 +73,24 @@ module "edge_ingress" {
 
   create_waf_regional = var.create_waf_regional
   waf_ruleset_level   = var.waf_ruleset_level
+
+  tags = local.tags
+}
+
+# ---------------------------
+# Edge CDN (Cloudfront + ACM)
+# ---------------------------
+module "edge_cdn" {
+  source = "../../modules/edge-cdn"
+  name   = local.name
+
+  domain_name         = var.alb_domain_name
+  aliases             = var.cf_aliases
+  alb_dns_name        = var.alb_domain_name
+  acm_certificate_arn = var.acm_certificate_arn
+  waf_web_acl_arn     = ""
+  log_bucket_name     = local.cf_log_bucket_name
+  origin_secret_value = ""
 
   tags = local.tags
 }
@@ -146,7 +165,7 @@ module "app_wordpress" {
   namespace   = var.wp_namespace
   domain_name = var.wp_domain_name
 
-  alb_certificate_arn = module.edge_ingress.alb_certificate_arn
+  alb_certificate_arn = var.acm_certificate_arn
   waf_acl_arn         = module.edge_ingress.waf_regional_arn
   alb_tags            = { project = local.name, env = var.env }
 
