@@ -20,7 +20,7 @@ locals {
   writer_endpoint         = local.infra_outputs.writer_endpoint
   wpapp_db_secret_arn     = local.infra_outputs.wpapp_db_secret_arn
   wp_admin_secret_arn     = local.infra_outputs.wp_admin_secret_arn
-  cf_log_bucket_name      = local.infra_outputs.logs_bucket
+  cf_log_bucket_name      = local.infra_outputs.log_bucket_name
 
   _ensure_infra_ready = length(keys(local.infra_outputs)) > 0
 }
