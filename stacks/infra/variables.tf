@@ -7,7 +7,7 @@ variable "region" {
 variable "project" {
   description = "Project/environment short name; used as cluster name and tag prefix (e.g., wp-sbx)"
   type        = string
-  default     = "wordpress"
+  default     = "wdp"
 }
 
 variable "env" {

@@ -88,20 +88,24 @@ module "edge_ingress" {
 # Edge CDN (Cloudfront + ACM)
 # ---------------------------
 module "edge_cdn" {
-  # Enable disable cloudfront module
-  count  = var.enable_cloudfront ? 1 : 0
+  # Create CloudFront only when enabled and ALB has been discovered
+  count  = var.enable_cloudfront && local.alb_found ? 1 : 0
   source = "../../modules/edge-cdn"
   name   = local.name
 
-  domain_name         = var.alb_domain_name
-  aliases             = var.cf_aliases
-  alb_dns_name        = var.alb_domain_name
+  domain_name = var.alb_domain_name
+  aliases     = var.cf_aliases
+  # Use the actual ALB DNS name as CloudFront origin
+  alb_dns_name        = data.aws_lb.wp_alb[0].dns_name
   acm_certificate_arn = var.cf_acm_certificate_arn
   waf_web_acl_arn     = ""
   log_bucket_name     = local.cf_log_bucket_name
   origin_secret_value = ""
 
   tags = local.tags
+
+  # Ensure the ALB/Ingress exists before CF (origin dependency)
+  depends_on = [module.app_wordpress]
 }
 
 # ---------------------------
@@ -176,7 +180,8 @@ module "app_wordpress" {
 
   alb_certificate_arn = var.acm_certificate_arn
   waf_acl_arn         = module.edge_ingress.waf_regional_arn
-  alb_tags            = { project = local.name, env = var.env }
+  # Tag ALB via Ingress annotation so we can discover it for DNS/CF
+  alb_tags = { project = local.name, env = var.env, dns = var.wp_domain_name }
 
   storage_class_name = var.wp_storage_class
   pvc_size           = var.wp_pvc_size
@@ -197,4 +202,68 @@ module "app_wordpress" {
   target_cpu_percent    = var.wp_target_cpu_percent
   target_memory_percent = var.wp_target_memory_value
   depends_on            = [module.secrets_operator]
+}
+
+#############################################
+# DNS resolution + conditional records
+#############################################
+
+# Discover the ALB created by AWS Load Balancer Controller using our tags
+data "aws_resourcegroupstaggingapi_resources" "wp_alb" {
+  resource_type_filters = ["elasticloadbalancing:loadbalancer"]
+  tag_filter {
+    key    = "project"
+    values = [local.name]
+  }
+  tag_filter {
+    key    = "env"
+    values = [var.env]
+  }
+  tag_filter {
+    key    = "dns"
+    values = [var.wp_domain_name]
+  }
+
+  depends_on = [module.app_wordpress]
+}
+
+locals {
+  alb_arn   = try(data.aws_resourcegroupstaggingapi_resources.wp_alb.resource_tag_mapping_list[0].resource_arn, null)
+  alb_found = local.alb_arn != null && local.alb_arn != ""
+}
+
+# Materialize ALB details when found
+data "aws_lb" "wp_alb" {
+  count = local.alb_found ? 1 : 0
+  arn   = local.alb_arn
+}
+
+# If CloudFront is enabled, alias the domain to the distribution
+resource "aws_route53_record" "wp_cf_alias" {
+  count = var.enable_cloudfront && local.alb_found ? 1 : 0
+
+  zone_id = var.alb_hosted_zone_id
+  name    = var.alb_domain_name
+  type    = "A"
+
+  alias {
+    name                   = module.edge_cdn[0].distribution_domain_name
+    zone_id                = var.alb_hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# If CloudFront is disabled, alias the domain directly to the ALB
+resource "aws_route53_record" "wp_alb_alias" {
+  count = var.enable_cloudfront ? 0 : (local.alb_found ? 1 : 0)
+
+  zone_id = var.alb_hosted_zone_id
+  name    = var.alb_domain_name
+  type    = "A"
+
+  alias {
+    name                   = data.aws_lb.wp_alb[0].dns_name
+    zone_id                = data.aws_lb.wp_alb[0].zone_id
+    evaluate_target_health = true
+  }
 }

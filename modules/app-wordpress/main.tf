@@ -133,6 +133,7 @@ locals {
       "alb.ingress.kubernetes.io/healthcheck-path" = "/"
       "alb.ingress.kubernetes.io/listen-ports"     = "[{\"HTTP\":80},{\"HTTPS\":443}]"
       "alb.ingress.kubernetes.io/ssl-redirect"     = "443"
+      "alb.ingress.kubernetes.io/ssl-policy"       = "ELBSecurityPolicy-TLS13-1-2-2021-06"
     },
     var.alb_certificate_arn != "" ? {
       "alb.ingress.kubernetes.io/certificate-arn" = var.alb_certificate_arn
@@ -236,6 +237,11 @@ resource "helm_release" "wordpress" {
     value = "false"
   }
 
+  set {
+    name  = "wordpressScheme"
+    value = "https"
+  }
+
   # Keep this for non-DB envs only (remove DB keys from wp-env to avoid clashes)
   set {
     name  = "extraEnvVarsSecret"
@@ -296,6 +302,7 @@ resource "helm_release" "wordpress" {
         enabled     = true
         hostname    = var.domain_name
         annotations = local.ingress_annotations
+        tls         = true
       }
     }),
 

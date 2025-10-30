@@ -7,7 +7,7 @@ variable "region" {
 variable "project" {
   description = "Project/environment short name; used as release/ingress prefix"
   type        = string
-  default     = "wordpress"
+  default     = "wdp"
 }
 
 variable "env" {

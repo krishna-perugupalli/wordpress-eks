@@ -17,7 +17,7 @@ output "ingress_name" {
   description = "Deterministic Ingress name used by the chart (matches fullnameOverride/nameOverride logic)"
   value = (
     var.fullname_override != "" ? var.fullname_override :
-    (var.name_override != "" ? var.name_override : "${var.name}-wordpress")
+    (var.name_override != "" ? var.name_override : "${var.name}-wdp")
   )
 }
 
@@ -25,6 +25,6 @@ output "service_name" {
   description = "Service name exposed by the chart (same naming logic)"
   value = (
     var.fullname_override != "" ? var.fullname_override :
-    (var.name_override != "" ? var.name_override : "${var.name}-wordpress")
+    (var.name_override != "" ? var.name_override : "${var.name}-wdp")
   )
 }
