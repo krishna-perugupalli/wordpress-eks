@@ -9,10 +9,6 @@ resource "helm_release" "karpenter_crds" {
   namespace  = "karpenter"
   wait       = true
   timeout    = 600
-
-  depends_on = [
-    kubernetes_namespace.karpenter
-  ]
 }
 
 resource "helm_release" "karpenter" {
