@@ -242,6 +242,14 @@ locals {
     (var.create_redis_auth_secret && var.existing_redis_auth_secret_arn == "" ? [local.redis_kms_arn] : []),
     [for s in data.aws_secretsmanager_secret.external : s.kms_key_id]
   )))
+
+  # Plan-time-known switch: if any path implies KMS decrypt, create the policy skeleton now.
+  need_kms_policy = (
+    var.create_wpapp_db_secret ||
+    var.create_wp_admin_secret ||
+    (var.create_redis_auth_secret && var.existing_redis_auth_secret_arn == "") ||
+    length(var.readable_secret_arns) > 0
+  )
 }
 
 #############################################
@@ -290,7 +298,7 @@ resource "aws_iam_policy" "secrets_read" {
 # IAM: KMS decrypt policy (derived CMKs) for ESO
 #############################################
 data "aws_iam_policy_document" "secrets_kms" {
-  count = length(local.kms_arns_for_read) > 0 ? 1 : 0
+  count = local.need_kms_policy ? 1 : 0
 
   statement {
     sid       = "KmsDecryptForSecretsManager"
@@ -308,7 +316,7 @@ data "aws_iam_policy_document" "secrets_kms" {
 }
 
 resource "aws_iam_policy" "secrets_kms" {
-  count  = length(local.kms_arns_for_read) > 0 ? 1 : 0
+  count  = local.need_kms_policy ? 1 : 0
   name   = "${var.name}-secrets-kms-decrypt"
   policy = data.aws_iam_policy_document.secrets_kms[0].json
   tags   = var.tags
@@ -396,7 +404,7 @@ resource "aws_iam_role_policy_attachment" "eso_attach_read" {
 }
 
 resource "aws_iam_role_policy_attachment" "eso_attach_kms" {
-  count      = length(local.kms_arns_for_read) > 0 ? 1 : 0
+  count      = local.need_kms_policy ? 1 : 0
   role       = aws_iam_role.eso.name
   policy_arn = aws_iam_policy.secrets_kms[0].arn
 }
