@@ -1,3 +1,20 @@
+#############################################
+# Helm charts: CRDs first, then controller (OCI)
+#############################################
+resource "helm_release" "karpenter_crds" {
+  name       = "karpenter-crd"
+  repository = "oci://public.ecr.aws/karpenter"
+  chart      = "karpenter-crd"
+  version    = "0.37.8"
+  namespace  = "karpenter"
+  wait       = true
+  timeout    = 600
+
+  depends_on = [
+    kubernetes_namespace.karpenter
+  ]
+}
+
 resource "helm_release" "karpenter" {
   namespace        = "karpenter"
   create_namespace = true
