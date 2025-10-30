@@ -146,7 +146,7 @@ resource "kubectl_manifest" "karpenter_nodeclass" {
       amiFamily = var.karpenter_ami_family
       amiSelectorTerms = [
         {
-          ssmParameter = "/aws/service/eks/optimized-ami/${var.cluster_version}/amazon-linux-2023/${var.arch}/standard/recommended/image_id"
+          alias = "al2023@latest"
         }
       ]
       role = local.karpenter_node_iam_role_name
