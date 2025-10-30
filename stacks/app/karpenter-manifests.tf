@@ -89,11 +89,6 @@ resource "kubectl_manifest" "karpenter_node_pool_amd64" {
               values   = var.karpenter_capacity_types
             },
             {
-              key      = "karpenter.k8s.aws/instance-family"
-              operator = "In"
-              values   = var.karpenter_instance_families
-            },
-            {
               key      = "node.kubernetes.io/instance-type"
               operator = "In"
               values   = var.karpenter_instance_types

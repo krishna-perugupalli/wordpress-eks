@@ -110,7 +110,7 @@ variable "karpenter_instance_types" {
 }
 
 variable "karpenter_instance_families" {
-  description = "Allowed Family types"
+  description = "Allowed Family types - Optional"
   type        = list(string)
   default     = ["t3a", "m6a", "c6a"]
 }
@@ -124,7 +124,7 @@ variable "karpenter_cpu_allowed" {
 variable "karpenter_arch_types" {
   description = "Allowed arch types"
   type        = list(string)
-  default     = ["amd64", "arm64"]
+  default     = ["amd64"]
 }
 
 variable "karpenter_os_types" {
