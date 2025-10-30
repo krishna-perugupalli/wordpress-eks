@@ -28,7 +28,7 @@ resource "helm_release" "karpenter" {
 }
 
 resource "kubectl_manifest" "karpenter_node_pool_amd64" {
-  manifest = {
+  yaml_body = yamlencode({
     apiVersion = "karpenter.sh/v1"
     kind       = "NodePool"
     metadata = {
@@ -101,13 +101,12 @@ resource "kubectl_manifest" "karpenter_node_pool_amd64" {
         expireAfter         = "168h" # expire nodes after 7 days = 7 * 24h
       }
     }
-  }
-
-  depends_on = [helm_release.karpenter, kubectl_manifest.karpenter_nodeclass]
+    depends_on = [helm_release.karpenter, kubectl_manifest.karpenter_nodeclass]
+  })
 }
 
 resource "kubectl_manifest" "karpenter_nodeclass" {
-  manifest = {
+  yaml_body = yamlencode({
     apiVersion = "karpenter.k8s.aws/v1"
     kind       = "EC2NodeClass"
     metadata = {
@@ -152,8 +151,6 @@ resource "kubectl_manifest" "karpenter_nodeclass" {
         }
       ]
     }
-  }
-
-  depends_on = [helm_release.karpenter]
+    depends_on = [helm_release.karpenter]
+  })
 }
-
