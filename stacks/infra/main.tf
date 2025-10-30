@@ -221,7 +221,9 @@ module "elasticache" {
   vpc_id                   = module.foundation.vpc_id
   subnet_ids               = module.foundation.private_subnet_ids
   node_sg_source_ids       = [module.eks.node_security_group_id]
-  enable_auth_token_secret = true
+  # Prefer passing the token directly from secrets-iam to avoid plan-time data reads
+  enable_auth_token_secret = false
+  auth_token               = module.secrets_iam.redis_auth_token
   auth_token_secret_arn    = module.secrets_iam.redis_auth_secret_arn
   tags                     = local.tags
 }

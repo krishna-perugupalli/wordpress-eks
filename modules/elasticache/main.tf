@@ -82,16 +82,19 @@ resource "aws_elasticache_parameter_group" "this" {
 # Auth token (from Secrets Manager) — optional
 #############################################
 data "aws_secretsmanager_secret_version" "auth" {
-  # Make count depend only on a static boolean so it's known at plan time.
-  # Avoid referencing values that may be unknown (e.g., ARN passed from a resource).
-  count = var.enable_auth_token_secret ? 1 : 0
+  # Only read from Secrets Manager if no direct token is provided
+  # and a secret ARN is supplied and reading is enabled.
+  count = (var.auth_token == "" && var.enable_auth_token_secret && var.auth_token_secret_arn != "") ? 1 : 0
 
   secret_id     = var.auth_token_secret_arn
   version_stage = "AWSCURRENT"
 }
 
 locals {
-  use_secret = var.enable_auth_token_secret && var.auth_token_secret_arn != ""
+  use_secret = (var.auth_token == "" && var.enable_auth_token_secret && var.auth_token_secret_arn != "")
+
+  # Direct value takes precedence if provided
+  _direct_token = trimspace(var.auth_token) != "" ? trimspace(var.auth_token) : null
 
   # Safely fetch the secret string if available
   _secret_string = local.use_secret ? data.aws_secretsmanager_secret_version.auth[0].secret_string : null
@@ -100,8 +103,10 @@ locals {
   _secret_json = local._secret_string != null ? try(jsondecode(local._secret_string), null) : null
   _raw_token   = local._secret_json != null ? try(local._secret_json.token, null) : local._secret_string
 
-  # Final token: trimmed whitespace, null if empty
-  redis_auth_token = trimspace(coalesce(local._raw_token, "")) != "" ? trimspace(local._raw_token) : null
+  # Final token: prefer direct token, else from secret; null if empty
+  redis_auth_token = local._direct_token != null ? local._direct_token : (
+    trimspace(coalesce(local._raw_token, "")) != "" ? trimspace(local._raw_token) : null
+  )
 }
 
 #############################################
