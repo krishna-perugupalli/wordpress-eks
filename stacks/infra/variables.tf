@@ -344,6 +344,13 @@ variable "eks_admin_user_arns" {
   default     = []
 }
 
+variable "additional_access_arns" {
+  type        = list(string)
+  default     = []
+  description = "List of additional IAM user or role ARNs to grant cluster access"
+}
+
+
 # --------------------
 # EFS Access Point
 # --------------------
