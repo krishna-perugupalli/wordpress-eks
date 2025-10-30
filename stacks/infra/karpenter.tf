@@ -24,10 +24,10 @@ module "karpenter" {
   version                       = "20.24.0"
   cluster_name                  = module.eks.cluster_name
   irsa_oidc_provider_arn        = module.eks.oidc_provider_arn
-  iam_role_name                 = "${local.name}karpenter-controller"
+  iam_role_name                 = "${local.name}-karpenter-controller"
   iam_role_use_name_prefix      = false
   enable_irsa                   = true
-  node_iam_role_name            = "${local.name}karpenter-node-role"
+  node_iam_role_name            = "${local.name}-karpenter-node-role"
   node_iam_role_use_name_prefix = false
   create_instance_profile       = true
   node_iam_role_additional_policies = {
