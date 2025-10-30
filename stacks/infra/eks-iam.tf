@@ -341,30 +341,21 @@ resource "aws_iam_role_policy" "cluster_management_logs_policy" {
   })
 }
 
-locals {
-  all_access_arns = concat(
-    [aws_iam_role.cluster_management_role.arn],
-    var.additional_access_arns
-  )
-}
-
-resource "aws_eks_access_entry" "cluster_access" {
-  for_each = toset(local.all_access_arns)
-
+resource "aws_eks_access_entry" "cluster_manager" {
+  # count         = var.enable_eks ? 1 : 0
   cluster_name  = local.name
-  principal_arn = each.value
+  principal_arn = aws_iam_role.cluster_management_role.arn
   type          = "STANDARD"
   depends_on    = [module.eks]
 }
 
-resource "aws_eks_access_policy_association" "cluster_access_policy" {
-  for_each = toset(local.all_access_arns)
-
+resource "aws_eks_access_policy_association" "cluster_manager_policy" {
+  # count         = var.enable_eks ? 1 : 0
   cluster_name  = local.name
   policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-  principal_arn = each.value
+  principal_arn = aws_iam_role.cluster_management_role.arn
   access_scope {
     type = "cluster"
   }
-  depends_on = [aws_eks_access_entry.cluster_access]
+  depends_on = [aws_eks_access_entry.cluster_manager]
 }
