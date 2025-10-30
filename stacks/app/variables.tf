@@ -46,6 +46,12 @@ variable "db_user" {
 # ---------------------------
 # Edge/Ingress
 # ---------------------------
+variable "enable_cloudfront" {
+  description = "Enable CloudFront distribution in front of ALB"
+  type        = bool
+  default     = false
+}
+
 variable "alb_domain_name" {
   description = "Hostname for WordPress (ALB Ingress)"
   type        = string

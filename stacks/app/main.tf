@@ -88,6 +88,8 @@ module "edge_ingress" {
 # Edge CDN (Cloudfront + ACM)
 # ---------------------------
 module "edge_cdn" {
+  # Enable disable cloudfront module
+  count  = var.enable_cloudfront ? 1 : 0
   source = "../../modules/edge-cdn"
   name   = local.name
 
