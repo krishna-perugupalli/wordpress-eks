@@ -38,6 +38,9 @@ resource "helm_release" "karpenter" {
     name  = "settings.interruptionQueueName"
     value = local.karpenter_sqs_queue_name
   }
+  depends_on = [
+    helm_release.karpenter_crds
+  ]
 }
 
 resource "kubectl_manifest" "karpenter_node_pool_amd64" {
@@ -114,7 +117,7 @@ resource "kubectl_manifest" "karpenter_node_pool_amd64" {
         expireAfter         = "168h" # expire nodes after 7 days = 7 * 24h
       }
     }
-    depends_on = [helm_release.karpenter, kubectl_manifest.karpenter_nodeclass]
+    depends_on = [kubectl_manifest.karpenter_nodeclass]
   })
 }
 
