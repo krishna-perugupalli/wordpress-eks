@@ -77,7 +77,27 @@ output "log_bucket_name" {
   value       = module.foundation.logs_bucket
 }
 
+output "azs" {
+  description = "Availability Zones used by the foundation module"
+  value       = module.foundation.azs
+}
+
 output "eso_role_arn" {
   description = "IAM Role ARN for the External Secrets Operator (IRSA)."
   value       = module.secrets_iam.eso_role_arn
+}
+
+output "karpenter_role_arn" {
+  description = "IAM Role ARN for the Karpenter Controller (IRSA)."
+  value       = module.karpenter.iam_role_arn
+}
+
+output "karpenter_sqs_queue_name" {
+  description = "SQS queue name for Karpenter interruptions."
+  value       = module.karpenter.queue_name
+}
+
+output "karpenter_node_iam_role_name" {
+  description = "IAM Role name for Karpenter nodes."
+  value       = module.karpenter.node_iam_role_name
 }

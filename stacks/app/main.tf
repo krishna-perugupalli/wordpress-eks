@@ -9,18 +9,24 @@ locals {
     var.tags
   )
 
+  # azs           = data.aws_availability_zones.available.names
   infra_outputs = data.terraform_remote_state.infra.outputs
 
-  cluster_name            = local.infra_outputs.cluster_name
-  cluster_oidc_issuer_url = local.infra_outputs.cluster_oidc_issuer_url
-  oidc_provider_arn       = local.infra_outputs.oidc_provider_arn
-  vpc_id                  = local.infra_outputs.vpc_id
-  secrets_read_policy_arn = local.infra_outputs.secrets_read_policy_arn
-  kms_logs_arn            = local.infra_outputs.kms_logs_arn
-  writer_endpoint         = local.infra_outputs.writer_endpoint
-  wpapp_db_secret_arn     = local.infra_outputs.wpapp_db_secret_arn
-  wp_admin_secret_arn     = local.infra_outputs.wp_admin_secret_arn
-  cf_log_bucket_name      = local.infra_outputs.log_bucket_name
+  cluster_name                      = local.infra_outputs.cluster_name
+  cluster_endpoint                  = local.infra_outputs.cluster_endpoint
+  karpenter_controller_iam_role_arn = local.infra_outputs.karpenter_role_arn
+  karpenter_sqs_queue_name          = local.infra_outputs.karpenter_sqs_queue_name
+  karpenter_node_iam_role_name      = local.infra_outputs.karpenter_node_iam_role_name
+  cluster_oidc_issuer_url           = local.infra_outputs.cluster_oidc_issuer_url
+  oidc_provider_arn                 = local.infra_outputs.oidc_provider_arn
+  vpc_id                            = local.infra_outputs.vpc_id
+  azs                               = local.infra_outputs.azs
+  secrets_read_policy_arn           = local.infra_outputs.secrets_read_policy_arn
+  kms_logs_arn                      = local.infra_outputs.kms_logs_arn
+  writer_endpoint                   = local.infra_outputs.writer_endpoint
+  wpapp_db_secret_arn               = local.infra_outputs.wpapp_db_secret_arn
+  wp_admin_secret_arn               = local.infra_outputs.wp_admin_secret_arn
+  cf_log_bucket_name                = local.infra_outputs.log_bucket_name
 
   _ensure_infra_ready = length(keys(local.infra_outputs)) > 0
 }
@@ -99,7 +105,7 @@ module "edge_cdn" {
 # ---------------------------
 # Karpenter (controller + NodePool)
 # ---------------------------
-module "karpenter" {
+/* module "karpenter" {
   source                  = "../../modules/karpenter"
   name                    = local.name
   cluster_name            = local.cluster_name
@@ -126,7 +132,7 @@ module "karpenter" {
   taints               = []
 
   tags = local.tags
-}
+} */
 
 # ---------------------------
 # Observability (CW Agent + Fluent Bit + ALB alarms)

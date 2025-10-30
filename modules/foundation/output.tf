@@ -42,3 +42,8 @@ output "public_zone_id" {
   value       = try(aws_route53_zone.public[0].zone_id, null)
   description = "Route53 hosted zone ID if created"
 }
+
+output "azs" {
+  description = "Availability Zones used for subnets (in order)"
+  value       = local.azs
+}

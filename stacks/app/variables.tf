@@ -106,7 +106,31 @@ variable "cf_aliases" {
 variable "karpenter_instance_types" {
   description = "Allowed instance types"
   type        = list(string)
-  default     = ["c6i.large", "c6i.xlarge", "m6i.large", "m6i.xlarge"]
+  default     = ["t3a.medium", "t3a.large", "t3a.xlarge", "m6a.large", "m6a.xlarge", "c6a.large", "c6a.xlarge"]
+}
+
+variable "karpenter_instance_families" {
+  description = "Allowed Family types"
+  type        = list(string)
+  default     = ["t3a", "m6a", "c6a"]
+}
+
+variable "karpenter_cpu_allowed" {
+  description = "Allowed CPU types"
+  type        = list(string)
+  default     = ["2", "4", "8", "16"]
+}
+
+variable "karpenter_arch_types" {
+  description = "Allowed arch types"
+  type        = list(string)
+  default     = ["amd64", "arm64"]
+}
+
+variable "karpenter_os_types" {
+  description = "Allowed OS types"
+  type        = list(string)
+  default     = ["linux"]
 }
 
 variable "karpenter_capacity_types" {
@@ -137,6 +161,28 @@ variable "karpenter_cpu_limit" {
   description = "NodePool CPU limit across nodes"
   type        = string
   default     = "64"
+}
+
+variable "karpenter_volume_size" {
+  description = "Node volume size in GB"
+  type        = string
+  default     = "50Gi"
+}
+
+variable "karpenter_volume_type" {
+  description = "Node volume type"
+  type        = string
+  default     = "gp2"
+}
+
+variable "karpenter_taints" {
+  description = "Optional taints for provisioned nodes"
+  type = list(object({
+    key    = string
+    value  = string
+    effect = string
+  }))
+  default = []
 }
 
 # ---------------------------
