@@ -55,12 +55,6 @@ resource "random_id" "suffix" {
   byte_length = 3
 }
 
-# If caller provides an existing bucket name, do not create bucket resources; just reference it.
-data "aws_s3_bucket" "existing" {
-  count  = var.trail_bucket_name != "" ? 1 : 0
-  bucket = var.trail_bucket_name
-}
-
 locals {
   computed_logs_bucket_name = var.trail_bucket_name != "" ? var.trail_bucket_name : "${var.name}-sec-logs-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}-${random_id.suffix.hex}"
 }
@@ -113,10 +107,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "security_logs" {
   }
 }
 
-# Effective bucket identifiers (resource or data)
+# Effective bucket identifiers (resource or caller-provided existing bucket)
 locals {
-  security_logs_bucket_name = var.trail_bucket_name != "" ? data.aws_s3_bucket.existing[0].bucket : aws_s3_bucket.security_logs[0].bucket
-  security_logs_bucket_arn  = var.trail_bucket_name != "" ? data.aws_s3_bucket.existing[0].arn : aws_s3_bucket.security_logs[0].arn
+  security_logs_bucket_name = var.trail_bucket_name != "" ? var.trail_bucket_name : aws_s3_bucket.security_logs[0].bucket
+  security_logs_bucket_arn  = var.trail_bucket_name != "" ? "arn:aws:s3:::${var.trail_bucket_name}" : aws_s3_bucket.security_logs[0].arn
 }
 
 # Allow services to write & enforce TLS-only access

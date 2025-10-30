@@ -205,22 +205,24 @@ locals {
   )
 
   # Caller-provided + module-created + redis (either existing or created)
-  readable_secret_arns_candidate = concat(
+  readable_secret_arns_effective = distinct(compact(concat(
     var.readable_secret_arns,
     var.create_wpapp_db_secret ? [aws_secretsmanager_secret.wpapp[0].arn] : [],
     var.create_wp_admin_secret ? [aws_secretsmanager_secret.wpadmin[0].arn] : [],
     (var.create_redis_auth_secret || var.existing_redis_auth_secret_arn != "") ? [local.redis_auth_secret_arn] : []
+  )))
+
+  # Plan-time-known flag that avoids unknowns in count/for_each
+  has_readable_secrets = (
+    length(var.readable_secret_arns) > 0 ||
+    var.create_wpapp_db_secret ||
+    var.create_wp_admin_secret ||
+    var.create_redis_auth_secret ||
+    var.existing_redis_auth_secret_arn != ""
   )
 
-  readable_secret_arns_effective = distinct(compact(local.readable_secret_arns_candidate))
-
-  has_readable_secrets = length(local.readable_secret_arns_effective) > 0
-
-  # External secrets = readable but not created here
-  external_readable_secret_arns = toset(setsubtract(
-    local.readable_secret_arns_effective,
-    compact(local.module_created_secret_arns)
-  ))
+  # External secrets: use only caller-provided ARNs for discovery to avoid unknowns
+  external_readable_secret_arns = toset(var.readable_secret_arns)
 }
 
 # Discover KMS key for each external secret (if any)
