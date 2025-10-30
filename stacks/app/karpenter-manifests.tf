@@ -1,12 +1,10 @@
 resource "helm_release" "karpenter" {
-  namespace           = "karpenter"
-  create_namespace    = true
-  name                = "karpenter"
-  repository          = "oci://public.ecr.aws/karpenter"
-  repository_username = data.aws_ecrpublic_authorization_token.token.user_name
-  repository_password = data.aws_ecrpublic_authorization_token.token.password
-  chart               = "karpenter"
-  version             = "0.37.8"
+  namespace        = "karpenter"
+  create_namespace = true
+  name             = "karpenter"
+  repository       = "oci://public.ecr.aws/karpenter"
+  chart            = "karpenter"
+  version          = "0.37.8"
 
   set {
     name  = "settings.clusterName"
