@@ -124,8 +124,7 @@ locals {
     var.db_grant_login_user != null && trimspace(var.db_grant_login_user) != ""
   ) ? var.db_grant_login_user : var.db_user
 
-  # db_grant_job_name = "${local.effective_fullname}-db-grant"
-  db_grant_job_name = tostring(replace(lower(local.effective_fullname), "_", "-")) + "-db-grant"
+  db_grant_job_name = "${local.effective_fullname}-db-grant"
 }
 
 #############################################
