@@ -119,6 +119,118 @@ locals {
   )
 }
 
+locals {
+  db_grant_login_user_effective = (
+    var.db_grant_login_user != null && trimspace(var.db_grant_login_user) != ""
+  ) ? var.db_grant_login_user : var.db_user
+
+  db_grant_job_name = replace(lower(local.effective_fullname), "_", "-") + "-db-grant"
+}
+
+#############################################
+# One-time Job: ensure DB user has privileges
+#############################################
+resource "kubectl_manifest" "wp_db_grant_job" {
+  count = var.db_grant_job_enabled ? 1 : 0
+
+  yaml_body = yamlencode({
+    apiVersion = "batch/v1"
+    kind       = "Job"
+    metadata = {
+      name      = local.db_grant_job_name
+      namespace = var.namespace
+      labels = {
+        "app.kubernetes.io/name"      = "wordpress"
+        "app.kubernetes.io/instance"  = local.effective_fullname
+        "app.kubernetes.io/component" = "db-grant"
+      }
+    }
+    spec = {
+      backoffLimit            = var.db_grant_job_backoff_limit
+      ttlSecondsAfterFinished = 3600
+      template = {
+        metadata = {
+          labels = {
+            "app.kubernetes.io/name"      = "wordpress"
+            "app.kubernetes.io/instance"  = local.effective_fullname
+            "app.kubernetes.io/component" = "db-grant"
+          }
+        }
+        spec = {
+          restartPolicy = "OnFailure"
+          containers = [
+            {
+              name            = "mysql-grant"
+              image           = var.db_grant_job_image
+              imagePullPolicy = "IfNotPresent"
+              command         = ["/bin/sh", "-c"]
+              args = [<<-EOT
+set -euo pipefail
+mysql --protocol=TCP \
+  --host="${MYSQL_HOST}" \
+  --port="${MYSQL_PORT}" \
+  --user="${MYSQL_LOGIN_USER}" \
+  --password="${MYSQL_LOGIN_PASSWORD}" <<'SQL'
+GRANT ALL ON `${TARGET_DATABASE}`.* TO '${TARGET_USER}'@'%';
+FLUSH PRIVILEGES;
+SQL
+EOT
+              ]
+              env = [
+                {
+                  name = "MYSQL_HOST"
+                  valueFrom = {
+                    secretKeyRef = {
+                      name = "wp-env"
+                      key  = "WORDPRESS_DATABASE_HOST"
+                    }
+                  }
+                },
+                {
+                  name = "MYSQL_PORT"
+                  valueFrom = {
+                    secretKeyRef = {
+                      name = "wp-env"
+                      key  = "WORDPRESS_DATABASE_PORT"
+                    }
+                  }
+                },
+                {
+                  name  = "MYSQL_LOGIN_USER"
+                  value = local.db_grant_login_user_effective
+                },
+                {
+                  name = "MYSQL_LOGIN_PASSWORD"
+                  valueFrom = {
+                    secretKeyRef = {
+                      name = "wp-db"
+                      key  = var.db_grant_login_password_key
+                    }
+                  }
+                },
+                {
+                  name  = "TARGET_DATABASE"
+                  value = var.db_name
+                },
+                {
+                  name  = "TARGET_USER"
+                  value = var.db_user
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  })
+
+  depends_on = [
+    kubernetes_namespace.ns,
+    kubectl_manifest.wp_env_es,
+    kubectl_manifest.wp_db_es
+  ]
+}
+
 #############################################
 # Ingress annotations (ALB / TLS / WAFv2 / tags)
 #############################################
@@ -132,6 +244,7 @@ locals {
       "alb.ingress.kubernetes.io/target-type"      = "ip"
       "alb.ingress.kubernetes.io/healthcheck-path" = "/"
       "alb.ingress.kubernetes.io/listen-ports"     = "[{\"HTTP\":80},{\"HTTPS\":443}]"
+      "alb.ingress.kubernetes.io/backend-protocol" = "HTTP"
       "alb.ingress.kubernetes.io/ssl-redirect"     = "443"
       "alb.ingress.kubernetes.io/ssl-policy"       = "ELBSecurityPolicy-TLS13-1-2-2021-06"
     },
@@ -317,6 +430,7 @@ resource "helm_release" "wordpress" {
     kubernetes_namespace.ns,
     kubectl_manifest.wp_env_es,
     kubectl_manifest.wp_db_es,
-    kubectl_manifest.wp_admin_es
+    kubectl_manifest.wp_admin_es,
+    kubectl_manifest.wp_db_grant_job
   ]
 }

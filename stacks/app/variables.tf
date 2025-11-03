@@ -52,6 +52,12 @@ variable "enable_cloudfront" {
   default     = false
 }
 
+variable "enable_alb_traffic" {
+  description = "Enable ALB Taffic (disable when using CloudFront)"
+  type        = bool
+  default     = false
+}
+
 variable "alb_domain_name" {
   description = "Hostname for WordPress (ALB Ingress)"
   type        = string
@@ -297,6 +303,16 @@ variable "wp_admin_bootstrap_enabled" {
   description = "Enable one-time admin bootstrap initContainer"
   type        = bool
   default     = true
+}
+
+# --------------------
+# EFS Access Point
+# --------------------
+
+variable "efs_id" {
+  description = "EFS File System ID"
+  type        = string
+  default     = "efs-ap"
 }
 
 # ---------------------------

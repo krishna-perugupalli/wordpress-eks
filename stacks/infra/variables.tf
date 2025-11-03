@@ -349,14 +349,3 @@ variable "additional_access_arns" {
   default     = []
   description = "List of additional IAM user or role ARNs to grant cluster access"
 }
-
-
-# --------------------
-# EFS Access Point
-# --------------------
-
-variable "efs_id" {
-  description = "EFS File System ID"
-  type        = string
-  default     = "efs-ap"
-}

@@ -34,4 +34,3 @@ module "karpenter" {
     "KMSPolicy" = aws_iam_policy.karpenter_node_role_kms_policy.arn
   }
 }
-

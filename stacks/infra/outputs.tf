@@ -101,3 +101,8 @@ output "karpenter_node_iam_role_name" {
   description = "IAM Role name for Karpenter nodes."
   value       = module.karpenter.node_iam_role_name
 }
+
+output "file_system_id" {
+  description = "EFS File System ID"
+  value       = module.data_efs.file_system_id
+}

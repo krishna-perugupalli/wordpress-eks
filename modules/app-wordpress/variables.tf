@@ -107,6 +107,37 @@ variable "db_secret_arn" {
   type        = string
 }
 
+variable "db_grant_job_enabled" {
+  description = "When true, run a Kubernetes Job to ensure the DB user has required privileges."
+  type        = bool
+  default     = true
+}
+
+variable "db_grant_job_image" {
+  description = "Container image (with mysql client) used by the DB grant Job."
+  type        = string
+  default     = "docker.io/library/mysql:8.0"
+}
+
+variable "db_grant_job_backoff_limit" {
+  description = "Backoff limit for the DB grant Job retries."
+  type        = number
+  default     = 5
+}
+
+variable "db_grant_login_user" {
+  description = "Database user the Job should authenticate as when issuing GRANT statements. Defaults to db_user."
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "db_grant_login_password_key" {
+  description = "Key inside the wp-db Secret that stores the password for db_grant_login_user."
+  type        = string
+  default     = "password"
+}
+
 # ----- Optional admin bootstrap (one-time) -----
 variable "admin_bootstrap_enabled" {
   description = "When true, create wp-admin ExternalSecret and wire chart to use it for initial admin password"

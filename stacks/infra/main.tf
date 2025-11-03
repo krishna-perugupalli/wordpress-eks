@@ -216,11 +216,11 @@ module "secrets_iam" {
 # ElastiCache (Redis) for object cache
 #############################################
 module "elasticache" {
-  source                   = "../../modules/elasticache"
-  name                     = local.name
-  vpc_id                   = module.foundation.vpc_id
-  subnet_ids               = module.foundation.private_subnet_ids
-  node_sg_source_ids       = [module.eks.node_security_group_id]
+  source             = "../../modules/elasticache"
+  name               = local.name
+  vpc_id             = module.foundation.vpc_id
+  subnet_ids         = module.foundation.private_subnet_ids
+  node_sg_source_ids = [module.eks.node_security_group_id]
   # Prefer passing the token directly from secrets-iam to avoid plan-time data reads
   enable_auth_token_secret = false
   auth_token               = module.secrets_iam.redis_auth_token
@@ -244,34 +244,4 @@ module "cost_budgets" {
 
   forecast_threshold_percent = 80
   actual_threshold_percent   = 100
-}
-
-#############################################
-# StorageClass for EFS (dynamic access points)
-#############################################
-resource "kubernetes_storage_class_v1" "efs_ap" {
-  metadata {
-    name = var.efs_id # this is the name your WordPress chart references
-  }
-
-  storage_provisioner = "efs.csi.aws.com"
-
-  parameters = {
-    provisioningMode = var.efs_id
-    fileSystemId     = module.data_efs.file_system_id # <-- from your EFS module output
-    directoryPerms   = "0770"
-    gidRangeStart    = "1000"
-    gidRangeEnd      = "2000"
-    basePath         = "/k8s" # optional
-  }
-
-  reclaim_policy         = "Retain"
-  volume_binding_mode    = "WaitForFirstConsumer"
-  allow_volume_expansion = true
-
-  # Make sure the cluster and EFS exist before creating the SC
-  depends_on = [
-    module.eks,
-    module.data_efs
-  ]
 }

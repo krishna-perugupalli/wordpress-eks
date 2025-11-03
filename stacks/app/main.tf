@@ -27,6 +27,7 @@ locals {
   wpapp_db_secret_arn               = local.infra_outputs.wpapp_db_secret_arn
   wp_admin_secret_arn               = local.infra_outputs.wp_admin_secret_arn
   cf_log_bucket_name                = local.infra_outputs.log_bucket_name
+  file_system_id                    = local.infra_outputs.file_system_id
 
   _ensure_infra_ready = length(keys(local.infra_outputs)) > 0
 }
@@ -168,6 +169,36 @@ module "observability" {
   tags = local.tags
 }
 
+#############################################
+# StorageClass for EFS (dynamic access points)
+#############################################
+resource "kubernetes_storage_class_v1" "efs_ap" {
+  metadata {
+    name = var.efs_id # this is the name your WordPress chart references
+  }
+
+  storage_provisioner = "efs.csi.aws.com"
+
+  parameters = {
+    provisioningMode = var.efs_id
+    fileSystemId     = local.file_system_id
+    directoryPerms   = "0770"
+    gidRangeStart    = "1000"
+    gidRangeEnd      = "2000"
+    basePath         = "/k8s" # optional
+  }
+
+  reclaim_policy         = "Retain"
+  volume_binding_mode    = "WaitForFirstConsumer"
+  allow_volume_expansion = true
+
+  # Make sure the cluster and EFS exist before creating the SC
+  depends_on = [
+    module.eks,
+    module.data_efs
+  ]
+}
+
 # ---------------------------
 # WordPress (Bitnami) + ESO-fed Secrets + EFS
 # ---------------------------
@@ -255,7 +286,7 @@ resource "aws_route53_record" "wp_cf_alias" {
 
 # If CloudFront is disabled, alias the domain directly to the ALB
 resource "aws_route53_record" "wp_alb_alias" {
-  count = var.enable_cloudfront ? 0 : (local.alb_found ? 1 : 0)
+  count = var.enable_alb_traffic ? 0 : (local.alb_found ? 1 : 0)
 
   zone_id = var.alb_hosted_zone_id
   name    = var.alb_domain_name
@@ -266,4 +297,5 @@ resource "aws_route53_record" "wp_alb_alias" {
     zone_id                = data.aws_lb.wp_alb[0].zone_id
     evaluate_target_health = true
   }
+  depends_on = [module.app_wordpress]
 }
