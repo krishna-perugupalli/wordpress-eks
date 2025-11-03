@@ -4,9 +4,15 @@ variable "name" {
 }
 
 variable "trail_bucket_name" {
-  description = "Optional fixed S3 bucket name for security logs (must be globally unique). Leave empty to auto-generate."
+  description = "Existing S3 bucket name for security logs (CloudTrail/ALB/Config). Required when create_trail_bucket=false. Leave empty when create_trail_bucket=true to auto-generate."
   type        = string
   default     = ""
+}
+
+variable "create_trail_bucket" {
+  description = "If true, create the security logs S3 bucket in this module; otherwise, use trail_bucket_name (can be a module output)."
+  type        = bool
+  default     = false
 }
 
 variable "logs_expire_after_days" {

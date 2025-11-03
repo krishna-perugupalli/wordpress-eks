@@ -50,35 +50,37 @@ resource "aws_kms_alias" "logs" {
 #############################################
 # S3 bucket for security logs (CloudTrail, ALB, etc.)
 #############################################
-# Ensure a globally-unique bucket. If user supplied a name, use it.
 resource "random_id" "suffix" {
+  count       = var.create_trail_bucket ? 1 : 0
   byte_length = 3
 }
 
 locals {
-  computed_logs_bucket_name = var.trail_bucket_name != "" ? var.trail_bucket_name : "${var.name}-sec-logs-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}-${random_id.suffix.hex}"
+  computed_logs_bucket_name = var.create_trail_bucket ? (
+    var.trail_bucket_name != "" ? var.trail_bucket_name : "${var.name}-sec-logs-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}-${random_id.suffix[0].hex}"
+  ) : null
 }
 
 resource "aws_s3_bucket" "security_logs" {
-  count  = var.trail_bucket_name == "" ? 1 : 0
+  count  = var.create_trail_bucket ? 1 : 0
   bucket = local.computed_logs_bucket_name
   tags   = var.tags
 }
 
 resource "aws_s3_bucket_ownership_controls" "security_logs" {
-  count  = var.trail_bucket_name == "" ? 1 : 0
+  count  = var.create_trail_bucket ? 1 : 0
   bucket = aws_s3_bucket.security_logs[0].id
   rule { object_ownership = "BucketOwnerPreferred" }
 }
 
 resource "aws_s3_bucket_versioning" "security_logs" {
-  count  = var.trail_bucket_name == "" ? 1 : 0
+  count  = var.create_trail_bucket ? 1 : 0
   bucket = aws_s3_bucket.security_logs[0].id
   versioning_configuration { status = "Enabled" }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "security_logs" {
-  count  = var.trail_bucket_name == "" ? 1 : 0
+  count  = var.create_trail_bucket ? 1 : 0
   bucket = aws_s3_bucket.security_logs[0].id
   rule {
     apply_server_side_encryption_by_default {
@@ -91,7 +93,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "security_logs" {
 
 # Lifecycle with a required filter (provider needs either prefix or filter)
 resource "aws_s3_bucket_lifecycle_configuration" "security_logs" {
-  count  = var.trail_bucket_name == "" ? 1 : 0
+  count  = var.create_trail_bucket ? 1 : 0
   bucket = aws_s3_bucket.security_logs[0].id
 
   rule {
@@ -109,8 +111,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "security_logs" {
 
 # Effective bucket identifiers (resource or caller-provided existing bucket)
 locals {
-  security_logs_bucket_name = var.trail_bucket_name != "" ? var.trail_bucket_name : aws_s3_bucket.security_logs[0].bucket
-  security_logs_bucket_arn  = var.trail_bucket_name != "" ? "arn:aws:s3:::${var.trail_bucket_name}" : aws_s3_bucket.security_logs[0].arn
+  security_logs_bucket_name = var.create_trail_bucket ? aws_s3_bucket.security_logs[0].bucket : var.trail_bucket_name
+  security_logs_bucket_arn  = var.create_trail_bucket ? aws_s3_bucket.security_logs[0].arn : "arn:aws:s3:::${var.trail_bucket_name}"
 }
 
 # Allow services to write & enforce TLS-only access
@@ -174,8 +176,9 @@ data "aws_iam_policy_document" "security_logs_policy" {
 }
 
 resource "aws_s3_bucket_policy" "security_logs" {
-  bucket = local.security_logs_bucket_name
-  policy = data.aws_iam_policy_document.security_logs_policy.json
+  bucket     = local.security_logs_bucket_name
+  policy     = data.aws_iam_policy_document.security_logs_policy.json
+  depends_on = [aws_s3_bucket.security_logs]
 }
 
 #############################################
@@ -209,7 +212,8 @@ resource "aws_cloudtrail" "this" {
     include_management_events = true
   }
 
-  tags = var.tags
+  tags       = var.tags
+  depends_on = [aws_s3_bucket.security_logs]
 }
 
 # Role for CloudTrail to write to CloudWatch Logs
@@ -313,7 +317,7 @@ resource "aws_config_delivery_channel" "this" {
   name           = "default"
   s3_bucket_name = local.security_logs_bucket_name
   s3_key_prefix  = "config"
-  depends_on     = [aws_config_configuration_recorder.this]
+  depends_on     = [aws_config_configuration_recorder.this, aws_s3_bucket.security_logs]
 }
 
 resource "aws_config_configuration_recorder_status" "this" {

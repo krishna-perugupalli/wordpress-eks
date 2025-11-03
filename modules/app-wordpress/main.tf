@@ -167,11 +167,11 @@ resource "kubectl_manifest" "wp_db_grant_job" {
               args = [<<-EOT
 set -euo pipefail
 mysql --protocol=TCP \
-  --host="${MYSQL_HOST}" \
-  --port="${MYSQL_PORT}" \
-  --user="${MYSQL_LOGIN_USER}" \
-  --password="${MYSQL_LOGIN_PASSWORD}" <<'SQL'
-GRANT ALL ON `${TARGET_DATABASE}`.* TO '${TARGET_USER}'@'%';
+  --host="$MYSQL_HOST" \
+  --port="$MYSQL_PORT" \
+  --user="$MYSQL_LOGIN_USER" \
+  --password="$MYSQL_LOGIN_PASSWORD" <<SQL
+GRANT ALL ON `$TARGET_DATABASE`.* TO '$TARGET_USER'@'%';
 FLUSH PRIVILEGES;
 SQL
 EOT
