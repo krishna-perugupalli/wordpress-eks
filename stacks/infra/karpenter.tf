@@ -1,3 +1,9 @@
+resource "kubernetes_namespace" "karpenter" {
+  metadata {
+    name = "karpenter"
+  }
+}
+
 resource "aws_iam_policy" "karpenter_node_role_kms_policy" {
   name = "${local.name}karpenter-kms-policy"
   path = "/"
