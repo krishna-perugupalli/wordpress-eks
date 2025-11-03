@@ -249,7 +249,7 @@ data "aws_resourcegroupstaggingapi_resources" "wp_alb" {
     values = [var.wp_domain_name]
   }
 
-  depends_on = [module.app_wordpress]
+  # Do not depend on module.app_wordpress here; allow plan-time discovery.
 }
 
 locals {
