@@ -124,7 +124,8 @@ locals {
     var.db_grant_login_user != null && trimspace(var.db_grant_login_user) != ""
   ) ? var.db_grant_login_user : var.db_user
 
-  db_grant_job_name = replace(lower(local.effective_fullname), "_", "-") + "-db-grant"
+  # db_grant_job_name = "${local.effective_fullname}-db-grant"
+  db_grant_job_name = tostring(replace(lower(local.effective_fullname), "_", "-")) + "-db-grant"
 }
 
 #############################################
@@ -430,7 +431,6 @@ resource "helm_release" "wordpress" {
     kubernetes_namespace.ns,
     kubectl_manifest.wp_env_es,
     kubectl_manifest.wp_db_es,
-    kubectl_manifest.wp_admin_es,
-    kubectl_manifest.wp_db_grant_job
+    kubectl_manifest.wp_admin_es
   ]
 }

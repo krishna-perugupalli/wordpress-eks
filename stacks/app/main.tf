@@ -191,12 +191,6 @@ resource "kubernetes_storage_class_v1" "efs_ap" {
   reclaim_policy         = "Retain"
   volume_binding_mode    = "WaitForFirstConsumer"
   allow_volume_expansion = true
-
-  # Make sure the cluster and EFS exist before creating the SC
-  depends_on = [
-    module.eks,
-    module.data_efs
-  ]
 }
 
 # ---------------------------
