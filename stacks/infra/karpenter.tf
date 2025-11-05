@@ -27,7 +27,7 @@ resource "aws_iam_policy" "karpenter_node_role_kms_policy" {
 
 module "karpenter" {
   source                        = "terraform-aws-modules/eks/aws//modules/karpenter"
-  version                       = "20.24.0"
+  version                       = "~> 20.24.0"
   cluster_name                  = module.eks.cluster_name
   irsa_oidc_provider_arn        = module.eks.oidc_provider_arn
   iam_role_name                 = "${local.name}-karpenter-controller"

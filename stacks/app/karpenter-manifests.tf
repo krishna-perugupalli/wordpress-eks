@@ -5,7 +5,7 @@ resource "helm_release" "karpenter_crds" {
   name       = "karpenter-crd"
   repository = "oci://public.ecr.aws/karpenter"
   chart      = "karpenter-crd"
-  version    = "0.37.8"
+  version    = "1.5.0"
   namespace  = "karpenter"
   wait       = true
   timeout    = 600
@@ -17,7 +17,7 @@ resource "helm_release" "karpenter" {
   name             = "karpenter"
   repository       = "oci://public.ecr.aws/karpenter"
   chart            = "karpenter"
-  version          = "0.37.8"
+  version          = "1.5.0"
 
   set {
     name  = "settings.clusterName"
