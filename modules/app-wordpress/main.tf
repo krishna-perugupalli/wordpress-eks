@@ -315,7 +315,7 @@ locals {
             pathType = "ImplementationSpecific"
             backend = {
               service = {
-                name = "action:forward-default"
+                name = "forward-default"
                 port = {
                   name = "use-annotation"
                 }
