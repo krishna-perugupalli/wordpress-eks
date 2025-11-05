@@ -71,8 +71,10 @@ resource "kubectl_manifest" "wp_db_es" {
         name           = "wp-db"
         creationPolicy = "Owner"
         template = {
-          type = "Opaque"
-          data = local.db_secret_template_data
+          type          = "Opaque"
+          engineVersion = "v2"
+          mergePolicy   = "Merge"
+          data          = local.db_secret_template_data
         }
       }
       data = local.db_secret_data
