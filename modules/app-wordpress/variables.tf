@@ -107,10 +107,22 @@ variable "db_secret_arn" {
   type        = string
 }
 
+variable "db_secret_key" {
+  description = "Primary key stored in the Kubernetes Secret for the DB password"
+  type        = string
+  default     = "password"
+}
+
 variable "db_secret_property" {
   description = "Property key within the app DB secret JSON that stores the password"
   type        = string
   default     = "password"
+}
+
+variable "db_secret_additional_keys" {
+  description = "Additional key names that should mirror the DB password in the Kubernetes Secret"
+  type        = list(string)
+  default     = ["WORDPRESS_DATABASE_PASSWORD", "mariadb-password"]
 }
 
 variable "db_admin_secret_arn" {

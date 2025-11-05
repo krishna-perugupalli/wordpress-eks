@@ -20,8 +20,13 @@ locals {
     WORDPRESS_DATABASE_PORT = tostring(var.db_port)
   }
 
+  db_secret_password_keys = distinct(concat(
+    [var.db_secret_key],
+    var.db_secret_additional_keys
+  ))
+
   db_secret_data = [
-    for key in ["password", "WORDPRESS_DATABASE_PASSWORD"] : {
+    for key in local.db_secret_password_keys : {
       secretKey = key
       remoteRef = {
         key      = var.db_secret_arn
