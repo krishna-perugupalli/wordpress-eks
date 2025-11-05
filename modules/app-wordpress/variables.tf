@@ -33,6 +33,12 @@ variable "alb_tags" {
   default     = {}
 }
 
+variable "ingress_forward_default" {
+  description = "When true, add a catch-all ALB rule that forwards unmatched HTTPS requests to the WordPress service"
+  type        = bool
+  default     = true
+}
+
 # Optional Helm name overrides (used by locals in main.tf)
 variable "fullname_override" {
   description = "Helm fullnameOverride"

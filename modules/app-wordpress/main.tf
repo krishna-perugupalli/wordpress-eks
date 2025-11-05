@@ -7,6 +7,16 @@ resource "kubernetes_namespace" "ns" {
   }
 }
 
+locals {
+  helm_release_name = "${var.name}-wordpress"
+}
+
+locals {
+  wordpress_service_name = var.fullname_override != "" ? var.fullname_override : (
+    var.name_override != "" ? "${local.helm_release_name}-${var.name_override}" : local.helm_release_name
+  )
+}
+
 #############################################
 # ESO ExternalSecret: build 'wp-db' with DB creds
 # - PASSWORD pulled from SM via ClusterSecretStore 'aws-sm'
@@ -279,8 +289,43 @@ locals {
     } : {},
     local.alb_tags_csv != "" ? {
       "alb.ingress.kubernetes.io/tags" = local.alb_tags_csv
+    } : {},
+    var.ingress_forward_default ? {
+      "alb.ingress.kubernetes.io/actions.forward-default" = jsonencode({
+        Type = "forward"
+        ForwardConfig = {
+          TargetGroups = [
+            {
+              ServiceName = local.wordpress_service_name
+              ServicePort = "http"
+            }
+          ]
+        }
+      })
     } : {}
   )
+
+  ingress_extra_rules = var.ingress_forward_default ? [
+    {
+      host = ""
+      http = {
+        paths = [
+          {
+            path     = "/*"
+            pathType = "ImplementationSpecific"
+            backend = {
+              service = {
+                name = "action:forward-default"
+                port = {
+                  name = "use-annotation"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ] : []
 
   extra_env_vars = [
     for k, v in var.env_extra : {
@@ -310,7 +355,7 @@ locals {
 # Helm: Bitnami/wordpress (external DB, ESO env, EFS PVC, ALB ingress, HPA)
 #############################################
 resource "helm_release" "wordpress" {
-  name       = "${var.name}-wordpress"
+  name       = local.helm_release_name
   namespace  = var.namespace
   repository = "oci://registry-1.docker.io/bitnamicharts"
   chart      = "wordpress"
@@ -439,6 +484,7 @@ resource "helm_release" "wordpress" {
         hostname    = var.domain_name
         annotations = local.ingress_annotations
         tls         = true
+        extraRules  = local.ingress_extra_rules
       }
     }),
 
