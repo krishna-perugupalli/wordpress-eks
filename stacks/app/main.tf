@@ -24,6 +24,7 @@ locals {
   secrets_read_policy_arn           = local.infra_outputs.secrets_read_policy_arn
   kms_logs_arn                      = local.infra_outputs.kms_logs_arn
   writer_endpoint                   = local.infra_outputs.writer_endpoint
+  aurora_master_secret_arn          = local.infra_outputs.aurora_master_secret_arn
   wpapp_db_secret_arn               = local.infra_outputs.wpapp_db_secret_arn
   wp_admin_secret_arn               = local.infra_outputs.wp_admin_secret_arn
   cf_log_bucket_name                = local.infra_outputs.log_bucket_name
@@ -211,10 +212,11 @@ module "app_wordpress" {
   storage_class_name = var.wp_storage_class
   pvc_size           = var.wp_pvc_size
 
-  db_host       = local.writer_endpoint
-  db_name       = var.db_name
-  db_user       = var.db_user
-  db_secret_arn = local.wpapp_db_secret_arn
+  db_host             = local.writer_endpoint
+  db_name             = var.db_name
+  db_user             = var.db_user
+  db_secret_arn       = local.wpapp_db_secret_arn
+  db_admin_secret_arn = try(local.aurora_master_secret_arn, null)
 
   admin_secret_arn        = local.wp_admin_secret_arn
   admin_user              = var.wp_admin_user

@@ -195,6 +195,9 @@ module "secrets_iam" {
   tags   = local.tags
 
   wpapp_db_host = module.data_aurora.writer_endpoint
+  readable_secret_arns = compact([
+    module.data_aurora.master_user_secret_arn
+  ])
 
   cluster_oidc_provider_arn = module.eks.oidc_provider_arn
   eso_namespace             = "external-secrets"

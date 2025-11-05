@@ -8,53 +8,50 @@ resource "kubernetes_namespace" "ns" {
 }
 
 #############################################
-# ESO ExternalSecret: build 'wp-env' with DB creds
+# ESO ExternalSecret: build 'wp-db' with DB creds
 # - PASSWORD pulled from SM via ClusterSecretStore 'aws-sm'
 # - Non-secret connection metadata templated from variables
 #############################################
 locals {
-  wp_env_template_data = {
+  db_secret_template_data = {
     WORDPRESS_DATABASE_HOST = var.db_host
     WORDPRESS_DATABASE_NAME = var.db_name
     WORDPRESS_DATABASE_USER = var.db_user
-    WORDPRESS_DATABASE_PORT = "3306"
+    WORDPRESS_DATABASE_PORT = tostring(var.db_port)
   }
 
-  wp_env_data = [
-    {
-      secretKey = "WORDPRESS_DATABASE_PASSWORD"
+  db_secret_data = [
+    for key in ["password", "WORDPRESS_DATABASE_PASSWORD"] : {
+      secretKey = key
       remoteRef = {
         key      = var.db_secret_arn
-        property = "password"
+        property = var.db_secret_property
       }
     }
   ]
-}
 
-resource "kubectl_manifest" "wp_env_es" {
-  yaml_body = yamlencode({
-    apiVersion = "external-secrets.io/v1beta1"
-    kind       = "ExternalSecret"
-    metadata = {
-      name      = "wp-env"
-      namespace = var.namespace
-    }
-    spec = {
-      refreshInterval = "1h"
-      secretStoreRef  = { name = "aws-sm", kind = "ClusterSecretStore" }
-      target = {
-        name           = "wp-env"
-        creationPolicy = "Owner"
-        template = {
-          type = "Opaque"
-          data = local.wp_env_template_data
+  admin_secret_arn_effective = trimspace(coalesce(var.db_admin_secret_arn, ""))
+
+  admin_secret_data = local.admin_secret_arn_effective != "" ? concat(
+    [
+      {
+        secretKey = var.db_admin_secret_key
+        remoteRef = {
+          key      = local.admin_secret_arn_effective
+          property = var.db_admin_secret_property
         }
       }
-      data = local.wp_env_data
-    }
-  })
-
-  depends_on = [kubernetes_namespace.ns]
+    ],
+    trimspace(var.db_admin_username_property) != "" ? [
+      {
+        secretKey = var.db_admin_username_key
+        remoteRef = {
+          key      = local.admin_secret_arn_effective
+          property = var.db_admin_username_property
+        }
+      }
+    ] : []
+  ) : []
 }
 
 resource "kubectl_manifest" "wp_db_es" {
@@ -65,13 +62,32 @@ resource "kubectl_manifest" "wp_db_es" {
     spec = {
       refreshInterval = "1h"
       secretStoreRef  = { name = "aws-sm", kind = "ClusterSecretStore" }
-      target          = { name = "wp-db", creationPolicy = "Owner" }
-      data = [
-        {
-          secretKey = "password"
-          remoteRef = { key = var.db_secret_arn, property = "password" }
+      target = {
+        name           = "wp-db"
+        creationPolicy = "Owner"
+        template = {
+          type = "Opaque"
+          data = local.db_secret_template_data
         }
-      ]
+      }
+      data = local.db_secret_data
+    }
+  })
+  depends_on = [kubernetes_namespace.ns]
+}
+
+resource "kubectl_manifest" "wp_db_admin_es" {
+  count = local.admin_secret_arn_effective != "" ? 1 : 0
+
+  yaml_body = yamlencode({
+    apiVersion = "external-secrets.io/v1beta1"
+    kind       = "ExternalSecret"
+    metadata   = { name = "wp-db-admin", namespace = var.namespace }
+    spec = {
+      refreshInterval = "1h"
+      secretStoreRef  = { name = "aws-sm", kind = "ClusterSecretStore" }
+      target          = { name = "wp-db-admin", creationPolicy = "Owner" }
+      data            = local.admin_secret_data
     }
   })
   depends_on = [kubernetes_namespace.ns]
@@ -130,7 +146,7 @@ locals {
 #############################################
 # One-time Job: ensure DB user has privileges
 #############################################
-resource "kubectl_manifest" "wp_db_grant_job" {
+/* resource "kubectl_manifest" "wp_db_grant_job" {
   count = var.db_grant_job_enabled ? 1 : 0
 
   yaml_body = yamlencode({
@@ -181,7 +197,7 @@ EOT
                   name = "MYSQL_HOST"
                   valueFrom = {
                     secretKeyRef = {
-                      name = "wp-env"
+                  name = "wp-db"
                       key  = "WORDPRESS_DATABASE_HOST"
                     }
                   }
@@ -190,7 +206,7 @@ EOT
                   name = "MYSQL_PORT"
                   valueFrom = {
                     secretKeyRef = {
-                      name = "wp-env"
+                  name = "wp-db"
                       key  = "WORDPRESS_DATABASE_PORT"
                     }
                   }
@@ -229,7 +245,7 @@ EOT
     kubectl_manifest.wp_env_es,
     kubectl_manifest.wp_db_es
   ]
-}
+} */
 
 #############################################
 # Ingress annotations (ALB / TLS / WAFv2 / tags)
@@ -355,10 +371,10 @@ resource "helm_release" "wordpress" {
     value = "https"
   }
 
-  # Keep this for non-DB envs only (remove DB keys from wp-env to avoid clashes)
+  # Keep this for non-DB envs only (remove DB keys from wp-db to avoid clashes)
   set {
     name  = "extraEnvVarsSecret"
-    value = "wp-env"
+    value = "wp-db"
   }
 
   # Admin bootstrap (safe one-time init)
@@ -428,8 +444,8 @@ resource "helm_release" "wordpress" {
 
   depends_on = [
     kubernetes_namespace.ns,
-    kubectl_manifest.wp_env_es,
     kubectl_manifest.wp_db_es,
+    kubectl_manifest.wp_db_admin_es,
     kubectl_manifest.wp_admin_es
   ]
 }

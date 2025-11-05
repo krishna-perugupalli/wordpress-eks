@@ -107,6 +107,42 @@ variable "db_secret_arn" {
   type        = string
 }
 
+variable "db_secret_property" {
+  description = "Property key within the app DB secret JSON that stores the password"
+  type        = string
+  default     = "password"
+}
+
+variable "db_admin_secret_arn" {
+  description = "Optional Secrets Manager ARN that contains the Aurora admin credentials"
+  type        = string
+  default     = ""
+}
+
+variable "db_admin_secret_property" {
+  description = "Property key within the admin secret JSON that stores the password"
+  type        = string
+  default     = "password"
+}
+
+variable "db_admin_secret_key" {
+  description = "Key name to store the admin password under in the generated Kubernetes Secret"
+  type        = string
+  default     = "password"
+}
+
+variable "db_admin_username_property" {
+  description = "Property key within the admin secret JSON that stores the username (empty to skip)"
+  type        = string
+  default     = "username"
+}
+
+variable "db_admin_username_key" {
+  description = "Key name to store the admin username under in the generated Kubernetes Secret"
+  type        = string
+  default     = "username"
+}
+
 variable "db_grant_job_enabled" {
   description = "When true, run a Kubernetes Job to ensure the DB user has required privileges."
   type        = bool

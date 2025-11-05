@@ -37,6 +37,11 @@ output "writer_endpoint" {
   value = module.data_aurora.writer_endpoint
 }
 
+output "aurora_master_secret_arn" {
+  description = "Secrets Manager ARN for the Aurora master user credentials"
+  value       = module.data_aurora.master_user_secret_arn
+}
+
 output "redis_endpoint" {
   value = module.elasticache.primary_endpoint_address
 }
