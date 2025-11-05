@@ -2,8 +2,10 @@
 # Locals
 #############################################
 locals {
-  ns            = var.namespace
-  oidc_hostpath = replace(var.cluster_oidc_issuer_url, "https://", "")
+  ns                = var.namespace
+  oidc_hostpath     = replace(var.cluster_oidc_issuer_url, "https://", "")
+  kms_logs_key_trim = trimspace(coalesce(var.kms_logs_key_arn, ""))
+  has_kms_logs_key  = local.kms_logs_key_trim != ""
 
   lg_app       = "/aws/eks/${var.cluster_name}/application"
   lg_dataplane = "/aws/eks/${var.cluster_name}/dataplane"
@@ -16,7 +18,7 @@ locals {
 resource "aws_cloudwatch_log_group" "app" {
   count             = var.install_fluent_bit ? 1 : 0
   name              = local.lg_app
-  kms_key_id        = var.kms_logs_key_arn
+  kms_key_id        = local.has_kms_logs_key ? local.kms_logs_key_trim : null
   retention_in_days = var.cw_retention_days
   tags              = var.tags
 }
@@ -24,7 +26,7 @@ resource "aws_cloudwatch_log_group" "app" {
 resource "aws_cloudwatch_log_group" "dataplane" {
   count             = var.install_fluent_bit ? 1 : 0
   name              = local.lg_dataplane
-  kms_key_id        = var.kms_logs_key_arn
+  kms_key_id        = local.has_kms_logs_key ? local.kms_logs_key_trim : null
   retention_in_days = var.cw_retention_days
   tags              = var.tags
 }
@@ -32,7 +34,7 @@ resource "aws_cloudwatch_log_group" "dataplane" {
 resource "aws_cloudwatch_log_group" "host" {
   count             = var.install_fluent_bit ? 1 : 0
   name              = local.lg_host
-  kms_key_id        = var.kms_logs_key_arn
+  kms_key_id        = local.has_kms_logs_key ? local.kms_logs_key_trim : null
   retention_in_days = var.cw_retention_days
   tags              = var.tags
 }
@@ -104,6 +106,27 @@ data "aws_iam_policy_document" "fluentbit" {
       "arn:aws:logs:${var.region}:*:log-group:${local.lg_dataplane}:*",
       "arn:aws:logs:${var.region}:*:log-group:${local.lg_host}:*"
     ]
+  }
+
+  dynamic "statement" {
+    for_each = local.has_kms_logs_key ? [1] : []
+    content {
+      sid    = "AllowCWLogsKmsUsage"
+      effect = "Allow"
+      actions = [
+        "kms:Encrypt",
+        "kms:Decrypt",
+        "kms:ReEncrypt*",
+        "kms:GenerateDataKey*",
+        "kms:DescribeKey"
+      ]
+      resources = [local.kms_logs_key_trim]
+      condition {
+        test     = "StringEquals"
+        variable = "kms:ViaService"
+        values   = ["logs.${var.region}.amazonaws.com"]
+      }
+    }
   }
 }
 
