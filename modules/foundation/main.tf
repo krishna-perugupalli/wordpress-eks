@@ -65,7 +65,7 @@ resource "aws_subnet" "private" {
     Name                                = "${var.name}-private-${each.key}"
     "kubernetes.io/role/internal-elb"   = "1"
     "kubernetes.io/cluster/${var.name}" = "owned"
-    "karpnter.sh/discovery"             = var.name
+    "karpenter.sh/discovery"            = var.name
   })
 }
 
