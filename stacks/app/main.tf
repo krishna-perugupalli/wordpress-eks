@@ -284,7 +284,7 @@ resource "aws_route53_record" "wp_cf_alias" {
 
 # If CloudFront is disabled, alias the domain directly to the ALB
 resource "aws_route53_record" "wp_alb_alias" {
-  count = var.enable_alb_traffic ? 0 : (local.alb_found ? 1 : 0)
+  count = var.enable_alb_traffic && local.alb_found ? 1 : 0
 
   zone_id = var.alb_hosted_zone_id
   name    = var.alb_domain_name

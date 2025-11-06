@@ -53,7 +53,7 @@ variable "enable_cloudfront" {
 }
 
 variable "enable_alb_traffic" {
-  description = "Enable ALB Taffic (disable when using CloudFront)"
+  description = "Create Route53 alias pointing directly to the ALB (disable when using CloudFront)"
   type        = bool
   default     = false
 }
