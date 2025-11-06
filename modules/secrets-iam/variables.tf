@@ -107,6 +107,12 @@ variable "readable_secret_arns" {
   default     = []
 }
 
+variable "readable_secret_arn_map" {
+  description = "Optional map of external readable secrets (stable key => ARN). Use when ARNs may be unknown until apply to keep for_each keys deterministic."
+  type        = map(string)
+  default     = {}
+}
+
 variable "readable_ssm_parameter_arns" {
   description = "SSM Parameter ARNs that a 'ssm-read' policy should allow (if using SSM)"
   type        = list(string)
