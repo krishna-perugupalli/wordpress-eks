@@ -222,12 +222,13 @@ locals {
   )
 
   # External secrets: use only caller-provided ARNs for discovery to avoid unknowns
-  external_readable_secret_arns = toset(var.readable_secret_arns)
+  external_readable_secret_map  = { for idx, arn in var.readable_secret_arns : tostring(idx) => arn }
+  external_readable_secret_arns = toset(values(local.external_readable_secret_map))
 }
 
 # Discover KMS key for each external secret (if any)
 data "aws_secretsmanager_secret" "external" {
-  for_each = { for arn in local.external_readable_secret_arns : arn => arn }
+  for_each = local.external_readable_secret_map
   arn      = each.value
 }
 
