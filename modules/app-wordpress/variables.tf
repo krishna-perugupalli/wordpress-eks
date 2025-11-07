@@ -272,3 +272,52 @@ variable "env_extra" {
   type        = map(string)
   default     = {}
 }
+
+# ----- Redis cache / W3TC integration -----
+variable "enable_redis_cache" {
+  description = "Enable Redis-backed cache configuration via wordpressExtraConfigContent"
+  type        = bool
+  default     = false
+}
+
+variable "redis_endpoint" {
+  description = "Redis endpoint hostname (e.g., ElastiCache primary endpoint)"
+  type        = string
+  default     = ""
+}
+
+variable "redis_port" {
+  description = "Redis port"
+  type        = number
+  default     = 6379
+}
+
+variable "redis_database" {
+  description = "Redis logical database ID used by W3 Total Cache"
+  type        = number
+  default     = 0
+}
+
+variable "redis_connection_scheme" {
+  description = "Scheme prefix for Redis server URI (tcp, tls, rediss)"
+  type        = string
+  default     = "tls"
+}
+
+variable "redis_auth_secret_arn" {
+  description = "Secrets Manager ARN that stores the Redis auth token (JSON with `token` key)"
+  type        = string
+  default     = ""
+}
+
+variable "redis_auth_secret_property" {
+  description = "Property inside the Redis auth secret JSON that contains the token"
+  type        = string
+  default     = "token"
+}
+
+variable "redis_auth_env_var_name" {
+  description = "Environment variable name exposed to the pod that carries the Redis auth token"
+  type        = string
+  default     = "REDIS_AUTH_TOKEN"
+}

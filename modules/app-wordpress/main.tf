@@ -17,6 +17,36 @@ locals {
   )
 }
 
+##############################################
+# Redis cache configuration for WordPress
+##############################################
+locals {
+  redis_cache_enabled    = var.enable_redis_cache && trimspace(var.redis_endpoint) != ""
+  redis_scheme_effective = trimspace(var.redis_connection_scheme) != "" ? var.redis_connection_scheme : "tls"
+  redis_server_uri       = local.redis_cache_enabled ? format("%s://%s:%d", local.redis_scheme_effective, trimspace(var.redis_endpoint), var.redis_port) : ""
+  redis_config_lines = local.redis_cache_enabled ? concat(
+    [
+      "define('WP_CACHE', true);",
+      "define('W3TC_CONFIG_CACHE_ENGINE', 'redis');",
+      format("define('W3TC_CONFIG_REDIS_SERVERS', '%s');", local.redis_server_uri),
+      format("define('W3TC_CONFIG_REDIS_DBID', '%d');", var.redis_database)
+    ],
+    trimspace(var.redis_auth_secret_arn) != "" ? [
+      format("define('W3TC_CONFIG_REDIS_PASSWORD', getenv('%s'));", var.redis_auth_env_var_name)
+    ] : []
+  ) : []
+  redis_extra_config_content = local.redis_cache_enabled ? join("\n", local.redis_config_lines) : ""
+  redis_secret_entries = local.redis_cache_enabled && trimspace(var.redis_auth_secret_arn) != "" ? [
+    {
+      secretKey = var.redis_auth_env_var_name
+      remoteRef = {
+        key      = var.redis_auth_secret_arn
+        property = var.redis_auth_secret_property
+      }
+    }
+  ] : []
+}
+
 #############################################
 # ESO ExternalSecret: build 'wp-db' with DB creds
 # - PASSWORD pulled from SM via ClusterSecretStore 'aws-sm'
@@ -35,15 +65,18 @@ locals {
     var.db_secret_additional_keys
   ))
 
-  db_secret_data = [
-    for key in local.db_secret_password_keys : {
-      secretKey = key
-      remoteRef = {
-        key      = var.db_secret_arn
-        property = var.db_secret_property
+  db_secret_data = concat(
+    [
+      for key in local.db_secret_password_keys : {
+        secretKey = key
+        remoteRef = {
+          key      = var.db_secret_arn
+          property = var.db_secret_property
+        }
       }
-    }
-  ]
+    ],
+    local.redis_secret_entries
+  )
 
   admin_secret_arn_effective = trimspace(coalesce(var.db_admin_secret_arn, ""))
 
@@ -423,6 +456,12 @@ resource "helm_release" "wordpress" {
     value = "https"
   }
 
+  # Service fronted only by ALB ingress, so stick with ClusterIP
+  set {
+    name  = "service.type"
+    value = "ClusterIP"
+  }
+
   # Keep this for non-DB envs only (remove DB keys from wp-db to avoid clashes)
   set {
     name  = "extraEnvVarsSecret"
@@ -476,24 +515,32 @@ resource "helm_release" "wordpress" {
   ###########################################
   # Use VALUES (not --set) for ingress + HPA
   ###########################################
-  values = [
-    # Ingress (annotations include listen-ports JSON as a string)
-    yamlencode({
-      ingress = {
-        enabled     = true
-        hostname    = var.domain_name
-        annotations = local.ingress_annotations
-        tls         = true
-        extraRules  = local.ingress_extra_rules
-      }
-    }),
+  values = concat(
+    [
+      # Ingress (annotations include listen-ports JSON as a string)
+      yamlencode({
+        ingress = {
+          enabled     = true
+          hostname    = var.domain_name
+          annotations = local.ingress_annotations
+          tls         = true
+          extraRules  = local.ingress_extra_rules
+        }
+      }),
 
-    # HPA + replicaCount with proper numbers (no quotes)
-    yamlencode({
-      replicaCount = var.replicas_min
-      autoscaling  = local.autoscaling_values
-    })
-  ]
+      # HPA + replicaCount with proper numbers (no quotes)
+      yamlencode({
+        replicaCount = var.replicas_min
+        autoscaling  = local.autoscaling_values
+      })
+    ],
+    local.redis_cache_enabled ? [
+      yamlencode({
+        wordpressConfigureCache     = true
+        wordpressExtraConfigContent = "${local.redis_extra_config_content}\n"
+      })
+    ] : []
+  )
 
   depends_on = [
     kubernetes_namespace.ns,

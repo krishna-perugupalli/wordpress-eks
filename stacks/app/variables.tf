@@ -305,6 +305,33 @@ variable "wp_admin_bootstrap_enabled" {
   default     = true
 }
 
+# ---------------------------
+# Redis cache
+# ---------------------------
+variable "enable_redis_cache" {
+  description = "Enable Redis-backed cache configuration in the WordPress release"
+  type        = bool
+  default     = false
+}
+
+variable "redis_port" {
+  description = "Redis port exposed by ElastiCache"
+  type        = number
+  default     = 6379
+}
+
+variable "redis_database" {
+  description = "Logical Redis database ID used by W3TC"
+  type        = number
+  default     = 0
+}
+
+variable "redis_connection_scheme" {
+  description = "Scheme prefix for Redis connections (tcp, tls, rediss)"
+  type        = string
+  default     = "tls"
+}
+
 # --------------------
 # EFS Access Point
 # --------------------

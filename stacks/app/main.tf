@@ -29,6 +29,8 @@ locals {
   wp_admin_secret_arn               = local.infra_outputs.wp_admin_secret_arn
   cf_log_bucket_name                = local.infra_outputs.log_bucket_name
   file_system_id                    = local.infra_outputs.file_system_id
+  redis_endpoint                    = try(local.infra_outputs.redis_endpoint, null)
+  redis_auth_secret_arn             = try(local.infra_outputs.redis_auth_secret_arn, null)
 
   _ensure_infra_ready = length(keys(local.infra_outputs)) > 0
 }
@@ -179,6 +181,13 @@ module "app_wordpress" {
 
   storage_class_name = var.wp_storage_class
   pvc_size           = var.wp_pvc_size
+
+  enable_redis_cache      = var.enable_redis_cache
+  redis_endpoint          = coalesce(local.redis_endpoint, "")
+  redis_port              = var.redis_port
+  redis_database          = var.redis_database
+  redis_connection_scheme = var.redis_connection_scheme
+  redis_auth_secret_arn   = coalesce(local.redis_auth_secret_arn, "")
 
   db_host             = local.writer_endpoint
   db_name             = var.db_name
