@@ -111,38 +111,6 @@ module "edge_cdn" {
 }
 
 # ---------------------------
-# Karpenter (controller + NodePool)
-# ---------------------------
-/* module "karpenter" {
-  source                  = "../../modules/karpenter"
-  name                    = local.name
-  cluster_name            = local.cluster_name
-  oidc_provider_arn       = local.oidc_provider_arn
-  cluster_oidc_issuer_url = local.cluster_oidc_issuer_url
-
-  subnet_selector_tags = {
-    "kubernetes.io/cluster/${local.name}" = "shared"
-  }
-
-  security_group_selector_tags = {
-    "kubernetes.io/cluster/${local.name}" = "owned"
-  }
-
-  enable_interruption_queue = true
-
-  instance_types       = var.karpenter_instance_types
-  capacity_types       = var.karpenter_capacity_types
-  ami_family           = var.karpenter_ami_family
-  consolidation_policy = var.karpenter_consolidation_policy
-  expire_after         = var.karpenter_expire_after
-  cpu_limit            = var.karpenter_cpu_limit
-  labels               = { role = "web" }
-  taints               = []
-
-  tags = local.tags
-} */
-
-# ---------------------------
 # Observability (CW Agent + Fluent Bit + ALB alarms)
 # ---------------------------
 module "observability" {
