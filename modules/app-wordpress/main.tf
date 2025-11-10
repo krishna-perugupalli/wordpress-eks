@@ -50,6 +50,8 @@ EOT
       PLUGIN="amazon-s3-and-cloudfront"
       LOCK_DIR="/bitnami/wordpress/.media-offload.lock"
       DONE_FILE="/bitnami/wordpress/.media-offload.done"
+      export WP_CLI_CACHE_DIR="/bitnami/wp-cli-cache"
+      mkdir -p "$WP_CLI_CACHE_DIR"
 
       if [ -f "$DONE_FILE" ]; then
         echo "Media offload already configured; skipping."
