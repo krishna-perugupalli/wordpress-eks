@@ -273,6 +273,37 @@ variable "env_extra" {
   default     = {}
 }
 
+# ----- Media offload (S3) -----
+variable "enable_media_offload" {
+  description = "Enable S3-backed media offload (WP Offload Media Lite)"
+  type        = bool
+  default     = false
+}
+
+variable "media_bucket_name" {
+  description = "S3 bucket name that stores media assets"
+  type        = string
+  default     = ""
+}
+
+variable "media_bucket_region" {
+  description = "Region where the media bucket lives"
+  type        = string
+  default     = ""
+}
+
+variable "media_service_account" {
+  description = "Kubernetes ServiceAccount name used when media offload is enabled"
+  type        = string
+  default     = "wp-media"
+}
+
+variable "media_irsa_role_arn" {
+  description = "IAM role ARN (IRSA) that grants the pod access to the media bucket"
+  type        = string
+  default     = ""
+}
+
 # ----- Redis cache / W3TC integration -----
 variable "enable_redis_cache" {
   description = "Enable Redis-backed cache configuration via wordpressExtraConfigContent"

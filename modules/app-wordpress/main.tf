@@ -17,6 +17,83 @@ locals {
   )
 }
 
+locals {
+  media_offload_enabled = var.enable_media_offload && trimspace(var.media_bucket_name) != ""
+  media_service_account = trimspace(var.media_service_account) != "" ? var.media_service_account : "${var.name}-media"
+  media_env_vars = local.media_offload_enabled ? [
+    { name = "MEDIA_BUCKET_NAME", value = var.media_bucket_name },
+    { name = "MEDIA_BUCKET_REGION", value = var.media_bucket_region }
+  ] : []
+  media_extra_config_template = <<-EOT
+define('AS3CF_AWS_USE_IAM_ROLE', true);
+define('AS3CF_AWS_USE_EC2_IAM_ROLE', true);
+define('AS3CF_SETTINGS', serialize(array(
+  'provider'         => 'aws',
+  'bucket'           => getenv('MEDIA_BUCKET_NAME'),
+  'region'           => getenv('MEDIA_BUCKET_REGION'),
+  'use-server-roles' => true,
+  'copy-to-s3'       => true,
+  'serve-from-s3'    => true,
+  'force-https'      => true,
+  'domain'           => 's3',
+  'object-prefix'    => '',
+  'enable-object-prefix' => false,
+  'remove-local-file'    => false
+)));
+EOT
+  media_extra_config_content = local.media_offload_enabled ? trimspace(local.media_extra_config_template) : ""
+  media_post_init_scripts = local.media_offload_enabled ? {
+    "10-media-offload.sh" = <<-EOT
+      #!/bin/bash
+      set -euo pipefail
+
+      PLUGIN="amazon-s3-and-cloudfront"
+
+      if ! wp plugin is-installed "${PLUGIN}" --allow-root; then
+        wp plugin install "${PLUGIN}" --activate --allow-root
+      else
+        wp plugin activate "${PLUGIN}" --allow-root
+      fi
+
+      SETTINGS=$(php -r '
+        $bucket = getenv("MEDIA_BUCKET_NAME");
+        $region = getenv("MEDIA_BUCKET_REGION");
+        if (!$bucket || !$region) { exit(1); }
+        $settings = serialize([
+          "provider" => "aws",
+          "bucket" => $bucket,
+          "region" => $region,
+          "use-server-roles" => true,
+          "copy-to-s3" => true,
+          "serve-from-s3" => true,
+          "force-https" => true,
+          "domain" => "s3",
+          "object-prefix" => "",
+          "enable-object-prefix" => false,
+          "remove-local-file" => false,
+        ]);
+        echo $settings;
+      ')
+
+      wp config set AS3CF_SETTINGS "$SETTINGS" --type=constant --allow-root
+      wp config set AS3CF_AWS_USE_IAM_ROLE true --type=constant --raw --allow-root
+      wp config set AS3CF_AWS_USE_EC2_IAM_ROLE true --type=constant --raw --allow-root
+      wp option update as3cf_settings "$SETTINGS" --allow-root
+    EOT
+  } : {}
+}
+
+resource "null_resource" "media_requirements" {
+  count = local.media_offload_enabled ? 1 : 0
+
+  lifecycle {
+    precondition {
+      condition     = trimspace(var.media_bucket_region) != "" && trimspace(var.media_irsa_role_arn) != ""
+      error_message = "Media offload requires media_bucket_region and media_irsa_role_arn to be set."
+    }
+  }
+}
+
 ##############################################
 # Redis cache configuration for WordPress
 ##############################################
@@ -360,12 +437,15 @@ locals {
     }
   ] : []
 
-  extra_env_vars = [
-    for k, v in var.env_extra : {
-      name  = k
-      value = v
-    }
-  ]
+  extra_env_vars = concat(
+    [
+      for k, v in var.env_extra : {
+        name  = k
+        value = v
+      }
+    ],
+    local.media_env_vars
+  )
 }
 
 #############################################
@@ -380,6 +460,32 @@ locals {
     },
     var.target_cpu_percent != null ? { targetCPU = tonumber(var.target_cpu_percent) } : {},
     var.target_memory_percent != null ? { targetMemory = tonumber(var.target_memory_percent) } : {}
+  )
+}
+
+locals {
+  wordpress_extra_config_blocks = concat(
+    local.redis_cache_enabled ? [local.redis_extra_config_content] : [],
+    local.media_offload_enabled ? [local.media_extra_config_content] : []
+  )
+  wordpress_extra_config_content = length(local.wordpress_extra_config_blocks) > 0 ? join("\n\n", local.wordpress_extra_config_blocks) : ""
+  wordpress_runtime_values       = merge(
+    { extraEnvVars = local.extra_env_vars },
+    local.media_offload_enabled ? {
+      serviceAccount = {
+        create                      = true
+        name                        = local.media_service_account
+        automountServiceAccountToken = true
+        annotations = {
+          "eks.amazonaws.com/role-arn" = var.media_irsa_role_arn
+        }
+      }
+      customPostInitScripts = local.media_post_init_scripts
+    } : {},
+    local.wordpress_extra_config_content != "" ? {
+      wordpressExtraConfigContent = "${local.wordpress_extra_config_content}\n"
+    } : {},
+    local.redis_cache_enabled ? { wordpressConfigureCache = true } : {}
   )
 }
 
@@ -515,32 +621,27 @@ resource "helm_release" "wordpress" {
   ###########################################
   # Use VALUES (not --set) for ingress + HPA
   ###########################################
-  values = concat(
-    [
-      # Ingress (annotations include listen-ports JSON as a string)
-      yamlencode({
-        ingress = {
-          enabled     = true
-          hostname    = var.domain_name
-          annotations = local.ingress_annotations
-          tls         = true
-          extraRules  = local.ingress_extra_rules
-        }
-      }),
+  values = [
+    # Ingress (annotations include listen-ports JSON as a string)
+    yamlencode({
+      ingress = {
+        enabled     = true
+        hostname    = var.domain_name
+        annotations = local.ingress_annotations
+        tls         = true
+        extraRules  = local.ingress_extra_rules
+      }
+    }),
 
-      # HPA + replicaCount with proper numbers (no quotes)
-      yamlencode({
-        replicaCount = var.replicas_min
-        autoscaling  = local.autoscaling_values
-      })
-    ],
-    local.redis_cache_enabled ? [
-      yamlencode({
-        wordpressConfigureCache     = true
-        wordpressExtraConfigContent = "${local.redis_extra_config_content}\n"
-      })
-    ] : []
-  )
+    # HPA + replicaCount with proper numbers (no quotes)
+    yamlencode({
+      replicaCount = var.replicas_min
+      autoscaling  = local.autoscaling_values
+    }),
+
+    # Runtime extras (env vars, wp-config additions, service account, init scripts)
+    yamlencode(local.wordpress_runtime_values)
+  ]
 
   depends_on = [
     kubernetes_namespace.ns,
