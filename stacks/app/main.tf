@@ -25,14 +25,14 @@ locals {
   kms_logs_arn                      = local.infra_outputs.kms_logs_arn
   writer_endpoint                   = local.infra_outputs.writer_endpoint
   aurora_master_secret_arn          = local.infra_outputs.aurora_master_secret_arn
-  wpapp_db_secret_arn   = local.infra_outputs.wpapp_db_secret_arn
-  wp_admin_secret_arn   = local.infra_outputs.wp_admin_secret_arn
-  cf_log_bucket_name    = local.infra_outputs.log_bucket_name
-  file_system_id        = local.infra_outputs.file_system_id
-  media_bucket_name     = try(local.infra_outputs.media_bucket_name, null)
-  media_bucket_kms_arn  = try(local.infra_outputs.media_bucket_kms_arn, null)
-  redis_endpoint        = try(local.infra_outputs.redis_endpoint, null)
-  redis_auth_secret_arn = try(local.infra_outputs.redis_auth_secret_arn, null)
+  wpapp_db_secret_arn               = local.infra_outputs.wpapp_db_secret_arn
+  wp_admin_secret_arn               = local.infra_outputs.wp_admin_secret_arn
+  cf_log_bucket_name                = local.infra_outputs.log_bucket_name
+  file_system_id                    = local.infra_outputs.file_system_id
+  media_bucket_name                 = try(local.infra_outputs.media_bucket_name, null)
+  media_bucket_kms_arn              = try(local.infra_outputs.media_bucket_kms_arn, null)
+  redis_endpoint                    = try(local.infra_outputs.redis_endpoint, null)
+  redis_auth_secret_arn             = try(local.infra_outputs.redis_auth_secret_arn, null)
 
   _ensure_infra_ready = length(keys(local.infra_outputs)) > 0
 }
@@ -280,12 +280,11 @@ module "app_wordpress" {
   storage_class_name = var.wp_storage_class
   pvc_size           = var.wp_pvc_size
 
-  enable_media_offload     = local.media_offload_enabled
-  media_bucket_name        = coalesce(local.media_bucket_name, "")
-  media_bucket_region      = var.region
-  media_bucket_kms_arn     = coalesce(local.media_bucket_kms_arn, "")
-  media_service_account    = var.media_service_account_name
-  media_irsa_role_arn      = local.media_offload_enabled ? aws_iam_role.wp_media[0].arn : null
+  enable_media_offload  = local.media_offload_enabled
+  media_bucket_name     = coalesce(local.media_bucket_name, "")
+  media_bucket_region   = var.region
+  media_service_account = var.media_service_account_name
+  media_irsa_role_arn   = local.media_offload_enabled ? aws_iam_role.wp_media[0].arn : null
 
   enable_redis_cache      = var.enable_redis_cache
   redis_endpoint          = coalesce(local.redis_endpoint, "")
