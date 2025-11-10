@@ -49,10 +49,10 @@ EOT
 
       PLUGIN="amazon-s3-and-cloudfront"
 
-      if ! wp plugin is-installed "${PLUGIN}" --allow-root; then
-        wp plugin install "${PLUGIN}" --activate --allow-root
+      if ! wp plugin is-installed "$${PLUGIN}" --allow-root; then
+        wp plugin install "$${PLUGIN}" --activate --allow-root
       else
-        wp plugin activate "${PLUGIN}" --allow-root
+        wp plugin activate "$${PLUGIN}" --allow-root
       fi
 
       SETTINGS=$(php -r '
