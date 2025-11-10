@@ -469,19 +469,23 @@ locals {
     local.media_offload_enabled ? [local.media_extra_config_content] : []
   )
   wordpress_extra_config_content = length(local.wordpress_extra_config_blocks) > 0 ? join("\n\n", local.wordpress_extra_config_blocks) : ""
-  wordpress_runtime_values       = merge(
-    { extraEnvVars = local.extra_env_vars },
-    local.media_offload_enabled ? {
-      serviceAccount = {
-        create                      = true
-        name                        = local.media_service_account
-        automountServiceAccountToken = true
-        annotations = {
-          "eks.amazonaws.com/role-arn" = var.media_irsa_role_arn
-        }
+  media_service_account_values = local.media_offload_enabled ? {
+    serviceAccount = {
+      create                      = true
+      name                        = local.media_service_account
+      automountServiceAccountToken = true
+      annotations = {
+        "eks.amazonaws.com/role-arn" = var.media_irsa_role_arn
       }
-      customPostInitScripts = local.media_post_init_scripts
-    } : {},
+    }
+  } : {}
+  media_post_init_values = local.media_offload_enabled ? {
+    customPostInitScripts = local.media_post_init_scripts
+  } : {}
+  wordpress_runtime_values = merge(
+    { extraEnvVars = local.extra_env_vars },
+    local.media_service_account_values,
+    local.media_post_init_values,
     local.wordpress_extra_config_content != "" ? {
       wordpressExtraConfigContent = "${local.wordpress_extra_config_content}\n"
     } : {},
