@@ -81,7 +81,19 @@ Feel free to expand this directory with more runbooks, troubleshooting guides, a
 | Operations runbook | `docs/runbook.md` | Common Day-2 tasks, backup/restore hints, and troubleshooting entry points. |
 
 ## In Progress
-- _TBD_
+- Elasticache (Redis OSS) module is still being tested and finalized.
+- CDN has ERR_TOO_MANY_REDIRECTS issue when enabled in front of ALB. Investigation ongoing.
+- Integration with third-party monitoring/logging platforms. (Grafana)
 
 ## Known Issues
-- _TBD_
+- Route53 record will not be created in the first run as the app stack creates the ingress and then in the next run the record is created. This can be resolved by running `terraform apply` twice in the app stack.
+- DNS management outside Route53 (e.g., external providers).
+- Domain validation for ACM certificates should be created manually beforehand; automated DNS validation is not yet implemented.
+
+## Not Supported At This Time
+- Multi-region deployments.
+- Automated CI/CD pipelines.
+- Advanced WordPress configurations (multisite, custom plugins/themes).
+- Automated scaling policies for Aurora Serverless v2 beyond default behavior.
+
+
