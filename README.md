@@ -71,8 +71,6 @@ Refer to `docs/getting-started.md` for the exact Terraform Cloud configuration s
 - **Disaster Recovery Plan**: Formal RTO/RPO targets, backup/restore testing procedures, and cross-region strategy once enabled.
 - **CI/CD Integration Guide**: When introducing automated pipelines, capture how plans/applies are triggered and gated.
 
-Feel free to expand this directory with more runbooks, troubleshooting guides, and diagrams as the platform evolves.
-
 ## Documentation Index
 | Topic | Location | Notes |
 |-------|----------|-------|
@@ -96,4 +94,4 @@ Feel free to expand this directory with more runbooks, troubleshooting guides, a
 - Advanced WordPress configurations (multisite, custom plugins/themes).
 - Automated scaling policies for Aurora Serverless v2 beyond default behavior.
 
-
+Feel free to expand this directory with more runbooks, troubleshooting guides, and diagrams as the platform evolves.
