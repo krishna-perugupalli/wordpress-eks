@@ -82,16 +82,6 @@ output "log_bucket_name" {
   value       = module.foundation.logs_bucket
 }
 
-output "media_bucket_name" {
-  description = "S3 bucket name for WordPress media/offload"
-  value       = module.foundation.media_bucket
-}
-
-output "media_bucket_kms_arn" {
-  description = "KMS key ARN encrypting the media bucket objects"
-  value       = module.foundation.kms_s3_arn
-}
-
 output "azs" {
   description = "Availability Zones used by the foundation module"
   value       = module.foundation.azs

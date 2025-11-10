@@ -332,21 +332,6 @@ variable "redis_connection_scheme" {
   default     = "tls"
 }
 
-# ---------------------------
-# Media offload (S3)
-# ---------------------------
-variable "enable_media_offload" {
-  description = "Enable S3 offload for WordPress media"
-  type        = bool
-  default     = false
-}
-
-variable "media_service_account_name" {
-  description = "Kubernetes service account name used for WordPress media IRSA"
-  type        = string
-  default     = "wp-media"
-}
-
 # --------------------
 # EFS Access Point
 # --------------------

@@ -28,20 +28,10 @@ locals {
   wp_admin_secret_arn               = local.infra_outputs.wp_admin_secret_arn
   cf_log_bucket_name                = local.infra_outputs.log_bucket_name
   file_system_id                    = local.infra_outputs.file_system_id
-  media_bucket_name                 = try(local.infra_outputs.media_bucket_name, null)
-  media_bucket_kms_arn              = try(local.infra_outputs.media_bucket_kms_arn, null)
   redis_endpoint                    = try(local.infra_outputs.redis_endpoint, null)
   redis_auth_secret_arn             = try(local.infra_outputs.redis_auth_secret_arn, null)
 
   _ensure_infra_ready = length(keys(local.infra_outputs)) > 0
-}
-
-locals {
-  oidc_hostpath            = replace(local.cluster_oidc_issuer_url, "https://", "")
-  media_bucket_present     = trimspace(coalesce(local.media_bucket_name, "")) != ""
-  media_offload_enabled    = var.enable_media_offload && local.media_bucket_present
-  media_bucket_arn         = local.media_offload_enabled ? "arn:aws:s3:::${local.media_bucket_name}" : null
-  media_bucket_objects_arn = local.media_offload_enabled ? "${local.media_bucket_arn}/*" : null
 }
 
 locals {

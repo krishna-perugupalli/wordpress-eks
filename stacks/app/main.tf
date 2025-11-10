@@ -128,94 +128,6 @@ resource "kubernetes_storage_class_v1" "efs_ap" {
 }
 
 # ---------------------------
-# WordPress media IRSA (S3)
-# ---------------------------
-data "aws_iam_policy_document" "wp_media_trust" {
-  count = local.media_offload_enabled ? 1 : 0
-
-  statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRoleWithWebIdentity"]
-    principals {
-      type        = "Federated"
-      identifiers = [local.oidc_provider_arn]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "${local.oidc_hostpath}:sub"
-      values   = ["system:serviceaccount:${var.wp_namespace}:${var.media_service_account_name}"]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "${local.oidc_hostpath}:aud"
-      values   = ["sts.amazonaws.com"]
-    }
-  }
-}
-
-data "aws_iam_policy_document" "wp_media_policy" {
-  count = local.media_offload_enabled ? 1 : 0
-
-  statement {
-    sid       = "ListBucket"
-    effect    = "Allow"
-    actions   = ["s3:ListBucket", "s3:GetBucketLocation"]
-    resources = [local.media_bucket_arn]
-  }
-
-  statement {
-    sid    = "ObjectReadWrite"
-    effect = "Allow"
-    actions = [
-      "s3:GetObject",
-      "s3:GetObjectAttributes",
-      "s3:GetObjectAcl",
-      "s3:PutObject",
-      "s3:PutObjectAcl",
-      "s3:DeleteObject",
-      "s3:AbortMultipartUpload",
-      "s3:ListMultipartUploadParts"
-    ]
-    resources = [local.media_bucket_objects_arn]
-  }
-
-  dynamic "statement" {
-    for_each = local.media_bucket_kms_arn != null && local.media_bucket_kms_arn != "" ? [1] : []
-    content {
-      sid       = "KmsDecrypt"
-      effect    = "Allow"
-      actions   = ["kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"]
-      resources = [local.media_bucket_kms_arn]
-      condition {
-        test     = "StringEquals"
-        variable = "kms:ViaService"
-        values   = ["s3.${var.region}.amazonaws.com"]
-      }
-    }
-  }
-}
-
-resource "aws_iam_role" "wp_media" {
-  count              = local.media_offload_enabled ? 1 : 0
-  name               = "${local.name}-wp-media"
-  assume_role_policy = data.aws_iam_policy_document.wp_media_trust[0].json
-  tags               = local.tags
-}
-
-resource "aws_iam_policy" "wp_media" {
-  count  = local.media_offload_enabled ? 1 : 0
-  name   = "${local.name}-wp-media-s3"
-  policy = data.aws_iam_policy_document.wp_media_policy[0].json
-  tags   = local.tags
-}
-
-resource "aws_iam_role_policy_attachment" "wp_media_attach" {
-  count      = local.media_offload_enabled ? 1 : 0
-  role       = aws_iam_role.wp_media[0].name
-  policy_arn = aws_iam_policy.wp_media[0].arn
-}
-
-# ---------------------------
 # WordPress (Bitnami) + ESO-fed Secrets + EFS
 # ---------------------------
 module "app_wordpress" {
@@ -232,12 +144,6 @@ module "app_wordpress" {
 
   storage_class_name = var.wp_storage_class
   pvc_size           = var.wp_pvc_size
-
-  enable_media_offload  = local.media_offload_enabled
-  media_bucket_name     = coalesce(local.media_bucket_name, "")
-  media_bucket_region   = var.region
-  media_service_account = var.media_service_account_name
-  media_irsa_role_arn   = local.media_offload_enabled ? aws_iam_role.wp_media[0].arn : null
 
   enable_redis_cache      = var.enable_redis_cache
   redis_endpoint          = coalesce(local.redis_endpoint, "")
