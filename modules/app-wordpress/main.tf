@@ -48,11 +48,47 @@ EOT
       set -euo pipefail
 
       PLUGIN="amazon-s3-and-cloudfront"
+      LOCK_DIR="/bitnami/wordpress/.media-offload.lock"
+      DONE_FILE="/bitnami/wordpress/.media-offload.done"
+
+      if [ -f "$DONE_FILE" ]; then
+        echo "Media offload already configured; skipping."
+        exit 0
+      fi
+
+      if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+        echo "Another pod is configuring media offload; waiting..."
+        for i in {1..60}; do
+          if [ -f "$DONE_FILE" ]; then
+            echo "Configuration completed by another pod; exiting."
+            exit 0
+          fi
+          if [ ! -d "$LOCK_DIR" ]; then
+            break
+          fi
+          echo "Waiting for lock... ($i/60)"
+          sleep 5
+        done
+        if [ -f "$DONE_FILE" ]; then
+          exit 0
+        fi
+        if [ -d "$LOCK_DIR" ]; then
+          echo "Timed out waiting for media offload lock; aborting."
+          exit 1
+        fi
+      fi
+      trap 'rm -rf "$LOCK_DIR"' EXIT
 
       if ! wp plugin is-installed "$${PLUGIN}" --allow-root; then
-        wp plugin install "$${PLUGIN}" --activate --allow-root
+        wp plugin install "$${PLUGIN}" --activate --allow-root || {
+          echo "Failed to install plugin $${PLUGIN}"
+          exit 1
+        }
       else
-        wp plugin activate "$${PLUGIN}" --allow-root
+        wp plugin activate "$${PLUGIN}" --allow-root || {
+          echo "Failed to activate plugin $${PLUGIN}"
+          exit 1
+        }
       fi
 
       SETTINGS=$(php -r '
@@ -79,6 +115,7 @@ EOT
       wp config set AS3CF_AWS_USE_IAM_ROLE true --type=constant --raw --allow-root
       wp config set AS3CF_AWS_USE_EC2_IAM_ROLE true --type=constant --raw --allow-root
       wp option update as3cf_settings "$SETTINGS" --allow-root
+      touch "$DONE_FILE"
     EOT
   } : {}
 }
