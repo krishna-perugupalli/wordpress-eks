@@ -190,13 +190,15 @@ locals {
     var.db_grant_login_user != null && trimspace(var.db_grant_login_user) != ""
   ) ? var.db_grant_login_user : var.db_user
 
-  db_grant_job_name = "${local.effective_fullname}-db-grant"
+  db_grant_job_name      = "${local.effective_fullname}-db-grant"
+  admin_secret_available = local.admin_secret_arn_effective != ""
+  db_bootstrap_script    = file("${path.module}/files/bootstrap-wpdb.sh")
 }
 
 #############################################
 # One-time Job: ensure DB user has privileges
 #############################################
-/* resource "kubectl_manifest" "wp_db_grant_job" {
+resource "kubectl_manifest" "wp_db_grant_job" {
   count = var.db_grant_job_enabled ? 1 : 0
 
   yaml_body = yamlencode({
@@ -223,66 +225,97 @@ locals {
           }
         }
         spec = {
-          restartPolicy = "OnFailure"
+          restartPolicy = "Never"
           containers = [
             {
-              name            = "mysql-grant"
+              name            = "mysql-client"
               image           = var.db_grant_job_image
               imagePullPolicy = "IfNotPresent"
-              command         = ["/bin/sh", "-c"]
-              args = [<<-EOT
-set -euo pipefail
-mysql --protocol=TCP \
-  --host="$MYSQL_HOST" \
-  --port="$MYSQL_PORT" \
-  --user="$MYSQL_LOGIN_USER" \
-  --password="$MYSQL_LOGIN_PASSWORD" <<SQL
-GRANT ALL ON `$TARGET_DATABASE`.* TO '$TARGET_USER'@'%';
-FLUSH PRIVILEGES;
-SQL
-EOT
-              ]
-              env = [
-                {
-                  name = "MYSQL_HOST"
-                  valueFrom = {
-                    secretKeyRef = {
-                  name = "wp-db"
-                      key  = "WORDPRESS_DATABASE_HOST"
+              command         = ["/bin/bash", "-ceu"]
+              args            = [local.db_bootstrap_script]
+              env = concat(
+                local.admin_secret_available ? [
+                  {
+                    name = "MYSQL_LOGIN_USER"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name = "wp-db-admin"
+                        key  = var.db_admin_username_key
+                      }
+                    }
+                  },
+                  {
+                    name = "MYSQL_LOGIN_PASSWORD"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name = "wp-db-admin"
+                        key  = var.db_admin_secret_key
+                      }
                     }
                   }
-                },
-                {
-                  name = "MYSQL_PORT"
-                  valueFrom = {
-                    secretKeyRef = {
-                  name = "wp-db"
-                      key  = "WORDPRESS_DATABASE_PORT"
+                ] : [
+                  {
+                    name  = "MYSQL_LOGIN_USER"
+                    value = local.db_grant_login_user_effective
+                  },
+                  {
+                    name = "MYSQL_LOGIN_PASSWORD"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name = "wp-db"
+                        key  = var.db_grant_login_password_key
+                      }
                     }
                   }
-                },
-                {
-                  name  = "MYSQL_LOGIN_USER"
-                  value = local.db_grant_login_user_effective
-                },
-                {
-                  name = "MYSQL_LOGIN_PASSWORD"
-                  valueFrom = {
-                    secretKeyRef = {
-                      name = "wp-db"
-                      key  = var.db_grant_login_password_key
+                ],
+                [
+                  {
+                    name = "TARGET_USER_PASSWORD"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name = "wp-db"
+                        key  = var.db_secret_key
+                      }
+                    }
+                  },
+                  {
+                    name = "MYSQL_HOST"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name = "wp-db"
+                        key  = "WORDPRESS_DATABASE_HOST"
+                      }
+                    }
+                  },
+                  {
+                    name = "MYSQL_PORT"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name = "wp-db"
+                        key  = "WORDPRESS_DATABASE_PORT"
+                      }
+                    }
+                  },
+                  {
+                    name = "TARGET_DATABASE"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name = "wp-db"
+                        key  = "WORDPRESS_DATABASE_NAME"
+                      }
+                    }
+                  },
+                  {
+                    name = "TARGET_USER"
+                    valueFrom = {
+                      secretKeyRef = {
+                        name = "wp-db"
+                        key  = "WORDPRESS_DATABASE_USER"
+                      }
                     }
                   }
-                },
-                {
-                  name  = "TARGET_DATABASE"
-                  value = var.db_name
-                },
-                {
-                  name  = "TARGET_USER"
-                  value = var.db_user
-                }
-              ]
+                ]
+              )
             }
           ]
         }
@@ -290,12 +323,15 @@ EOT
     }
   })
 
-  depends_on = [
+  depends_on = local.admin_secret_available ? [
     kubernetes_namespace.ns,
-    kubectl_manifest.wp_env_es,
+    kubectl_manifest.wp_db_es,
+    kubectl_manifest.wp_db_admin_es
+  ] : [
+    kubernetes_namespace.ns,
     kubectl_manifest.wp_db_es
   ]
-} */
+}
 
 #############################################
 # Ingress annotations (ALB / TLS / WAFv2 / tags)
