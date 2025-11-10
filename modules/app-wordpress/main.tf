@@ -360,12 +360,14 @@ locals {
     }
   ] : []
 
-  extra_env_vars = [
-    for k, v in var.env_extra : {
-      name  = k
-      value = v
-    }
-  ]
+  extra_env_vars = concat(
+    [
+      for k, v in var.env_extra : {
+        name  = k
+        value = v
+      }
+    ]
+  )
 }
 
 #############################################
@@ -532,6 +534,11 @@ resource "helm_release" "wordpress" {
       yamlencode({
         replicaCount = var.replicas_min
         autoscaling  = local.autoscaling_values
+      }),
+
+      # Extra env vars if provided
+      yamlencode({
+        extraEnvVars = local.extra_env_vars
       })
     ],
     local.redis_cache_enabled ? [

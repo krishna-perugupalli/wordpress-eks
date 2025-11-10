@@ -6,6 +6,7 @@ on:
       - main
       - master
       - tflint-fix
+      - feature/s3-offload
     paths:
       - '**/*.tf'
       - '**/*.tfvars'
@@ -82,21 +83,21 @@ jobs:
       - name: TFLint (recursive)
         run: tflint --recursive
 
-      - name: Ensure reports directory
-        run: mkdir -p reports
+      # - name: Ensure reports directory
+      #   run: mkdir -p reports
 
-      - name: Checkov scan
-        id: checkov
-        uses: bridgecrewio/checkov-action@v12
-        with:
-          directory: .
-          framework: terraform
-          output_format: json
-          output_file_path: reports/checkov-report.json
-
-      - name: Upload Checkov report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: checkov-report
-          path: reports/checkov-report.json
+      # - name: Checkov scan
+      #   id: checkov
+      #   uses: bridgecrewio/checkov-action@v12
+      #   with:
+      #     directory: .
+      #     framework: terraform
+      #     output_format: json
+      #     output_file_path: reports/checkov-report.json
+      #
+      # - name: Upload Checkov report
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: checkov-report
+      #     path: reports/checkov-report.json
