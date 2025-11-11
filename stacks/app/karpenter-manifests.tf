@@ -39,7 +39,8 @@ resource "helm_release" "karpenter" {
     value = local.karpenter_sqs_queue_name
   }
   depends_on = [
-    helm_release.karpenter_crds
+    helm_release.karpenter_crds,
+    module.edge_ingress
   ]
 }
 

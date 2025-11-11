@@ -171,6 +171,9 @@ resource "helm_release" "alb_controller" {
     value = var.vpc_id
   }
 
+  wait    = true
+  timeout = 600
+
   depends_on = [
     kubernetes_service_account.alb_controller
   ]

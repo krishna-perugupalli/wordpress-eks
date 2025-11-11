@@ -102,6 +102,8 @@ module "observability" {
   service_namespace = module.app_wordpress.namespace
 
   tags = local.tags
+
+  depends_on = [module.edge_ingress]
 }
 
 #############################################
