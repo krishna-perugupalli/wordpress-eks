@@ -10,6 +10,9 @@ locals {
   lg_app       = "/aws/eks/${var.cluster_name}/application"
   lg_dataplane = "/aws/eks/${var.cluster_name}/dataplane"
   lg_host      = "/aws/eks/${var.cluster_name}/host"
+
+  account_number = data.aws_caller_identity.current.account_id
+
 }
 
 #############################################
@@ -102,9 +105,9 @@ data "aws_iam_policy_document" "fluentbit" {
       "logs:PutRetentionPolicy"
     ]
     resources = [
-      "arn:aws:logs:${var.region}:*:log-group:${local.lg_app}:*",
-      "arn:aws:logs:${var.region}:*:log-group:${local.lg_dataplane}:*",
-      "arn:aws:logs:${var.region}:*:log-group:${local.lg_host}:*"
+      "arn:aws:logs:${var.region}:${local.account_number}:log-group:${local.lg_app}:*",
+      "arn:aws:logs:${var.region}:${local.account_number}:log-group:${local.lg_dataplane}:*",
+      "arn:aws:logs:${var.region}:${local.account_number}:log-group:${local.lg_host}:*"
     ]
   }
 

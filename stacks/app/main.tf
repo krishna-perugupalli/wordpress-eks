@@ -45,8 +45,9 @@ module "edge_ingress" {
 
   create_cf_certificate = var.create_cf_certificate
 
-  create_waf_regional = var.create_waf_regional
-  waf_ruleset_level   = var.waf_ruleset_level
+  create_waf_regional   = var.create_waf_regional
+  waf_ruleset_level     = var.waf_ruleset_level
+  enable_common_ruleset = var.enable_common_ruleset
 
   tags = local.tags
 }

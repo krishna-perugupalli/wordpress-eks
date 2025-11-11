@@ -104,3 +104,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "enable_common_ruleset" {
+  description = "Enable or disable flag for AWSManagedRulesCommonRuleSet, To unblock some application level issues with WAF"
+  type        = string
+  default     = false
+}
