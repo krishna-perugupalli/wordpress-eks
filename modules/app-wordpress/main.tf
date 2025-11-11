@@ -323,13 +323,10 @@ resource "kubectl_manifest" "wp_db_grant_job" {
     }
   })
 
-  depends_on = concat(
-    [
-      kubernetes_namespace.ns,
-      kubectl_manifest.wp_db_es
-    ],
-    local.admin_secret_available ? [kubectl_manifest.wp_db_admin_es[0]] : []
-  )
+  depends_on = [
+    kubernetes_namespace.ns,
+    kubectl_manifest.wp_db_es
+  ]
 }
 
 #############################################
