@@ -190,112 +190,155 @@ locals {
     var.db_grant_login_user != null && trimspace(var.db_grant_login_user) != ""
   ) ? var.db_grant_login_user : var.db_user
 
-  db_grant_job_name = "${local.effective_fullname}-db-grant"
+  db_grant_job_name      = "${local.effective_fullname}-db-grant"
+  admin_secret_available = local.admin_secret_arn_effective != ""
+  db_bootstrap_script    = file("${path.module}/files/bootstrap-wpdb.sh")
+
+  db_job_login_envs = local.admin_secret_available ? [
+    {
+      name        = "MYSQL_LOGIN_USER"
+      from_secret = true
+      secret_name = "wp-db-admin"
+      secret_key  = var.db_admin_username_key
+    },
+    {
+      name        = "MYSQL_LOGIN_PASSWORD"
+      from_secret = true
+      secret_name = "wp-db-admin"
+      secret_key  = var.db_admin_secret_key
+    }
+    ] : [
+    {
+      name        = "MYSQL_LOGIN_USER"
+      from_secret = false
+      value       = local.db_grant_login_user_effective
+    },
+    {
+      name        = "MYSQL_LOGIN_PASSWORD"
+      from_secret = true
+      secret_name = "wp-db"
+      secret_key  = var.db_grant_login_password_key
+    }
+  ]
 }
 
 #############################################
 # One-time Job: ensure DB user has privileges
 #############################################
-/* resource "kubectl_manifest" "wp_db_grant_job" {
+resource "kubernetes_job_v1" "wp_db_grant_job" {
   count = var.db_grant_job_enabled ? 1 : 0
 
-  yaml_body = yamlencode({
-    apiVersion = "batch/v1"
-    kind       = "Job"
-    metadata = {
-      name      = local.db_grant_job_name
-      namespace = var.namespace
-      labels = {
-        "app.kubernetes.io/name"      = "wordpress"
-        "app.kubernetes.io/instance"  = local.effective_fullname
-        "app.kubernetes.io/component" = "db-grant"
-      }
+  metadata {
+    name      = local.db_grant_job_name
+    namespace = var.namespace
+
+    labels = {
+      "app.kubernetes.io/name"      = "wordpress"
+      "app.kubernetes.io/instance"  = local.effective_fullname
+      "app.kubernetes.io/component" = "db-grant"
     }
-    spec = {
-      backoffLimit            = var.db_grant_job_backoff_limit
-      ttlSecondsAfterFinished = 3600
-      template = {
-        metadata = {
-          labels = {
-            "app.kubernetes.io/name"      = "wordpress"
-            "app.kubernetes.io/instance"  = local.effective_fullname
-            "app.kubernetes.io/component" = "db-grant"
+  }
+
+  spec {
+    backoff_limit              = var.db_grant_job_backoff_limit
+    ttl_seconds_after_finished = 3600
+    template {
+      metadata {
+        labels = {
+          "app.kubernetes.io/name"      = "wordpress"
+          "app.kubernetes.io/instance"  = local.effective_fullname
+          "app.kubernetes.io/component" = "db-grant"
+        }
+      }
+
+      spec {
+        restart_policy = "Never"
+
+        container {
+          name              = "mysql-client"
+          image             = var.db_grant_job_image
+          image_pull_policy = "IfNotPresent"
+          command           = ["/bin/bash", "-ceu", local.db_bootstrap_script]
+
+          dynamic "env" {
+            for_each = local.db_job_login_envs
+            content {
+              name  = env.value.name
+              value = env.value.from_secret ? null : env.value.value
+
+              dynamic "value_from" {
+                for_each = env.value.from_secret ? [1] : []
+                content {
+                  secret_key_ref {
+                    name = env.value.secret_name
+                    key  = env.value.secret_key
+                  }
+                }
+              }
+            }
+          }
+
+          env {
+            name = "TARGET_USER_PASSWORD"
+            value_from {
+              secret_key_ref {
+                name = "wp-db"
+                key  = var.db_secret_key
+              }
+            }
+          }
+
+          env {
+            name = "MYSQL_HOST"
+            value_from {
+              secret_key_ref {
+                name = "wp-db"
+                key  = "WORDPRESS_DATABASE_HOST"
+              }
+            }
+          }
+
+          env {
+            name = "MYSQL_PORT"
+            value_from {
+              secret_key_ref {
+                name = "wp-db"
+                key  = "WORDPRESS_DATABASE_PORT"
+              }
+            }
+          }
+
+          env {
+            name = "TARGET_DATABASE"
+            value_from {
+              secret_key_ref {
+                name = "wp-db"
+                key  = "WORDPRESS_DATABASE_NAME"
+              }
+            }
+          }
+
+          env {
+            name = "TARGET_USER"
+            value_from {
+              secret_key_ref {
+                name = "wp-db"
+                key  = "WORDPRESS_DATABASE_USER"
+              }
+            }
           }
         }
-        spec = {
-          restartPolicy = "OnFailure"
-          containers = [
-            {
-              name            = "mysql-grant"
-              image           = var.db_grant_job_image
-              imagePullPolicy = "IfNotPresent"
-              command         = ["/bin/sh", "-c"]
-              args = [<<-EOT
-set -euo pipefail
-mysql --protocol=TCP \
-  --host="$MYSQL_HOST" \
-  --port="$MYSQL_PORT" \
-  --user="$MYSQL_LOGIN_USER" \
-  --password="$MYSQL_LOGIN_PASSWORD" <<SQL
-GRANT ALL ON `$TARGET_DATABASE`.* TO '$TARGET_USER'@'%';
-FLUSH PRIVILEGES;
-SQL
-EOT
-              ]
-              env = [
-                {
-                  name = "MYSQL_HOST"
-                  valueFrom = {
-                    secretKeyRef = {
-                  name = "wp-db"
-                      key  = "WORDPRESS_DATABASE_HOST"
-                    }
-                  }
-                },
-                {
-                  name = "MYSQL_PORT"
-                  valueFrom = {
-                    secretKeyRef = {
-                  name = "wp-db"
-                      key  = "WORDPRESS_DATABASE_PORT"
-                    }
-                  }
-                },
-                {
-                  name  = "MYSQL_LOGIN_USER"
-                  value = local.db_grant_login_user_effective
-                },
-                {
-                  name = "MYSQL_LOGIN_PASSWORD"
-                  valueFrom = {
-                    secretKeyRef = {
-                      name = "wp-db"
-                      key  = var.db_grant_login_password_key
-                    }
-                  }
-                },
-                {
-                  name  = "TARGET_DATABASE"
-                  value = var.db_name
-                },
-                {
-                  name  = "TARGET_USER"
-                  value = var.db_user
-                }
-              ]
-            }
-          ]
-        }
       }
     }
-  })
+  }
+
+  wait_for_completion = true
 
   depends_on = [
     kubernetes_namespace.ns,
-    kubectl_manifest.wp_env_es,
     kubectl_manifest.wp_db_es
   ]
-} */
+}
 
 #############################################
 # Ingress annotations (ALB / TLS / WAFv2 / tags)
@@ -553,6 +596,7 @@ resource "helm_release" "wordpress" {
     kubernetes_namespace.ns,
     kubectl_manifest.wp_db_es,
     kubectl_manifest.wp_db_admin_es,
-    kubectl_manifest.wp_admin_es
+    kubectl_manifest.wp_admin_es,
+    kubernetes_job_v1.wp_db_grant_job
   ]
 }
