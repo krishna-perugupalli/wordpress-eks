@@ -109,7 +109,8 @@ data "aws_iam_policy_document" "fluentbit" {
     resources = [
       "arn:aws:logs:${var.region}:${local.account_number}:log-group:${local.lg_app}:*",
       "arn:aws:logs:${var.region}:${local.account_number}:log-group:${local.lg_dataplane}:*",
-      "arn:aws:logs:${var.region}:${local.account_number}:log-group:${local.lg_host}:*"
+      "arn:aws:logs:${var.region}:${local.account_number}:log-group:${local.lg_host}:*",
+      "arn:aws:logs:${var.region}:${local.account_number}:log-group:/aws/eks/*:*"
     ]
   }
 
@@ -241,26 +242,44 @@ resource "helm_release" "fluentbit" {
     name  = "cloudWatch.logStreamPrefix"
     value = "app"
   }
+  set {
+    name  = "cloudWatchLogs.enabled"
+    value = "false"
+  }
 
-  # Extra outputs for dataplane + host logs
-  values = [yamlencode({
-    extraOutputs = [
-      {
-        Name              = "cloudwatch_logs"
-        Match             = "kube.*"
-        region            = var.region
-        log_group_name    = local.lg_dataplane
-        log_stream_prefix = "dataplane"
-      },
-      {
-        Name              = "cloudwatch_logs"
-        Match             = "host.*"
-        region            = var.region
-        log_group_name    = local.lg_host
-        log_stream_prefix = "host"
-      }
-    ]
-  })]
+  # Ensure AWS SDK inside Fluent Bit always uses the IRSA role/token
+  set {
+    name  = "extraEnvs[0].name"
+    value = "AWS_ROLE_ARN"
+  }
+  set {
+    name  = "extraEnvs[0].value"
+    value = aws_iam_role.fluentbit[0].arn
+  }
+  set {
+    name  = "extraEnvs[1].name"
+    value = "AWS_WEB_IDENTITY_TOKEN_FILE"
+  }
+  set {
+    name  = "extraEnvs[1].value"
+    value = "/var/run/secrets/eks.amazonaws.com/serviceaccount/token"
+  }
+  set {
+    name  = "extraEnvs[2].name"
+    value = "AWS_REGION"
+  }
+  set {
+    name  = "extraEnvs[2].value"
+    value = var.region
+  }
+  set {
+    name  = "extraEnvs[3].name"
+    value = "AWS_DEFAULT_REGION"
+  }
+  set {
+    name  = "extraEnvs[3].value"
+    value = var.region
+  }
 
   depends_on = [
     kubernetes_service_account.fluentbit,
