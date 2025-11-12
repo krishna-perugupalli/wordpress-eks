@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 #############################################
 # Locals
 #############################################
@@ -10,6 +12,9 @@ locals {
   lg_app       = "/aws/eks/${var.cluster_name}/application"
   lg_dataplane = "/aws/eks/${var.cluster_name}/dataplane"
   lg_host      = "/aws/eks/${var.cluster_name}/host"
+
+  account_number = data.aws_caller_identity.current.account_id
+
 }
 
 #############################################
@@ -102,9 +107,10 @@ data "aws_iam_policy_document" "fluentbit" {
       "logs:PutRetentionPolicy"
     ]
     resources = [
-      "arn:aws:logs:${var.region}:*:log-group:${local.lg_app}:*",
-      "arn:aws:logs:${var.region}:*:log-group:${local.lg_dataplane}:*",
-      "arn:aws:logs:${var.region}:*:log-group:${local.lg_host}:*"
+      "arn:aws:logs:${var.region}:${local.account_number}:log-group:${local.lg_app}:*",
+      "arn:aws:logs:${var.region}:${local.account_number}:log-group:${local.lg_dataplane}:*",
+      "arn:aws:logs:${var.region}:${local.account_number}:log-group:${local.lg_host}:*",
+      "arn:aws:logs:${var.region}:${local.account_number}:log-group:/aws/eks/*:*"
     ]
   }
 
@@ -225,6 +231,10 @@ resource "helm_release" "fluentbit" {
     value = "true"
   }
   set {
+    name  = "cloudWatch.match"
+    value = "kube.*"
+  }
+  set {
     name  = "cloudWatch.region"
     value = var.region
   }
@@ -236,26 +246,119 @@ resource "helm_release" "fluentbit" {
     name  = "cloudWatch.logStreamPrefix"
     value = "app"
   }
+  set {
+    name  = "cloudWatchLogs.enabled"
+    value = "false"
+  }
 
-  # Extra outputs for dataplane + host logs
   values = [yamlencode({
-    extraOutputs = [
-      {
-        Name              = "cloudwatch_logs"
-        Match             = "kube.*"
-        region            = var.region
-        log_group_name    = local.lg_dataplane
-        log_stream_prefix = "dataplane"
-      },
-      {
-        Name              = "cloudwatch_logs"
-        Match             = "host.*"
-        region            = var.region
-        log_group_name    = local.lg_host
-        log_stream_prefix = "host"
-      }
-    ]
+    additionalInputs = <<-EOT
+[INPUT]
+    Name              tail
+    Tag               dataplane.kube-proxy
+    Path              /var/log/containers/kube-proxy*.log
+    Parser            docker
+    DB                /var/log/flb_dataplane_kube-proxy.db
+    Mem_Buf_Limit     5MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+[INPUT]
+    Name              tail
+    Tag               dataplane.aws-node
+    Path              /var/log/containers/aws-node*.log
+    Parser            docker
+    DB                /var/log/flb_dataplane_aws-node.db
+    Mem_Buf_Limit     5MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+[INPUT]
+    Name              tail
+    Tag               dataplane.coredns
+    Path              /var/log/containers/coredns*.log
+    Parser            docker
+    DB                /var/log/flb_dataplane_coredns.db
+    Mem_Buf_Limit     5MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+[INPUT]
+    Name              tail
+    Tag               host.messages
+    Path              /var/log/messages
+    Parser            syslog
+    DB                /var/log/flb_host_messages.db
+    Mem_Buf_Limit     5MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+[INPUT]
+    Name              tail
+    Tag               host.secure
+    Path              /var/log/secure
+    Parser            syslog
+    DB                /var/log/flb_host_secure.db
+    Mem_Buf_Limit     5MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+[INPUT]
+    Name              tail
+    Tag               host.dmesg
+    Path              /var/log/dmesg
+    Parser            syslog
+    DB                /var/log/flb_host_dmesg.db
+    Mem_Buf_Limit     5MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+EOT
+    additionalOutputs = <<-EOT
+[OUTPUT]
+    Name                  cloudwatch
+    Match                 dataplane.*
+    region                ${var.region}
+    log_group_name        ${local.lg_dataplane}
+    log_stream_prefix     dataplane
+    auto_create_group     true
+[OUTPUT]
+    Name                  cloudwatch
+    Match                 host.*
+    region                ${var.region}
+    log_group_name        ${local.lg_host}
+    log_stream_prefix     host
+    auto_create_group     true
+EOT
   })]
+
+  # Ensure AWS SDK inside Fluent Bit always uses the IRSA role/token
+  set {
+    name  = "extraEnvs[0].name"
+    value = "AWS_ROLE_ARN"
+  }
+  set {
+    name  = "extraEnvs[0].value"
+    value = aws_iam_role.fluentbit[0].arn
+  }
+  set {
+    name  = "extraEnvs[1].name"
+    value = "AWS_WEB_IDENTITY_TOKEN_FILE"
+  }
+  set {
+    name  = "extraEnvs[1].value"
+    value = "/var/run/secrets/eks.amazonaws.com/serviceaccount/token"
+  }
+  set {
+    name  = "extraEnvs[2].name"
+    value = "AWS_REGION"
+  }
+  set {
+    name  = "extraEnvs[2].value"
+    value = var.region
+  }
+  set {
+    name  = "extraEnvs[3].name"
+    value = "AWS_DEFAULT_REGION"
+  }
+  set {
+    name  = "extraEnvs[3].value"
+    value = var.region
+  }
 
   depends_on = [
     kubernetes_service_account.fluentbit,
@@ -269,7 +372,7 @@ resource "helm_release" "fluentbit" {
 # Robust ALB/TG discovery via Tagging API
 #############################################
 # We only discover if alarms are requested and no explicit suffixes were provided
-locals {
+/*locals {
   _need_discovery = var.create_alb_alarms && length(var.alb_arn_suffixes) == 0 && length(var.target_group_arn_suffixes) == 0
   _svc_tag_value  = "${var.service_namespace}/${var.service_name}"
 }
@@ -302,7 +405,7 @@ data "aws_resourcegroupstaggingapi_resources" "tg" {
 }
 
 # Extract first match (if any) and build arn_suffix lists
-locals {
+ locals {
   _alb_arn = local._need_discovery && length(try(data.aws_resourcegroupstaggingapi_resources.alb[0].resource_tag_mapping_list, [])) > 0 ? data.aws_resourcegroupstaggingapi_resources.alb[0].resource_tag_mapping_list[0].resource_arn : null
 
   _tg_arn = local._need_discovery && length(try(data.aws_resourcegroupstaggingapi_resources.tg[0].resource_tag_mapping_list, [])) > 0 ? data.aws_resourcegroupstaggingapi_resources.tg[0].resource_tag_mapping_list[0].resource_arn : null
@@ -368,4 +471,4 @@ resource "aws_cloudwatch_metric_alarm" "alb_latency_p95" {
   ok_actions        = var.alarm_email_sns_topic_arn != "" ? [var.alarm_email_sns_topic_arn] : []
 
   tags = var.tags
-}
+} */

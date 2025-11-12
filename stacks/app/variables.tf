@@ -94,6 +94,12 @@ variable "waf_ruleset_level" {
   default     = "baseline"
 }
 
+variable "enable_common_ruleset" {
+  description = "Enable or disable flag for AWSManagedRulesCommonRuleSet, To unblock some application level issues with WAF"
+  type        = string
+  default     = false
+}
+
 variable "acm_certificate_arn" {
   description = "Pre-created ACM certificate ARN for the ALB (regional). If set, ACM creation/validation is skipped."
   type        = string
