@@ -231,6 +231,10 @@ resource "helm_release" "fluentbit" {
     value = "true"
   }
   set {
+    name  = "cloudWatch.match"
+    value = "kube.*"
+  }
+  set {
     name  = "cloudWatch.region"
     value = var.region
   }
@@ -246,6 +250,81 @@ resource "helm_release" "fluentbit" {
     name  = "cloudWatchLogs.enabled"
     value = "false"
   }
+
+  values = [yamlencode({
+    additionalInputs = <<-EOT
+[INPUT]
+    Name              tail
+    Tag               dataplane.kube-proxy
+    Path              /var/log/containers/kube-proxy*.log
+    Parser            docker
+    DB                /var/log/flb_dataplane_kube-proxy.db
+    Mem_Buf_Limit     5MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+[INPUT]
+    Name              tail
+    Tag               dataplane.aws-node
+    Path              /var/log/containers/aws-node*.log
+    Parser            docker
+    DB                /var/log/flb_dataplane_aws-node.db
+    Mem_Buf_Limit     5MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+[INPUT]
+    Name              tail
+    Tag               dataplane.coredns
+    Path              /var/log/containers/coredns*.log
+    Parser            docker
+    DB                /var/log/flb_dataplane_coredns.db
+    Mem_Buf_Limit     5MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+[INPUT]
+    Name              tail
+    Tag               host.messages
+    Path              /var/log/messages
+    Parser            syslog
+    DB                /var/log/flb_host_messages.db
+    Mem_Buf_Limit     5MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+[INPUT]
+    Name              tail
+    Tag               host.secure
+    Path              /var/log/secure
+    Parser            syslog
+    DB                /var/log/flb_host_secure.db
+    Mem_Buf_Limit     5MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+[INPUT]
+    Name              tail
+    Tag               host.dmesg
+    Path              /var/log/dmesg
+    Parser            syslog
+    DB                /var/log/flb_host_dmesg.db
+    Mem_Buf_Limit     5MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+EOT
+    additionalOutputs = <<-EOT
+[OUTPUT]
+    Name                  cloudwatch
+    Match                 dataplane.*
+    region                ${var.region}
+    log_group_name        ${local.lg_dataplane}
+    log_stream_prefix     dataplane
+    auto_create_group     true
+[OUTPUT]
+    Name                  cloudwatch
+    Match                 host.*
+    region                ${var.region}
+    log_group_name        ${local.lg_host}
+    log_stream_prefix     host
+    auto_create_group     true
+EOT
+  })]
 
   # Ensure AWS SDK inside Fluent Bit always uses the IRSA role/token
   set {
