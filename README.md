@@ -79,9 +79,7 @@ Refer to `docs/getting-started.md` for the exact Terraform Cloud configuration s
 | Operations runbook | `docs/runbook.md` | Common Day-2 tasks, backup/restore hints, and troubleshooting entry points. |
 
 ## In Progress
-- Elasticache (Redis OSS) module is still being tested and finalized.
-- CDN has ERR_TOO_MANY_REDIRECTS issue when enabled in front of ALB. Investigation ongoing.
-- Integration with third-party monitoring/logging platforms. (Grafana)
+- You can find the progress in the "issues"
 
 ## Known Issues
 - Route53 record will not be created in the first run as the app stack creates the ingress and then in the next run the record is created. This can be resolved by running `terraform apply` twice in the app stack.
