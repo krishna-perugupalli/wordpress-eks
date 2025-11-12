@@ -293,7 +293,7 @@ resource "helm_release" "fluentbit" {
 # Robust ALB/TG discovery via Tagging API
 #############################################
 # We only discover if alarms are requested and no explicit suffixes were provided
-locals {
+/*locals {
   _need_discovery = var.create_alb_alarms && length(var.alb_arn_suffixes) == 0 && length(var.target_group_arn_suffixes) == 0
   _svc_tag_value  = "${var.service_namespace}/${var.service_name}"
 }
@@ -326,7 +326,7 @@ data "aws_resourcegroupstaggingapi_resources" "tg" {
 }
 
 # Extract first match (if any) and build arn_suffix lists
-locals {
+ locals {
   _alb_arn = local._need_discovery && length(try(data.aws_resourcegroupstaggingapi_resources.alb[0].resource_tag_mapping_list, [])) > 0 ? data.aws_resourcegroupstaggingapi_resources.alb[0].resource_tag_mapping_list[0].resource_arn : null
 
   _tg_arn = local._need_discovery && length(try(data.aws_resourcegroupstaggingapi_resources.tg[0].resource_tag_mapping_list, [])) > 0 ? data.aws_resourcegroupstaggingapi_resources.tg[0].resource_tag_mapping_list[0].resource_arn : null
@@ -392,4 +392,4 @@ resource "aws_cloudwatch_metric_alarm" "alb_latency_p95" {
   ok_actions        = var.alarm_email_sns_topic_arn != "" ? [var.alarm_email_sns_topic_arn] : []
 
   tags = var.tags
-}
+} */
