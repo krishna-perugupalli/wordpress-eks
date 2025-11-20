@@ -1,5 +1,7 @@
 # WordPress on EKS – Project Overview
 
+![High level architecture](./docs/wp_hla.png)
+
 ## What This Stack Delivers
 - A production-grade AWS foundation (networking, KMS, shared buckets) sized for an EKS-hosted WordPress deployment.
 - Managed data services: Aurora MySQL Serverless v2 for the application database, ElastiCache Redis for object caching, and EFS for persistent media.

@@ -14,3 +14,5 @@ override.tf.json
 *_override.tf.json
 .kube-manifest/*.yaml
 .amaz**
+.kir**
+

@@ -2,6 +2,8 @@
 
 This document explains the end-to-end architecture of the WordPress on EKS platform so you can map relationships and produce detailed diagrams. The stack is composed of two Terraform roots—`stacks/infra` and `stacks/app`—that together provision AWS primitives, an EKS cluster, and the Kubernetes workloads required to run WordPress with production guardrails.
 
+![wp_hla.png](wp_hla.png)
+
 ## 1. Layered Overview
 
 ```
