@@ -1,6 +1,10 @@
 # WordPress on EKS – Project Overview
 
+## High level architecture
 ![High level architecture](./docs/wp_hla.png)
+
+## Network architecture
+![Network architecture](./docs/wp_network.png)
 
 ## What This Stack Delivers
 - A production-grade AWS foundation (networking, KMS, shared buckets) sized for an EKS-hosted WordPress deployment.
