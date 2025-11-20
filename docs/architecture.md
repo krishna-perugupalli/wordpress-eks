@@ -40,6 +40,8 @@ Terraform Cloud workspaces enforce execution order: `wp-infra` must succeed befo
 - **Routing**: Public subnets route via Internet Gateway; private subnets route via NAT gateways (single or per-AZ mode).
 - **Security Groups**: Created by downstream modules; foundation ensures base networking prerequisites.
 
+![Network architecture](wp_network.png)
+
 ### Shared Security
 - **KMS Keys**: Dedicated CMKs for RDS, EFS, CloudWatch logs, and S3. Downstream modules consume these ARNs.
 - **S3 Buckets**: One for logs (CloudTrail, Config) and one for WordPress media offload (optional). Server-side encryption uses the S3 CMK and access logging targets the logs bucket.
