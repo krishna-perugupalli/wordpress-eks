@@ -47,6 +47,25 @@ locals {
   ] : []
 }
 
+##############################################
+# CloudFront/Proxy HTTPS detection configuration
+##############################################
+locals {
+  # PHP code to trust X-Forwarded-Proto header from CloudFront/ALB
+  cloudfront_proxy_config = var.behind_cloudfront ? [
+    "// Trust proxy headers for HTTPS detection when behind CloudFront/ALB",
+    "if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {",
+    "    $_SERVER['HTTPS'] = 'on';",
+    "}",
+    "if (isset($_SERVER['HTTP_CLOUDFRONT_FORWARDED_PROTO']) && $_SERVER['HTTP_CLOUDFRONT_FORWARDED_PROTO'] === 'https') {",
+    "    $_SERVER['HTTPS'] = 'on';",
+    "}",
+    "define('FORCE_SSL_ADMIN', true);"
+  ] : []
+
+  cloudfront_proxy_config_content = length(local.cloudfront_proxy_config) > 0 ? join("\n", local.cloudfront_proxy_config) : ""
+}
+
 #############################################
 # ESO ExternalSecret: build 'wp-db' with DB creds
 # - PASSWORD pulled from SM via ClusterSecretStore 'aws-sm'
@@ -584,10 +603,14 @@ resource "helm_release" "wordpress" {
         extraEnvVars = local.extra_env_vars
       })
     ],
-    local.redis_cache_enabled ? [
+    # Combine Redis and CloudFront proxy configs into wordpressExtraConfigContent
+    (local.redis_cache_enabled || var.behind_cloudfront) ? [
       yamlencode({
-        wordpressConfigureCache     = true
-        wordpressExtraConfigContent = "${local.redis_extra_config_content}\n"
+        wordpressConfigureCache = local.redis_cache_enabled
+        wordpressExtraConfigContent = join("\n", compact([
+          local.redis_extra_config_content,
+          local.cloudfront_proxy_config_content
+        ]))
       })
     ] : []
   )

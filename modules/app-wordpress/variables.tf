@@ -39,6 +39,12 @@ variable "ingress_forward_default" {
   default     = true
 }
 
+variable "behind_cloudfront" {
+  description = "When true, configure WordPress to trust CloudFront/ALB proxy headers for HTTPS detection"
+  type        = bool
+  default     = false
+}
+
 # Optional Helm name overrides (used by locals in main.tf)
 variable "fullname_override" {
   description = "Helm fullnameOverride"

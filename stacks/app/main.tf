@@ -162,6 +162,7 @@ module "app_wordpress" {
   db_admin_secret_arn = try(local.aurora_master_secret_arn, null)
 
   ingress_forward_default = !var.enable_cloudfront
+  behind_cloudfront       = var.enable_cloudfront
 
   admin_secret_arn        = local.wp_admin_secret_arn
   admin_user              = var.wp_admin_user

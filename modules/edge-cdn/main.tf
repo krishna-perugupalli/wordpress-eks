@@ -11,10 +11,10 @@ locals {
 #############################################
 resource "aws_cloudfront_cache_policy" "bypass_auth" {
   name = "${var.name}-bypass-auth"
-  # Treat as a no-cache policy for dynamic WP routes
-  default_ttl = 50
-  max_ttl     = 100
-  min_ttl     = 1
+  # True no-cache policy for dynamic WP routes (prevents caching redirects)
+  default_ttl = 0
+  max_ttl     = 0
+  min_ttl     = 0
 
   parameters_in_cache_key_and_forwarded_to_origin {
     enable_accept_encoding_brotli = true
@@ -78,7 +78,12 @@ resource "aws_cloudfront_origin_request_policy" "minimal" {
   headers_config {
     header_behavior = "whitelist"
     headers {
-      items = ["Host", "CloudFront-Viewer-Country"]
+      items = [
+        "Host",
+        "CloudFront-Viewer-Country",
+        "CloudFront-Forwarded-Proto",
+        "X-Forwarded-Proto"
+      ]
     }
   }
 
