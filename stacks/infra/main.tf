@@ -220,5 +220,5 @@ module "standalone_alb" {
 
   tags = local.tags
 
-  depends_on = [module.foundation, module.eks]
+  depends_on = [module.foundation, module.eks, module.waf_regional]
 }
