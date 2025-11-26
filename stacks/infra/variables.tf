@@ -343,3 +343,98 @@ variable "eks_admin_user_arns" {
   type        = list(string)
   default     = []
 }
+
+# ---------------------------
+# Standalone ALB Configuration
+# ---------------------------
+
+variable "wordpress_domain_name" {
+  description = "Domain name for WordPress site (e.g., wordpress.example.com)"
+  type        = string
+  default     = ""
+}
+
+variable "wordpress_hosted_zone_id" {
+  description = "Route53 hosted zone ID for WordPress domain"
+  type        = string
+  default     = ""
+}
+
+variable "create_alb_route53_record" {
+  description = "Whether to create Route53 A record for ALB"
+  type        = bool
+  default     = true
+}
+
+variable "enable_cloudfront_restriction" {
+  description = "Restrict ALB ingress to CloudFront IP ranges only"
+  type        = bool
+  default     = false
+}
+
+variable "alb_enable_deletion_protection" {
+  description = "Enable deletion protection on ALB"
+  type        = bool
+  default     = false
+}
+
+variable "wordpress_pod_port" {
+  description = "Port where WordPress pods are listening"
+  type        = number
+  default     = 8080
+}
+
+variable "alb_certificate_arn" {
+  description = "ACM certificate ARN for ALB HTTPS listener (must be created and validated manually as prerequisite)"
+  type        = string
+  validation {
+    condition     = can(regex("^arn:aws:acm:", var.alb_certificate_arn))
+    error_message = "The alb_certificate_arn must be a valid ACM certificate ARN starting with 'arn:aws:acm:'."
+  }
+}
+
+variable "waf_acl_arn" {
+  description = "WAF WebACL ARN for ALB association (if not creating new WAF in this stack)"
+  type        = string
+  default     = ""
+}
+
+variable "create_waf" {
+  description = "Create WAF WebACL for ALB in infrastructure stack"
+  type        = bool
+  default     = true
+}
+
+variable "waf_rate_limit" {
+  description = "WAF rate limit for wp-login.php (requests per 5 minutes)"
+  type        = number
+  default     = 100
+}
+
+variable "waf_enable_managed_rules" {
+  description = "Enable AWS Managed Rules (Common Rule Set) for OWASP Top 10 protection"
+  type        = bool
+  default     = true
+}
+
+# ---------------------------
+# CloudFront Integration (Optional)
+# ---------------------------
+
+variable "route53_points_to_cloudfront" {
+  description = "When true, Route53 record points to CloudFront distribution instead of ALB"
+  type        = bool
+  default     = false
+}
+
+variable "cloudfront_distribution_domain_name" {
+  description = "CloudFront distribution domain name (required when route53_points_to_cloudfront is true)"
+  type        = string
+  default     = ""
+}
+
+variable "cloudfront_distribution_zone_id" {
+  description = "CloudFront distribution zone ID (typically Z2FDTNDATAQYW2 for CloudFront)"
+  type        = string
+  default     = "Z2FDTNDATAQYW2"
+}

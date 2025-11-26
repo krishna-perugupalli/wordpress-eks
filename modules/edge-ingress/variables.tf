@@ -34,19 +34,6 @@ variable "controller_namespace" {
   default     = "kube-system"
 }
 
-# --- New: optional CF -> ALB SG lock-down ---
-variable "restrict_alb_to_cloudfront" {
-  description = "If true, allow ALB ingress only from CloudFront origin-facing prefix list"
-  type        = bool
-  default     = false
-}
-
-variable "alb_security_group_id" {
-  description = "Security Group ID attached to the ALB created by LBC (required if restrict_alb_to_cloudfront = true)"
-  type        = string
-  default     = ""
-}
-
 variable "create_regional_certificate" {
   description = "Create a regional ACM certificate for ALB"
   type        = bool
@@ -83,30 +70,8 @@ variable "cf_hosted_zone_id" {
   default     = ""
 }
 
-variable "create_waf_regional" {
-  description = "Create a WAFv2 Web ACL (REGIONAL) for ALB"
-  type        = bool
-  default     = true
-}
-
-variable "waf_ruleset_level" {
-  description = "Managed rules strictness: 'baseline' or 'strict'"
-  type        = string
-  default     = "baseline"
-  validation {
-    condition     = contains(["baseline", "strict"], var.waf_ruleset_level)
-    error_message = "waf_ruleset_level must be 'baseline' or 'strict'."
-  }
-}
-
 variable "tags" {
   description = "Common tags for created resources"
   type        = map(string)
   default     = {}
-}
-
-variable "enable_common_ruleset" {
-  description = "Enable or disable flag for AWSManagedRulesCommonRuleSet, To unblock some application level issues with WAF"
-  type        = string
-  default     = false
 }

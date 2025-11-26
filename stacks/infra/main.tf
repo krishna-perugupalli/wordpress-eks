@@ -178,3 +178,47 @@ module "cost_budgets" {
   forecast_threshold_percent = 80
   actual_threshold_percent   = 100
 }
+
+#############################################
+# WAF WebACL for ALB (Regional)
+#############################################
+module "waf_regional" {
+  source = "../../modules/waf-regional"
+
+  name                 = local.name
+  rate_limit           = var.waf_rate_limit
+  enable_managed_rules = var.waf_enable_managed_rules
+  tags                 = local.tags
+}
+
+#############################################
+# Standalone ALB for WordPress
+# Prerequisites:
+# - ACM certificate must be created and validated manually
+# - Certificate ARN must be provided via alb_certificate_arn variable
+#############################################
+module "standalone_alb" {
+  source = "../../modules/standalone-alb"
+
+  name                          = local.name
+  vpc_id                        = module.foundation.vpc_id
+  public_subnet_ids             = module.foundation.public_subnet_ids
+  certificate_arn               = var.alb_certificate_arn
+  waf_acl_arn                   = var.create_waf ? module.waf_regional.waf_arn : var.waf_acl_arn
+  domain_name                   = var.wordpress_domain_name
+  hosted_zone_id                = var.wordpress_hosted_zone_id
+  create_route53_record         = var.create_alb_route53_record
+  wordpress_pod_port            = var.wordpress_pod_port
+  worker_node_security_group_id = module.eks.node_security_group_id
+  enable_cloudfront_restriction = var.enable_cloudfront_restriction
+  enable_deletion_protection    = var.alb_enable_deletion_protection
+
+  # CloudFront integration
+  route53_points_to_cloudfront        = var.route53_points_to_cloudfront
+  cloudfront_distribution_domain_name = var.cloudfront_distribution_domain_name
+  cloudfront_distribution_zone_id     = var.cloudfront_distribution_zone_id
+
+  tags = local.tags
+
+  depends_on = [module.foundation, module.eks]
+}

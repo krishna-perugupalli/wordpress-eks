@@ -36,15 +36,14 @@ resource "aws_iam_role" "alb_controller" {
   tags               = var.tags
 }
 
-# AWS-recommended IAM policy for ALB Controller (core privileges)
+# IAM policy for ALB Controller - focused on TargetGroupBinding management
+# Removed ALB/Listener creation permissions since ALB is managed by Terraform
 data "aws_iam_policy_document" "alb_controller_policy" {
   statement {
-    sid    = "ELBPermissions"
+    sid    = "TargetGroupManagement"
     effect = "Allow"
     actions = [
-      "acm:DescribeCertificate",
-      "acm:ListCertificates",
-      "acm:GetCertificate",
+      # EC2 permissions for security group management (TargetGroupBinding networking)
       "ec2:AuthorizeSecurityGroupIngress",
       "ec2:CreateSecurityGroup",
       "ec2:CreateTags",
@@ -52,45 +51,16 @@ data "aws_iam_policy_document" "alb_controller_policy" {
       "ec2:DeleteTags",
       "ec2:Describe*",
       "ec2:RevokeSecurityGroupIngress",
-      "elasticloadbalancing:AddListenerCertificates",
-      "elasticloadbalancing:AddTags",
-      "elasticloadbalancing:CreateListener",
-      "elasticloadbalancing:CreateLoadBalancer",
-      "elasticloadbalancing:CreateRule",
-      "elasticloadbalancing:CreateTargetGroup",
-      "elasticloadbalancing:DeleteListener",
-      "elasticloadbalancing:DeleteLoadBalancer",
-      "elasticloadbalancing:DeleteRule",
-      "elasticloadbalancing:DeleteTargetGroup",
+      # Target group management (core TargetGroupBinding functionality)
       "elasticloadbalancing:DeregisterTargets",
       "elasticloadbalancing:Describe*",
-      "elasticloadbalancing:ModifyListener",
-      "elasticloadbalancing:ModifyLoadBalancerAttributes",
-      "elasticloadbalancing:ModifyRule",
       "elasticloadbalancing:ModifyTargetGroup",
       "elasticloadbalancing:ModifyTargetGroupAttributes",
       "elasticloadbalancing:RegisterTargets",
-      "elasticloadbalancing:RemoveListenerCertificates",
+      "elasticloadbalancing:AddTags",
       "elasticloadbalancing:RemoveTags",
-      "elasticloadbalancing:SetIpAddressType",
-      "elasticloadbalancing:SetSecurityGroups",
-      "elasticloadbalancing:SetSubnets",
-      "elasticloadbalancing:SetWebAcl",
-      "iam:CreateServiceLinkedRole",
-      "cognito-idp:DescribeUserPoolClient",
-      "waf-regional:GetWebACLForResource",
-      "waf-regional:GetWebACL",
-      "waf-regional:AssociateWebACL",
-      "waf-regional:DisassociateWebACL",
-      "wafv2:GetWebACLForResource",
-      "wafv2:GetWebACL",
-      "wafv2:AssociateWebACL",
-      "wafv2:DisassociateWebACL",
-      "shield:DescribeProtection",
-      "shield:GetSubscriptionState",
-      "shield:DeleteProtection",
-      "shield:CreateProtection",
-      "shield:DescribeSubscription"
+      # Service linked role creation
+      "iam:CreateServiceLinkedRole"
     ]
     resources = ["*"]
   }
@@ -180,25 +150,6 @@ resource "helm_release" "alb_controller" {
 }
 
 #############################################
-# Optional: Restrict ALB to CloudFront origin-facing IPs
-#############################################
-data "aws_prefix_list" "cloudfront_origin" {
-  count = var.restrict_alb_to_cloudfront ? 1 : 0
-  name  = "com.amazonaws.global.cloudfront.origin-facing"
-}
-
-resource "aws_security_group_rule" "alb_ingress_cf_only" {
-  count             = var.restrict_alb_to_cloudfront ? 1 : 0
-  type              = "ingress"
-  from_port         = 443
-  to_port           = 443
-  protocol          = "tcp"
-  security_group_id = var.alb_security_group_id
-  prefix_list_ids   = [data.aws_prefix_list.cloudfront_origin[0].id]
-  description       = "Allow only CloudFront origin-facing IPs to reach ALB"
-}
-
-#############################################
 # ACM (Regional) for ALB (DNS validated)
 #############################################
 resource "aws_acm_certificate" "alb" {
@@ -280,166 +231,4 @@ resource "aws_acm_certificate_validation" "cf" {
   validation_record_fqdns = [for r in aws_route53_record.cf_cert_validation : r.fqdn]
 }
 
-#############################################
-# WAFv2 (REGIONAL) for ALB
-#############################################
-resource "aws_wafv2_web_acl" "regional" {
-  count = var.create_waf_regional ? 1 : 0
 
-  name        = "${var.name}-alb-waf"
-  description = "WAF for ALB fronting ${var.name}"
-  scope       = "REGIONAL"
-
-  default_action {
-    allow {}
-  }
-
-  visibility_config {
-    cloudwatch_metrics_enabled = true
-    metric_name                = "${var.name}-alb-waf"
-    sampled_requests_enabled   = true
-  }
-
-  dynamic "rule" {
-    for_each = var.enable_common_ruleset ? [1] : []
-    content {
-      name     = "AWS-AWSManagedRulesCommonRuleSet"
-      priority = 10
-      override_action {
-        none {}
-      }
-      statement {
-        managed_rule_group_statement {
-          vendor_name = "AWS"
-          name        = "AWSManagedRulesCommonRuleSet"
-        }
-      }
-      visibility_config {
-        cloudwatch_metrics_enabled = true
-        metric_name                = "CommonRuleSet"
-        sampled_requests_enabled   = true
-      }
-    }
-  }
-
-  rule {
-    name     = "AWS-AWSManagedRulesKnownBadInputsRuleSet"
-    priority = 20
-    override_action {
-      none {}
-    }
-    statement {
-      managed_rule_group_statement {
-        vendor_name = "AWS"
-        name        = "AWSManagedRulesKnownBadInputsRuleSet"
-      }
-    }
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "KnownBadInputs"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  dynamic "rule" {
-    for_each = var.waf_ruleset_level == "strict" ? [1] : []
-    content {
-      name     = "AWS-AWSManagedRulesSQLiRuleSet"
-      priority = 30
-      override_action {
-        none {}
-      }
-      statement {
-        managed_rule_group_statement {
-          vendor_name = "AWS"
-          name        = "AWSManagedRulesSQLiRuleSet"
-        }
-      }
-      visibility_config {
-        cloudwatch_metrics_enabled = true
-        metric_name                = "SQLi"
-        sampled_requests_enabled   = true
-      }
-    }
-  }
-
-  ## Rate limit rule
-  # --- Rate limit /wp-login.php ---
-  rule {
-    name     = "RateLimitLogin"
-    priority = 12
-    action {
-      block {}
-    }
-    statement {
-      rate_based_statement {
-        limit              = 2000
-        aggregate_key_type = "IP"
-        scope_down_statement {
-          byte_match_statement {
-            search_string         = "/wp-login.php"
-            positional_constraint = "EXACTLY"
-            field_to_match {
-              uri_path {}
-            }
-            text_transformation {
-              priority = 0
-              type     = "NONE"
-            }
-          }
-        }
-      }
-    }
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "ratelogin"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  # --- Block XML-RPC POSTs (optional) ---
-  rule {
-    name     = "BlockXmlRpcPost"
-    priority = 11
-    action {
-      block {}
-    }
-    statement {
-      and_statement {
-        statement {
-          byte_match_statement {
-            field_to_match {
-              uri_path {}
-            }
-            search_string         = "/xmlrpc.php"
-            positional_constraint = "EXACTLY"
-            text_transformation {
-              priority = 0
-              type     = "NONE"
-            }
-          }
-        }
-        statement {
-          byte_match_statement {
-            search_string         = "POST"
-            positional_constraint = "EXACTLY"
-            field_to_match {
-              method {}
-            }
-            text_transformation {
-              priority = 0
-              type     = "NONE"
-            }
-          }
-        }
-      }
-    }
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "xmlrpc"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  tags = var.tags
-}

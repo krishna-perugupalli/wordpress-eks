@@ -8,7 +8,7 @@ output "wordpress_hostname" {
   value       = var.wp_domain_name
 }
 
-output "debug_alb_arn" {
-  value       = var.enable_alb_traffic ? local.alb_arn : null
-  description = "Temporary: ALB ARN discovered via tag lookup"
+output "target_group_arn" {
+  description = "Target group ARN from infrastructure stack"
+  value       = local.target_group_arn
 }

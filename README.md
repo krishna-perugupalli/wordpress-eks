@@ -10,7 +10,8 @@
 - A production-grade AWS foundation (networking, KMS, shared buckets) sized for an EKS-hosted WordPress deployment.
 - Managed data services: Aurora MySQL Serverless v2 for the application database, ElastiCache Redis for object caching, and EFS for persistent media.
 - An EKS control plane with managed node groups, core add-ons (CNI, CoreDNS, kube-proxy, EFS CSI), and supporting IAM roles.
-- A Kubernetes application layer that installs the External Secrets Operator (ESO), AWS Load Balancer Controller, Karpenter, observability agents, and WordPress via Helm.
+- A standalone Application Load Balancer (ALB) managed directly by Terraform with TargetGroupBinding for pod registration.
+- A Kubernetes application layer that installs the External Secrets Operator (ESO), AWS Load Balancer Controller (for TargetGroupBinding), Karpenter, observability agents, and WordPress via Helm.
 - Guardrails such as GuardDuty, AWS Config, CloudTrail, and monthly cost budgets.
 
 ## Repository Layout
@@ -26,21 +27,22 @@ wordpress-eks.tfvars # Example variable overrides for Terraform runs
 ### Stack Boundaries
 | Stack | Key Responsibilities | Terraform Cloud Workspace |
 |-------|----------------------|---------------------------|
-| `stacks/infra` | Foundation (VPC, NAT, subnets), EKS cluster/IAM, Aurora, EFS, Redis, security baseline, shared secrets | `wp-infra` |
-| `stacks/app`   | ESO, AWS Load Balancer Controller, Karpenter, observability add-ons, WordPress Helm release | `wp-app` |
+| `stacks/infra` | Foundation (VPC, NAT, subnets), EKS cluster/IAM, Aurora, EFS, Redis, standalone ALB, WAF, Route53, security baseline, shared secrets | `wp-infra` |
+| `stacks/app`   | ESO, AWS Load Balancer Controller (for TargetGroupBinding), Karpenter, observability add-ons, WordPress Helm release with TargetGroupBinding | `wp-app` |
 
 The `stacks/app` configuration consumes outputs published by `stacks/infra` through Terraform Cloud remote state.
 
 ## Deployment Flow (High Level)
-1. **Terraform Cloud workspaces**: create/run `wp-infra`, then `wp-app`. The app stack refuses to plan until infra has produced required outputs (cluster name, OIDC, secrets policy ARN, etc.).
+1. **Terraform Cloud workspaces**: create/run `wp-infra`, then `wp-app`. The app stack refuses to plan until infra has produced required outputs (cluster name, OIDC, secrets policy ARN, ALB target group ARN, etc.).
 2. **Infrastructure apply**:
    - Builds networking/KMS, then EKS IAM, then the cluster and node group.
    - Provisions Aurora, EFS (with access point and optional backups), Redis (auth token in Secrets Manager), and security services.
-   - Publishes outputs (cluster metadata, secret ARNs, policy ARNs) for downstream stacks.
+   - Creates standalone ALB with target group, listeners, security groups, WAF association, and Route53 records.
+   - Publishes outputs (cluster metadata, secret ARNs, policy ARNs, ALB details, target group ARN) for downstream stacks.
 3. **Application apply**:
    - Installs ESO using the pre-created read policy so it can sync secrets from Secrets Manager.
-   - Deploys AWS Load Balancer Controller and issues ACM/WAF resources if enabled.
-   - Configures Karpenter for flexible compute, observability agents, and finally installs WordPress via Bitnami Helm chart pointing to Aurora/EFS/Redis.
+   - Deploys AWS Load Balancer Controller (for TargetGroupBinding functionality only).
+   - Configures Karpenter for flexible compute, observability agents, and finally installs WordPress via Bitnami Helm chart with TargetGroupBinding pointing to the pre-created target group.
 
 Refer to `docs/getting-started.md` for the exact Terraform Cloud configuration steps.
 
@@ -52,7 +54,7 @@ Refer to `docs/getting-started.md` for the exact Terraform Cloud configuration s
   - EFS shared filesystem with access point and AWS Backup support for `wp-content`.
   - Redis replication group with TLS/auth, fed from Secrets Manager.
 - **EKS Add-ons**: IRSA-enabled AWS controllers (LBC, ESO, CloudWatch Agent, Fluent Bit, EFS CSI), Karpenter node provisioning, namespace-specific service accounts.
-- **App Layer**: Bitnami WordPress chart configured for external database, ESO-managed secrets, ALB ingress with optional WAF and ACM certificates, horizontal autoscaling, and EFS-backed storage.
+- **App Layer**: Bitnami WordPress chart configured for external database, ESO-managed secrets, TargetGroupBinding for ALB integration, horizontal autoscaling, and EFS-backed storage.
 
 ## Tooling & Automation
 - **Terraform Cloud** for remote state, execution, and cross-workspace dependencies.
@@ -83,14 +85,24 @@ Refer to `docs/getting-started.md` for the exact Terraform Cloud configuration s
 | End-to-end deployment steps | `docs/getting-started.md` | Terraform Cloud workspace setup, variable conventions, run order. |
 | Architecture deep dive | `docs/architecture.md` | Network layout, module boundaries, data flows, and security controls. |
 | Operations runbook | `docs/runbook.md` | Common Day-2 tasks, backup/restore hints, and troubleshooting entry points. |
+| TargetGroupBinding configuration | `docs/targetgroupbinding.md` | Detailed guide on TargetGroupBinding setup, troubleshooting, and best practices. |
+| Karpenter integration | `docs/karpenter-integration.md` | How Karpenter autoscaling works with the standalone ALB architecture. |
 
 ## In Progress
 - You can find the progress in the "issues"
 
+## CloudFront Integration (Optional)
+The standalone ALB architecture supports optional CloudFront integration:
+- **ALB Security Group Restriction**: Restrict ALB ingress to CloudFront IP ranges only
+- **Conditional Route53 Records**: Route53 can point to either ALB directly or CloudFront distribution  
+- **WordPress Proxy Header Trust**: WordPress trusts X-Forwarded-Proto headers from CloudFront/ALB
+
+See `docs/cloudfront-integration.md` and `examples/cloudfront-integration.tfvars` for configuration details.
+
 ## Known Issues
-- Route53 record will not be created in the first run as the app stack creates the ingress and then in the next run the record is created. This can be resolved by running `terraform apply` twice in the app stack.
 - DNS management outside Route53 (e.g., external providers).
 - Domain validation for ACM certificates should be created manually beforehand; automated DNS validation is not yet implemented.
+- TargetGroupBinding requires AWS Load Balancer Controller to be running for pod IP registration.
 
 ## Not Supported At This Time
 - Multi-region deployments.

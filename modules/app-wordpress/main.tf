@@ -360,68 +360,9 @@ resource "kubernetes_job_v1" "wp_db_grant_job" {
 }
 
 #############################################
-# Ingress annotations (ALB / TLS / WAFv2 / tags)
+# Extra environment variables
 #############################################
 locals {
-  alb_tags_csv = length(var.alb_tags) > 0 ? join(",", [for k, v in var.alb_tags : "${k}=${v}"]) : ""
-
-  ingress_annotations = merge(
-    {
-      "kubernetes.io/ingress.class"                = "alb"
-      "alb.ingress.kubernetes.io/scheme"           = "internet-facing"
-      "alb.ingress.kubernetes.io/target-type"      = "ip"
-      "alb.ingress.kubernetes.io/healthcheck-path" = "/"
-      "alb.ingress.kubernetes.io/listen-ports"     = "[{\"HTTP\":80},{\"HTTPS\":443}]"
-      "alb.ingress.kubernetes.io/backend-protocol" = "HTTP"
-      "alb.ingress.kubernetes.io/ssl-redirect"     = "443"
-      "alb.ingress.kubernetes.io/ssl-policy"       = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-    },
-    var.alb_certificate_arn != "" ? {
-      "alb.ingress.kubernetes.io/certificate-arn" = var.alb_certificate_arn
-    } : {},
-    var.waf_acl_arn != "" ? {
-      "alb.ingress.kubernetes.io/wafv2-acl-arn" = var.waf_acl_arn
-    } : {},
-    local.alb_tags_csv != "" ? {
-      "alb.ingress.kubernetes.io/tags" = local.alb_tags_csv
-    } : {},
-    var.ingress_forward_default ? {
-      "alb.ingress.kubernetes.io/actions.forward-default" = jsonencode({
-        Type = "forward"
-        ForwardConfig = {
-          TargetGroups = [
-            {
-              ServiceName = local.wordpress_service_name
-              ServicePort = "http"
-            }
-          ]
-        }
-      })
-    } : {}
-  )
-
-  ingress_extra_rules = var.ingress_forward_default ? [
-    {
-      host = ""
-      http = {
-        paths = [
-          {
-            path     = "/*"
-            pathType = "ImplementationSpecific"
-            backend = {
-              service = {
-                name = "forward-default"
-                port = {
-                  name = "use-annotation"
-                }
-              }
-            }
-          }
-        ]
-      }
-    }
-  ] : []
-
   extra_env_vars = concat(
     [
       for k, v in var.env_extra : {
@@ -577,18 +518,14 @@ resource "helm_release" "wordpress" {
   }
 
   ###########################################
-  # Use VALUES (not --set) for ingress + HPA
+  # Use VALUES (not --set) for HPA and config
   ###########################################
   values = concat(
     [
-      # Ingress (annotations include listen-ports JSON as a string)
+      # Disable Ingress (using TargetGroupBinding instead)
       yamlencode({
         ingress = {
-          enabled     = true
-          hostname    = var.domain_name
-          annotations = local.ingress_annotations
-          tls         = true
-          extraRules  = local.ingress_extra_rules
+          enabled = false
         }
       }),
 
@@ -622,4 +559,28 @@ resource "helm_release" "wordpress" {
     kubectl_manifest.wp_admin_es,
     kubernetes_job_v1.wp_db_grant_job
   ]
+}
+
+#############################################
+# TargetGroupBinding: Register WordPress pods with ALB target group
+#############################################
+resource "kubectl_manifest" "wordpress_tgb" {
+  yaml_body = yamlencode({
+    apiVersion = "elbv2.k8s.aws/v1beta1"
+    kind       = "TargetGroupBinding"
+    metadata = {
+      name      = "${local.effective_fullname}-tgb"
+      namespace = var.namespace
+    }
+    spec = {
+      serviceRef = {
+        name = local.wordpress_service_name
+        port = 80
+      }
+      targetGroupARN = var.target_group_arn
+      targetType     = "ip"
+    }
+  })
+
+  depends_on = [helm_release.wordpress]
 }

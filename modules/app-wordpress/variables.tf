@@ -14,29 +14,10 @@ variable "domain_name" {
   type        = string
 }
 
-# ----- Ingress / ALB / WAF -----
-variable "alb_certificate_arn" {
-  description = "ACM cert ARN for ALB listener; empty = no TLS annotation"
+# ----- TargetGroupBinding -----
+variable "target_group_arn" {
+  description = "ARN of the ALB target group to bind the WordPress service to"
   type        = string
-  default     = ""
-}
-
-variable "waf_acl_arn" {
-  description = "WAFv2 WebACL ARN to attach to ALB; empty = none"
-  type        = string
-  default     = ""
-}
-
-variable "alb_tags" {
-  description = "Tags to attach to the ALB via ingress annotation"
-  type        = map(string)
-  default     = {}
-}
-
-variable "ingress_forward_default" {
-  description = "When true, add a catch-all ALB rule that forwards unmatched HTTPS requests to the WordPress service"
-  type        = bool
-  default     = true
 }
 
 variable "behind_cloudfront" {

@@ -111,3 +111,61 @@ output "file_system_id" {
   description = "EFS File System ID"
   value       = module.data_efs.file_system_id
 }
+
+# ACM Certificate (provided as prerequisite)
+output "alb_certificate_arn" {
+  description = "Regional ACM certificate ARN for ALB (passed through from variable)"
+  value       = var.alb_certificate_arn
+}
+
+# WAF
+output "waf_regional_arn" {
+  description = "WAF WebACL ARN for ALB"
+  value       = var.create_waf ? module.waf_regional.waf_arn : var.waf_acl_arn
+}
+
+# Standalone ALB
+output "alb_arn" {
+  description = "ARN of the standalone ALB"
+  value       = module.standalone_alb.alb_arn
+}
+
+output "alb_dns_name" {
+  description = "DNS name of the standalone ALB"
+  value       = module.standalone_alb.alb_dns_name
+}
+
+output "alb_zone_id" {
+  description = "Zone ID of the standalone ALB"
+  value       = module.standalone_alb.alb_zone_id
+}
+
+output "alb_security_group_id" {
+  description = "Security group ID of the ALB"
+  value       = module.standalone_alb.alb_security_group_id
+}
+
+output "target_group_arn" {
+  description = "ARN of the target group for WordPress"
+  value       = module.standalone_alb.target_group_arn
+}
+
+output "target_group_name" {
+  description = "Name of the target group"
+  value       = module.standalone_alb.target_group_name
+}
+
+output "route53_record_fqdn" {
+  description = "FQDN of the created Route53 record"
+  value       = module.standalone_alb.route53_record_fqdn
+}
+
+output "route53_record_type" {
+  description = "Type of Route53 record created (alb or cloudfront)"
+  value       = module.standalone_alb.route53_record_type
+}
+
+output "public_subnet_ids" {
+  description = "Public subnet IDs for ALB"
+  value       = module.foundation.public_subnet_ids
+}

@@ -252,7 +252,7 @@ resource "helm_release" "fluentbit" {
   }
 
   values = [yamlencode({
-    additionalInputs = <<-EOT
+    additionalInputs  = <<-EOT
 [INPUT]
     Name              tail
     Tag               dataplane.kube-proxy

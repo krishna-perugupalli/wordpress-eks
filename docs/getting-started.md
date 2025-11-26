@@ -64,7 +64,12 @@ make apply-app
   ```bash
   make kubeconfig
   ```
-- **DNS**: Update the chosen domain (`alb_domain_name` / `wp_domain_name`) to point at the ALB hostname if using an external DNS provider.
+- **DNS**: If using external DNS provider, update the chosen domain to point at the ALB hostname (available in infra stack outputs).
+- **Verify TargetGroupBinding**: Check that WordPress pods are registered with the ALB target group:
+  ```bash
+  kubectl get targetgroupbinding -n wordpress
+  kubectl describe targetgroupbinding wordpress-tgb -n wordpress
+  ```
 - **WordPress Admin**: Log in with bootstrap credentials from the Secrets Manager entry (`<project>-wp-admin`). After the first login, disable bootstrap by setting `wp_admin_bootstrap_enabled = false` in the app workspace.
 
 ## 7. Ongoing Operations
@@ -75,7 +80,8 @@ make apply-app
 ## 8. Troubleshooting Basics
 - **Terraform Cloud run failures**: Inspect logs for provider errors, missing permissions, or circular dependencies. Re-run after addressing issues.
 - **Remote state issues**: `wp-app` depends on `wp-infra`; ensure the latest infra apply succeeded before re-running app.
-- **WordPress pod failures**: See `docs/runbook.md` for detailed remediation steps, covering ESO sync, database connectivity, storage, and ingress checks.
+- **WordPress pod failures**: See `docs/runbook.md` for detailed remediation steps, covering ESO sync, database connectivity, storage, and TargetGroupBinding checks.
+- **TargetGroupBinding issues**: Verify AWS Load Balancer Controller is running and has proper IRSA permissions for target group management.
 
 ## 9. Next Steps for New Contributors
 - Review the module source under `modules/` to understand configurable options and resource decisions.

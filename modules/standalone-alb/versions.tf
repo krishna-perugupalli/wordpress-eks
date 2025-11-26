@@ -1,3 +1,5 @@
+# Standalone ALB Module Version Constraints
+
 terraform {
   required_version = ">= 1.6.0"
 
@@ -5,10 +7,6 @@ terraform {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.55"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.6"
     }
   }
 }
