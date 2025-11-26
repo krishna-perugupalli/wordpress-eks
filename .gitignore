@@ -3,6 +3,7 @@ stacks/sandbox/**/.terraform.lock.hcl
 .terraform
 .terraform.lock.hcl
 .vscode
+.kir**
 wordpress-eks.tfstate
 wordpress-eks.tfstate.backup
 *.tfvars
@@ -14,5 +15,4 @@ override.tf.json
 *_override.tf.json
 .kube-manifest/*.yaml
 .amaz**
-.kir**
 

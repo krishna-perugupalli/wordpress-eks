@@ -11,6 +11,16 @@ locals {
     },
     var.tags
   )
+
+  # DNS coordination validation
+  dns_coordination_valid = (
+    # If CloudFront is enabled, domain name and hosted zone must be provided
+    var.enable_cloudfront ?
+    var.wordpress_domain_name != "" && var.wordpress_hosted_zone_id != "" : true
+    ) && (
+    # If CloudFront is enabled, ALB should not create Route53 records
+    var.enable_cloudfront ? !var.create_alb_route53_record : true
+  )
 }
 
 ## Get current AWS account ID
@@ -209,18 +219,86 @@ module "standalone_alb" {
   enable_waf                    = var.create_waf || var.waf_acl_arn != ""
   domain_name                   = var.wordpress_domain_name
   hosted_zone_id                = var.wordpress_hosted_zone_id
-  create_route53_record         = var.create_alb_route53_record
+  create_route53_record         = var.create_alb_route53_record && !var.enable_cloudfront
   wordpress_pod_port            = var.wordpress_pod_port
   worker_node_security_group_id = module.eks.node_security_group_id
   enable_cloudfront_restriction = var.enable_cloudfront_restriction
   enable_deletion_protection    = var.alb_enable_deletion_protection
 
-  # CloudFront integration
-  route53_points_to_cloudfront        = var.route53_points_to_cloudfront
-  cloudfront_distribution_domain_name = var.cloudfront_distribution_domain_name
-  cloudfront_distribution_zone_id     = var.cloudfront_distribution_zone_id
+  # Origin Protection Configuration
+  enable_origin_protection        = var.enable_alb_origin_protection
+  origin_secret_value             = var.cloudfront_origin_secret
+  origin_protection_response_code = var.alb_origin_protection_response_code
+  origin_protection_response_body = var.alb_origin_protection_response_body
 
   tags = local.tags
 
   depends_on = [module.foundation, module.eks]
+}
+
+#############################################
+# CloudFront Distribution (Optional)
+# Prerequisites:
+# - ACM certificate must be created and validated manually in us-east-1
+# - Certificate ARN must be provided via cloudfront_certificate_arn variable
+# - ALB must be deployed and healthy with valid DNS name
+# - Route53 hosted zone must exist for DNS record creation
+#############################################
+module "cloudfront" {
+  count  = var.enable_cloudfront ? 1 : 0
+  source = "../../modules/cloudfront"
+
+  providers = {
+    aws.us_east_1 = aws.us_east_1
+  }
+
+  name                = local.name
+  domain_name         = var.wordpress_domain_name
+  aliases             = var.cloudfront_aliases
+  alb_dns_name        = module.standalone_alb.alb_dns_name
+  acm_certificate_arn = var.cloudfront_certificate_arn
+  log_bucket_name     = module.foundation.logs_bucket
+  price_class         = var.cloudfront_price_class
+  enable_http3        = var.cloudfront_enable_http3
+  origin_secret_value = var.cloudfront_origin_secret
+
+  # Geo-restrictions configuration
+  geo_restriction_type      = var.cloudfront_geo_restriction_type
+  geo_restriction_locations = var.cloudfront_geo_restriction_locations
+
+  # Compression and performance features
+  compress             = var.cloudfront_enable_compression
+  enable_origin_shield = var.cloudfront_enable_origin_shield
+  origin_shield_region = var.cloudfront_origin_shield_region
+
+  # Logging configuration
+  enable_logging           = var.cloudfront_enable_logging
+  log_prefix               = var.cloudfront_log_prefix
+  log_include_cookies      = var.cloudfront_log_include_cookies
+  enable_real_time_logs    = var.cloudfront_enable_real_time_logs
+  real_time_log_config_arn = var.cloudfront_real_time_log_config_arn
+
+  # Custom error responses
+  custom_error_responses = var.cloudfront_custom_error_responses
+
+  # Security and protocol configuration
+  waf_web_acl_arn          = var.cloudfront_waf_web_acl_arn
+  minimum_protocol_version = var.cloudfront_minimum_protocol_version
+  is_ipv6_enabled          = var.cloudfront_enable_ipv6
+  default_root_object      = var.cloudfront_default_root_object
+  enable_smooth_streaming  = var.cloudfront_enable_smooth_streaming
+
+  # Route53 Integration
+  hosted_zone_id        = var.wordpress_hosted_zone_id
+  create_route53_record = var.create_cloudfront_route53_record
+
+  tags = local.tags
+
+  # Explicit dependencies to ensure proper deployment order and validation
+  depends_on = [
+    terraform_data.infrastructure_readiness_validation,
+    terraform_data.cloudfront_dependencies_validation,
+    terraform_data.dns_coordination_validation,
+    terraform_data.cloudfront_certificate_validation
+  ]
 }

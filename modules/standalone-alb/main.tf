@@ -116,18 +116,57 @@ resource "aws_lb_target_group" "wordpress" {
   )
 }
 
-# HTTP Listener (redirect to HTTPS)
+# HTTP Listener (redirect to HTTPS or block based on origin protection)
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.wordpress.arn
   port              = 80
   protocol          = "HTTP"
 
+  # Default action: redirect to HTTPS when origin protection is disabled, or return error when enabled
   default_action {
+    type = var.enable_origin_protection ? "fixed-response" : "redirect"
+
+    dynamic "redirect" {
+      for_each = var.enable_origin_protection ? [] : [1]
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+
+    dynamic "fixed_response" {
+      for_each = var.enable_origin_protection ? [1] : []
+      content {
+        content_type = "text/plain"
+        message_body = var.origin_protection_response_body
+        status_code  = var.origin_protection_response_code
+      }
+    }
+  }
+
+  tags = var.tags
+}
+
+# Origin Secret Validation Rule for HTTP (redirect to HTTPS with valid secret)
+resource "aws_lb_listener_rule" "origin_secret_validation_http" {
+  count        = var.enable_origin_protection && var.origin_secret_value != "" ? 1 : 0
+  listener_arn = aws_lb_listener.http.arn
+  priority     = 100
+
+  action {
     type = "redirect"
     redirect {
       port        = "443"
       protocol    = "HTTPS"
       status_code = "HTTP_301"
+    }
+  }
+
+  condition {
+    http_header {
+      http_header_name = "X-Origin-Secret"
+      values           = [var.origin_secret_value]
     }
   }
 
@@ -142,9 +181,40 @@ resource "aws_lb_listener" "https" {
   ssl_policy        = var.ssl_policy
   certificate_arn   = var.certificate_arn
 
+  # Default action when origin protection is disabled or no rules match
   default_action {
+    type             = var.enable_origin_protection ? "fixed-response" : "forward"
+    target_group_arn = var.enable_origin_protection ? null : aws_lb_target_group.wordpress.arn
+
+    dynamic "fixed_response" {
+      for_each = var.enable_origin_protection ? [1] : []
+      content {
+        content_type = "text/plain"
+        message_body = var.origin_protection_response_body
+        status_code  = var.origin_protection_response_code
+      }
+    }
+  }
+
+  tags = var.tags
+}
+
+# Origin Secret Validation Rule for HTTPS
+resource "aws_lb_listener_rule" "origin_secret_validation_https" {
+  count        = var.enable_origin_protection && var.origin_secret_value != "" ? 1 : 0
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 100
+
+  action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.wordpress.arn
+  }
+
+  condition {
+    http_header {
+      http_header_name = "X-Origin-Secret"
+      values           = [var.origin_secret_value]
+    }
   }
 
   tags = var.tags
@@ -157,9 +227,15 @@ resource "aws_wafv2_web_acl_association" "alb" {
   web_acl_arn  = var.waf_acl_arn
 }
 
-# Route53 A Record - conditionally points to ALB or CloudFront
+# Data source to validate hosted zone exists and is accessible
+data "aws_route53_zone" "selected" {
+  count   = var.create_route53_record && var.hosted_zone_id != "" ? 1 : 0
+  zone_id = var.hosted_zone_id
+}
+
+# Route53 A Record pointing to ALB
 resource "aws_route53_record" "wordpress" {
-  count   = var.create_route53_record && !var.route53_points_to_cloudfront ? 1 : 0
+  count   = var.create_route53_record && var.hosted_zone_id != "" ? 1 : 0
   zone_id = var.hosted_zone_id
   name    = var.domain_name
   type    = "A"
@@ -169,18 +245,8 @@ resource "aws_route53_record" "wordpress" {
     zone_id                = aws_lb.wordpress.zone_id
     evaluate_target_health = true
   }
-}
 
-# Route53 A Record for CloudFront (when CloudFront is used)
-resource "aws_route53_record" "wordpress_cloudfront" {
-  count   = var.create_route53_record && var.route53_points_to_cloudfront ? 1 : 0
-  zone_id = var.hosted_zone_id
-  name    = var.domain_name
-  type    = "A"
-
-  alias {
-    name                   = var.cloudfront_distribution_domain_name
-    zone_id                = var.cloudfront_distribution_zone_id
-    evaluate_target_health = false
+  lifecycle {
+    create_before_destroy = true
   }
 }

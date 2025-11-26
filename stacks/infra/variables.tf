@@ -421,20 +421,257 @@ variable "waf_enable_managed_rules" {
 # CloudFront Integration (Optional)
 # ---------------------------
 
-variable "route53_points_to_cloudfront" {
-  description = "When true, Route53 record points to CloudFront distribution instead of ALB"
+variable "enable_cloudfront" {
+  description = "Enable CloudFront distribution deployment"
   type        = bool
   default     = false
 }
 
-variable "cloudfront_distribution_domain_name" {
-  description = "CloudFront distribution domain name (required when route53_points_to_cloudfront is true)"
+variable "cloudfront_certificate_arn" {
+  description = "ACM certificate ARN from us-east-1 for CloudFront (required when enable_cloudfront is true)"
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.cloudfront_certificate_arn == "" || can(regex("^arn:aws(-[a-z]+)?:acm:us-east-1:[0-9]{12}:certificate/.+$", var.cloudfront_certificate_arn))
+    error_message = "CloudFront requires an ACM certificate in us-east-1. Provide a us-east-1 ACM certificate ARN."
+  }
+}
+
+variable "cloudfront_aliases" {
+  description = "Additional domain aliases for CloudFront distribution"
+  type        = list(string)
+  default     = []
+}
+
+variable "cloudfront_price_class" {
+  description = "CloudFront price class (PriceClass_All, PriceClass_200, PriceClass_100)"
+  type        = string
+  default     = "PriceClass_100"
+  validation {
+    condition     = contains(["PriceClass_All", "PriceClass_200", "PriceClass_100"], var.cloudfront_price_class)
+    error_message = "CloudFront price class must be one of: PriceClass_All, PriceClass_200, PriceClass_100."
+  }
+}
+
+variable "cloudfront_enable_http3" {
+  description = "Enable HTTP/3 (QUIC) for CloudFront distribution"
+  type        = bool
+  default     = false
+}
+
+variable "cloudfront_origin_secret" {
+  description = "Optional shared secret header value for CloudFront origin protection"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "enable_alb_origin_protection" {
+  description = "Enable ALB origin protection to block direct access and only allow CloudFront traffic with valid origin secret"
+  type        = bool
+  default     = false
+}
+
+variable "alb_origin_protection_response_code" {
+  description = "HTTP response code to return when ALB origin secret validation fails"
+  type        = number
+  default     = 403
+  validation {
+    condition     = contains([400, 401, 403, 404, 503], var.alb_origin_protection_response_code)
+    error_message = "ALB origin protection response code must be one of: 400, 401, 403, 404, 503."
+  }
+}
+
+variable "alb_origin_protection_response_body" {
+  description = "Response body to return when ALB origin secret validation fails"
+  type        = string
+  default     = "Access Denied - Direct access not allowed"
+}
+
+
+
+
+
+variable "create_cloudfront_route53_record" {
+  description = "Whether to create Route53 A record pointing to CloudFront distribution"
+  type        = bool
+  default     = true
+}
+
+variable "cloudfront_geo_restriction_type" {
+  description = "Type of geo restriction for CloudFront (none, whitelist, blacklist)"
+  type        = string
+  default     = "none"
+  validation {
+    condition     = contains(["none", "whitelist", "blacklist"], var.cloudfront_geo_restriction_type)
+    error_message = "CloudFront geo restriction type must be one of: none, whitelist, blacklist."
+  }
+}
+
+variable "cloudfront_geo_restriction_locations" {
+  description = "List of country codes for CloudFront geo restriction (ISO 3166-1 alpha-2)"
+  type        = list(string)
+  default     = []
+  validation {
+    condition = alltrue([
+      for location in var.cloudfront_geo_restriction_locations :
+      can(regex("^[A-Z]{2}$", location))
+    ])
+    error_message = "CloudFront geo restriction locations must be valid ISO 3166-1 alpha-2 country codes (e.g., US, GB, DE)."
+  }
+}
+
+variable "cloudfront_enable_compression" {
+  description = "Enable automatic content compression (Gzip/Brotli) for CloudFront distribution"
+  type        = bool
+  default     = true
+}
+
+variable "cloudfront_enable_logging" {
+  description = "Enable CloudFront access logging to S3 bucket"
+  type        = bool
+  default     = true
+}
+
+variable "cloudfront_log_include_cookies" {
+  description = "Include cookies in CloudFront access logs"
+  type        = bool
+  default     = false
+}
+
+variable "cloudfront_log_prefix" {
+  description = "Prefix for CloudFront access log files in S3 bucket"
+  type        = string
+  default     = "cloudfront-logs/"
+}
+
+variable "cloudfront_enable_real_time_logs" {
+  description = "Enable CloudFront real-time logs"
+  type        = bool
+  default     = false
+}
+
+variable "cloudfront_real_time_log_config_arn" {
+  description = "ARN of the real-time log configuration for CloudFront"
   type        = string
   default     = ""
 }
 
-variable "cloudfront_distribution_zone_id" {
-  description = "CloudFront distribution zone ID (typically Z2FDTNDATAQYW2 for CloudFront)"
+variable "cloudfront_enable_origin_shield" {
+  description = "Enable CloudFront Origin Shield for improved cache hit ratio"
+  type        = bool
+  default     = false
+}
+
+variable "cloudfront_origin_shield_region" {
+  description = "AWS region for CloudFront Origin Shield (should be closest to your origin)"
   type        = string
-  default     = "Z2FDTNDATAQYW2"
+  default     = "eu-central-1"
+  validation {
+    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.cloudfront_origin_shield_region))
+    error_message = "CloudFront Origin Shield region must be a valid AWS region (e.g., us-east-1, eu-central-1)."
+  }
+}
+
+variable "cloudfront_custom_error_responses" {
+  description = "List of custom error response configurations for CloudFront"
+  type = list(object({
+    error_code            = number
+    response_code         = number
+    response_page_path    = string
+    error_caching_min_ttl = number
+  }))
+  default = [
+    {
+      error_code            = 400
+      response_code         = 400
+      response_page_path    = "/400.html"
+      error_caching_min_ttl = 300
+    },
+    {
+      error_code            = 403
+      response_code         = 404
+      response_page_path    = "/404.html"
+      error_caching_min_ttl = 300
+    },
+    {
+      error_code            = 404
+      response_code         = 404
+      response_page_path    = "/404.html"
+      error_caching_min_ttl = 300
+    },
+    {
+      error_code            = 500
+      response_code         = 500
+      response_page_path    = "/500.html"
+      error_caching_min_ttl = 60
+    },
+    {
+      error_code            = 502
+      response_code         = 502
+      response_page_path    = "/502.html"
+      error_caching_min_ttl = 60
+    },
+    {
+      error_code            = 503
+      response_code         = 503
+      response_page_path    = "/503.html"
+      error_caching_min_ttl = 60
+    },
+    {
+      error_code            = 504
+      response_code         = 504
+      response_page_path    = "/504.html"
+      error_caching_min_ttl = 60
+    }
+  ]
+  validation {
+    condition = alltrue([
+      for response in var.cloudfront_custom_error_responses :
+      response.error_code >= 400 && response.error_code <= 599 &&
+      response.response_code >= 200 && response.response_code <= 599 &&
+      response.error_caching_min_ttl >= 0
+    ])
+    error_message = "CloudFront custom error responses must have valid HTTP status codes (error_code: 400-599, response_code: 200-599) and non-negative caching TTL."
+  }
+}
+
+variable "cloudfront_waf_web_acl_arn" {
+  description = "Optional WAFv2 Web ACL ARN (CLOUDFRONT scope) for CloudFront distribution"
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.cloudfront_waf_web_acl_arn == "" || can(regex("^arn:aws(-[a-z]+)?:wafv2:[a-z0-9-]+:[0-9]{12}:global/webacl/.+$", var.cloudfront_waf_web_acl_arn))
+    error_message = "CloudFront WAF Web ACL ARN must be a valid global WAFv2 Web ACL ARN or empty string."
+  }
+}
+
+variable "cloudfront_minimum_protocol_version" {
+  description = "Minimum SSL/TLS protocol version for CloudFront distribution"
+  type        = string
+  default     = "TLSv1.2_2021"
+  validation {
+    condition = contains([
+      "SSLv3", "TLSv1", "TLSv1_2016", "TLSv1.1_2016", "TLSv1.2_2018", "TLSv1.2_2019", "TLSv1.2_2021"
+    ], var.cloudfront_minimum_protocol_version)
+    error_message = "CloudFront minimum protocol version must be one of: SSLv3, TLSv1, TLSv1_2016, TLSv1.1_2016, TLSv1.2_2018, TLSv1.2_2019, TLSv1.2_2021."
+  }
+}
+
+variable "cloudfront_enable_ipv6" {
+  description = "Enable IPv6 support for CloudFront distribution"
+  type        = bool
+  default     = true
+}
+
+variable "cloudfront_default_root_object" {
+  description = "Default root object for CloudFront distribution"
+  type        = string
+  default     = "index.php"
+}
+
+variable "cloudfront_enable_smooth_streaming" {
+  description = "Enable Microsoft Smooth Streaming for media content"
+  type        = bool
+  default     = false
 }

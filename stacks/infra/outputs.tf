@@ -169,3 +169,74 @@ output "public_subnet_ids" {
   description = "Public subnet IDs for ALB"
   value       = module.foundation.public_subnet_ids
 }
+
+# CloudFront (conditional outputs)
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID"
+  value       = var.enable_cloudfront ? module.cloudfront[0].distribution_id : ""
+}
+
+output "cloudfront_distribution_domain_name" {
+  description = "CloudFront distribution domain name"
+  value       = var.enable_cloudfront ? module.cloudfront[0].distribution_domain_name : ""
+}
+
+output "cloudfront_distribution_zone_id" {
+  description = "CloudFront distribution zone ID"
+  value       = var.enable_cloudfront ? module.cloudfront[0].distribution_zone_id : "Z2FDTNDATAQYW2"
+}
+
+output "cloudfront_enabled" {
+  description = "Whether CloudFront is enabled"
+  value       = var.enable_cloudfront
+}
+
+# CloudFront Route53 Integration Outputs
+output "cloudfront_route53_record_fqdn" {
+  description = "FQDN of the Route53 record pointing to CloudFront"
+  value       = var.enable_cloudfront ? module.cloudfront[0].route53_record_fqdn : ""
+}
+
+output "cloudfront_route53_alias_fqdns" {
+  description = "FQDNs of alias Route53 records pointing to CloudFront"
+  value       = var.enable_cloudfront ? module.cloudfront[0].route53_alias_fqdns : []
+}
+
+output "cloudfront_dns_validation" {
+  description = "CloudFront DNS configuration validation information"
+  value       = var.enable_cloudfront ? module.cloudfront[0].dns_validation : {}
+}
+
+output "dns_coordination_status" {
+  description = "Status of DNS coordination between ALB and CloudFront"
+  value = {
+    alb_route53_created        = var.create_alb_route53_record && !var.enable_cloudfront
+    cloudfront_route53_created = var.enable_cloudfront && var.create_cloudfront_route53_record
+    cloudfront_enabled         = var.enable_cloudfront
+    domain_name                = var.wordpress_domain_name
+    hosted_zone_id             = var.wordpress_hosted_zone_id
+    coordination_valid         = local.dns_coordination_valid
+  }
+}
+
+# ALB DNS Validation
+output "alb_dns_validation" {
+  description = "ALB DNS configuration validation information"
+  value       = module.standalone_alb.dns_validation
+}
+
+# ALB Origin Protection
+output "alb_origin_protection_enabled" {
+  description = "Whether ALB origin protection is enabled"
+  value       = module.standalone_alb.origin_protection_enabled
+}
+
+output "alb_origin_protection_config" {
+  description = "ALB origin protection configuration details"
+  value       = module.standalone_alb.origin_protection_config
+}
+
+output "alb_listener_rule_arns" {
+  description = "ARNs of the ALB origin secret validation listener rules"
+  value       = module.standalone_alb.listener_rule_arns
+}

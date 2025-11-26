@@ -121,22 +121,35 @@ variable "deregistration_delay" {
   default     = 30
 }
 
-variable "route53_points_to_cloudfront" {
-  description = "When true, Route53 record points to CloudFront distribution instead of ALB"
+
+
+variable "origin_secret_value" {
+  description = "Shared secret header value for CloudFront origin protection. When set, ALB will validate X-Origin-Secret header and reject requests without valid secret."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "enable_origin_protection" {
+  description = "Enable origin protection to block direct ALB access and only allow CloudFront traffic with valid origin secret"
   type        = bool
   default     = false
 }
 
-variable "cloudfront_distribution_domain_name" {
-  description = "CloudFront distribution domain name (required when route53_points_to_cloudfront is true)"
-  type        = string
-  default     = ""
+variable "origin_protection_response_code" {
+  description = "HTTP response code to return when origin secret validation fails"
+  type        = number
+  default     = 403
+  validation {
+    condition     = contains([400, 401, 403, 404, 503], var.origin_protection_response_code)
+    error_message = "Origin protection response code must be one of: 400, 401, 403, 404, 503."
+  }
 }
 
-variable "cloudfront_distribution_zone_id" {
-  description = "CloudFront distribution zone ID (typically Z2FDTNDATAQYW2 for CloudFront)"
+variable "origin_protection_response_body" {
+  description = "Response body to return when origin secret validation fails"
   type        = string
-  default     = "Z2FDTNDATAQYW2"
+  default     = "Access Denied"
 }
 
 variable "tags" {
