@@ -121,7 +121,7 @@ output "alb_certificate_arn" {
 # WAF
 output "waf_regional_arn" {
   description = "WAF WebACL ARN for ALB"
-  value       = var.create_waf ? module.waf_regional.waf_arn : var.waf_acl_arn
+  value       = var.create_waf ? module.waf_regional[0].waf_arn : var.waf_acl_arn
 }
 
 # Standalone ALB

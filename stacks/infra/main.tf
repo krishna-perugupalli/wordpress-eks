@@ -180,9 +180,10 @@ module "cost_budgets" {
 }
 
 #############################################
-# WAF WebACL for ALB (Regional)
+# WAF WebACL for ALB (Regional) - conditional creation
 #############################################
 module "waf_regional" {
+  count  = var.create_waf ? 1 : 0
   source = "../../modules/waf-regional"
 
   name                 = local.name
@@ -204,7 +205,8 @@ module "standalone_alb" {
   vpc_id                        = module.foundation.vpc_id
   public_subnet_ids             = module.foundation.public_subnet_ids
   certificate_arn               = var.alb_certificate_arn
-  waf_acl_arn                   = var.create_waf ? module.waf_regional.waf_arn : var.waf_acl_arn
+  waf_acl_arn                   = var.create_waf ? module.waf_regional[0].waf_arn : var.waf_acl_arn
+  enable_waf                    = var.create_waf || var.waf_acl_arn != ""
   domain_name                   = var.wordpress_domain_name
   hosted_zone_id                = var.wordpress_hosted_zone_id
   create_route53_record         = var.create_alb_route53_record
@@ -220,5 +222,5 @@ module "standalone_alb" {
 
   tags = local.tags
 
-  depends_on = [module.foundation, module.eks, module.waf_regional]
+  depends_on = [module.foundation, module.eks]
 }

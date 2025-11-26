@@ -26,6 +26,12 @@ variable "waf_acl_arn" {
   default     = ""
 }
 
+variable "enable_waf" {
+  description = "Enable WAF association with ALB"
+  type        = bool
+  default     = false
+}
+
 variable "domain_name" {
   description = "Domain name for Route53 record"
   type        = string
