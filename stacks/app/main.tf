@@ -49,12 +49,6 @@ module "edge_ingress" {
 }
 
 # ---------------------------
-# Edge CDN (Cloudfront + ACM)
-# ---------------------------
-# NOTE: CloudFront support removed as part of standalone ALB migration
-# CloudFront can be re-added later if needed, using ALB DNS from infra stack outputs
-
-# ---------------------------
 # Observability (CW Agent + Fluent Bit + ALB alarms)
 # ---------------------------
 module "observability" {
@@ -149,9 +143,3 @@ module "app_wordpress" {
   target_memory_percent = var.wp_target_memory_value
   depends_on            = [module.secrets_operator]
 }
-
-#############################################
-# DNS resolution + conditional records
-#############################################
-# NOTE: Route53 records moved to infrastructure stack as part of standalone ALB migration
-# ALB is now created in infra stack, so DNS records can be created there without circular dependency
