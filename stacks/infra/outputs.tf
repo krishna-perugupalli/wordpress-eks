@@ -204,7 +204,13 @@ output "cloudfront_route53_alias_fqdns" {
 
 output "cloudfront_dns_validation" {
   description = "CloudFront DNS configuration validation information"
-  value       = var.enable_cloudfront ? module.cloudfront[0].dns_validation : {}
+  value = var.enable_cloudfront ? module.cloudfront[0].dns_validation : {
+    cloudfront_domain_name = ""
+    cloudfront_zone_id     = ""
+    primary_domain         = ""
+    aliases                = []
+    hosted_zone_valid      = null
+  }
 }
 
 output "dns_coordination_status" {
