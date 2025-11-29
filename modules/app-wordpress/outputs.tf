@@ -25,3 +25,13 @@ output "target_group_binding_name" {
   description = "Name of the TargetGroupBinding resource"
   value       = "${local.effective_fullname}-tgb"
 }
+
+output "metrics_service_name" {
+  description = "Name of the WordPress metrics service (if enabled)"
+  value       = var.enable_metrics_exporter ? "${local.effective_fullname}-metrics" : null
+}
+
+output "metrics_enabled" {
+  description = "Whether WordPress metrics exporter is enabled"
+  value       = var.enable_metrics_exporter
+}

@@ -49,7 +49,7 @@ module "edge_ingress" {
 }
 
 # ---------------------------
-# Observability (CW Agent + Fluent Bit + ALB alarms)
+# Enhanced Observability (CloudWatch + Prometheus Stack)
 # ---------------------------
 module "observability" {
   source                  = "../../modules/observability"
@@ -59,17 +59,81 @@ module "observability" {
   cluster_oidc_issuer_url = local.cluster_oidc_issuer_url
   oidc_provider_arn       = local.oidc_provider_arn
 
-  namespace         = var.observability_namespace
-  kms_logs_key_arn  = local.kms_logs_arn
-  cw_retention_days = var.cw_retention_days
+  namespace = var.observability_namespace
 
+  # KMS encryption
+  kms_key_arn = local.kms_logs_arn
+
+  # CloudWatch configuration (legacy support)
+  enable_cloudwatch        = var.enable_cloudwatch
+  kms_logs_key_arn         = local.kms_logs_arn
+  cw_retention_days        = var.cw_retention_days
   install_cloudwatch_agent = var.install_cloudwatch_agent
   install_fluent_bit       = var.install_fluent_bit
 
-  create_alb_alarms = var.create_alb_alarms
+  # Prometheus stack configuration
+  enable_prometheus_stack = var.enable_prometheus_stack
+  enable_grafana          = var.enable_grafana
+  enable_alertmanager     = var.enable_alertmanager
 
-  service_name      = module.app_wordpress.service_name
-  service_namespace = module.app_wordpress.namespace
+  # Prometheus configuration
+  prometheus_storage_size      = var.prometheus_storage_size
+  prometheus_retention_days    = var.prometheus_retention_days
+  prometheus_storage_class     = var.prometheus_storage_class
+  prometheus_replica_count     = var.prometheus_replica_count
+  prometheus_resource_requests = var.prometheus_resource_requests
+  prometheus_resource_limits   = var.prometheus_resource_limits
+
+  # Service discovery
+  enable_service_discovery     = var.enable_service_discovery
+  service_discovery_namespaces = var.service_discovery_namespaces
+
+  # Grafana configuration
+  grafana_storage_size         = var.grafana_storage_size
+  grafana_storage_class        = var.grafana_storage_class
+  grafana_admin_password       = var.grafana_admin_password
+  grafana_resource_requests    = var.grafana_resource_requests
+  grafana_resource_limits      = var.grafana_resource_limits
+  enable_aws_iam_auth          = var.enable_aws_iam_auth
+  grafana_iam_role_arns        = var.grafana_iam_role_arns
+  enable_default_dashboards    = var.enable_default_dashboards
+  custom_dashboard_configs     = var.custom_dashboard_configs
+  enable_cloudwatch_datasource = var.enable_cloudwatch_datasource
+
+  # AlertManager configuration
+  alertmanager_storage_size      = var.alertmanager_storage_size
+  alertmanager_storage_class     = var.alertmanager_storage_class
+  alertmanager_replica_count     = var.alertmanager_replica_count
+  alertmanager_resource_requests = var.alertmanager_resource_requests
+  alertmanager_resource_limits   = var.alertmanager_resource_limits
+  smtp_config                    = var.smtp_config
+  sns_topic_arn                  = var.sns_topic_arn
+  slack_webhook_url              = var.slack_webhook_url
+  pagerduty_integration_key      = var.pagerduty_integration_key
+  alert_routing_config           = var.alert_routing_config
+
+  # Exporters configuration
+  enable_wordpress_exporter  = var.enable_wordpress_exporter
+  wordpress_namespace        = var.wp_namespace
+  wordpress_service_name     = module.app_wordpress.service_name
+  enable_mysql_exporter      = var.enable_mysql_exporter
+  mysql_connection_config    = var.mysql_connection_config
+  enable_redis_exporter      = var.enable_redis_exporter
+  redis_connection_config    = var.redis_connection_config
+  enable_cloudwatch_exporter = var.enable_cloudwatch_exporter
+  cloudwatch_metrics_config  = var.cloudwatch_metrics_config
+  enable_cost_monitoring     = var.enable_cost_monitoring
+  cost_allocation_tags       = var.cost_allocation_tags
+
+  # Security configuration
+  enable_security_features = var.enable_security_features
+  enable_tls_encryption    = var.enable_tls_encryption
+  tls_cert_manager_issuer  = var.tls_cert_manager_issuer
+  enable_pii_scrubbing     = var.enable_pii_scrubbing
+  pii_scrubbing_rules      = var.pii_scrubbing_rules
+  enable_audit_logging     = var.enable_audit_logging
+  audit_log_retention_days = var.audit_log_retention_days
+  rbac_policies            = var.rbac_policies
 
   tags = local.tags
 

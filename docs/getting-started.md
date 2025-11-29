@@ -80,12 +80,14 @@ make apply-app
 ## 8. Troubleshooting Basics
 - **Terraform Cloud run failures**: Inspect logs for provider errors, missing permissions, or circular dependencies. Re-run after addressing issues.
 - **Remote state issues**: `wp-app` depends on `wp-infra`; ensure the latest infra apply succeeded before re-running app.
-- **WordPress pod failures**: See `docs/runbook.md` for detailed remediation steps, covering ESO sync, database connectivity, storage, and TargetGroupBinding checks.
-- **TargetGroupBinding issues**: Verify AWS Load Balancer Controller is running and has proper IRSA permissions for target group management.
+- **WordPress pod failures**: See [Operations Runbook](./runbook.md) for detailed remediation steps, covering ESO sync, database connectivity, storage, and TargetGroupBinding checks.
+- **TargetGroupBinding issues**: Verify AWS Load Balancer Controller is running and has proper IRSA permissions for target group management. See [TargetGroupBinding Guide](./features/targetgroupbinding.md) for details.
 
 ## 9. Next Steps for New Contributors
-- Review the module source under `modules/` to understand configurable options and resource decisions.
-- Consider enabling optional features (per-AZ NAT gateways, stricter WAF rules, CloudFront) once the baseline deployment is healthy.
+- Review the [module documentation](./modules/README.md) to understand configurable options and resource decisions.
+- Consider enabling optional features (per-AZ NAT gateways, stricter WAF rules, [CloudFront](./cloudfront.md)) once the baseline deployment is healthy.
 - Extend Terraform Cloud with run tasks (e.g., policy checks, security scans) if required by your organisation.
+- Explore [feature guides](./features/README.md) for advanced capabilities like monitoring and autoscaling.
+- Review [operations guides](./operations/README.md) for day-2 operational procedures.
 
 You are now ready to maintain and iterate on this WordPress-on-EKS platform.

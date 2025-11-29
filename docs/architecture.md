@@ -169,6 +169,8 @@ spec:
 - **Health Management**: Uses Kubernetes readiness probes for target health
 - **No NodePort Required**: Direct pod IP routing eliminates NodePort complexity
 
+For detailed configuration and troubleshooting, see the [TargetGroupBinding Guide](./features/targetgroupbinding.md).
+
 ## 8. Request Lifecycle (User Journey)
 1. **DNS Resolution**: User queries DNS for `wp-sbx.example.com` (managed by Route53 or external). Record points to standalone ALB.
 2. **Edge Controls**:
@@ -223,9 +225,13 @@ Include annotations for key dependencies (e.g., `app` workspace consumes `secret
 - `stacks/infra/main.tf`: Composition of foundation + data + security modules.
 - `stacks/app/main.tf`: Composition of add-ons and WordPress.
 - `modules/*`: Detailed resource definitions for each building block.
-- `docs/runbook.md`: Operational procedures when issues arise.
-- `docs/getting-started.md`: Step-by-step deployment guidance.
-- `docs/targetgroupbinding.md`: Detailed TargetGroupBinding configuration and troubleshooting.
-- `docs/karpenter-integration.md`: Karpenter autoscaling integration with standalone ALB.
+- [Operations Runbook](./runbook.md): Operational procedures when issues arise.
+- [Getting Started](./getting-started.md): Step-by-step deployment guidance.
+- [TargetGroupBinding Guide](./features/targetgroupbinding.md): Detailed TargetGroupBinding configuration and troubleshooting.
+- [Karpenter Integration](./features/karpenter-integration.md): Karpenter autoscaling integration with standalone ALB.
+- [Module Documentation](./modules/README.md): Detailed module guides.
+- [Feature Guides](./features/README.md): Feature-specific documentation.
+- [Operations Guides](./operations/README.md): Day-2 operations and troubleshooting.
+- [Reference Documentation](./reference/README.md): Variables, outputs, and technical references.
 
 Use this deep dive as the textual source of truth when designing diagrams or explaining the system to stakeholders.

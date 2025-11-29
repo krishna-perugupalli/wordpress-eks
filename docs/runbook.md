@@ -152,6 +152,8 @@ If the apply fails:
 4. Check WordPress pod health and readiness probes
 5. Monitor TargetGroupBinding events for specific error messages
 
+For detailed TargetGroupBinding configuration and troubleshooting, see the [TargetGroupBinding Guide](./features/targetgroupbinding.md).
+
 ## 9. Scaling & Cost Optimisation
 - **Karpenter / Node Groups**: Adjust capacity limits in Terraform variables and re-apply.
 - **Aurora Serverless range**: Tune `db_serverless_min_acu` / `max_acu` in `stacks/infra`.

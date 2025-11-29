@@ -549,6 +549,91 @@ resource "helm_release" "wordpress" {
           local.cloudfront_proxy_config_content
         ]))
       })
+    ] : [],
+    # WordPress metrics exporter sidecar configuration
+    var.enable_metrics_exporter ? [
+      yamlencode({
+        sidecars = [
+          {
+            name    = "metrics-exporter"
+            image   = var.metrics_exporter_image
+            command = ["/bin/sh"]
+            args    = ["/usr/local/bin/metrics-files/simple-entrypoint.sh"]
+            ports = [
+              {
+                name          = "metrics"
+                containerPort = 9090
+                protocol      = "TCP"
+              }
+            ]
+            env = [
+              {
+                name  = "WORDPRESS_PATH"
+                value = "/var/www/html"
+              }
+            ]
+            volumeMounts = [
+              {
+                name      = "wordpress-data"
+                mountPath = "/var/www/html"
+                readOnly  = true
+              },
+              {
+                name      = "metrics-config"
+                mountPath = "/usr/local/bin/metrics-files"
+                readOnly  = true
+              }
+            ]
+            resources = {
+              requests = {
+                cpu    = var.metrics_exporter_resources_requests_cpu
+                memory = var.metrics_exporter_resources_requests_memory
+              }
+              limits = {
+                cpu    = var.metrics_exporter_resources_limits_cpu
+                memory = var.metrics_exporter_resources_limits_memory
+              }
+            }
+            livenessProbe = {
+              httpGet = {
+                path = "/metrics"
+                port = 9090
+              }
+              initialDelaySeconds = 30
+              periodSeconds       = 30
+              timeoutSeconds      = 10
+              failureThreshold    = 3
+            }
+            readinessProbe = {
+              httpGet = {
+                path = "/metrics"
+                port = 9090
+              }
+              initialDelaySeconds = 5
+              periodSeconds       = 10
+              timeoutSeconds      = 5
+              failureThreshold    = 3
+            }
+            securityContext = {
+              runAsNonRoot             = false
+              allowPrivilegeEscalation = false
+              readOnlyRootFilesystem   = false
+              capabilities = {
+                drop = ["ALL"]
+              }
+            }
+          }
+        ]
+        extraVolumes = [
+          {
+            name = "metrics-config"
+            configMap = {
+              name        = "${local.effective_fullname}-metrics-config"
+              defaultMode = 0755
+            }
+          }
+        ]
+      })
     ] : []
   )
 
@@ -581,6 +666,75 @@ resource "kubectl_manifest" "wordpress_tgb" {
       targetType     = "ip"
     }
   })
+
+  depends_on = [helm_release.wordpress]
+}
+
+#############################################
+# WordPress Metrics ConfigMap (contains exporter and plugin files)
+#############################################
+resource "kubernetes_config_map" "wordpress_metrics_config" {
+  count = var.enable_metrics_exporter ? 1 : 0
+
+  metadata {
+    name      = "${local.effective_fullname}-metrics-config"
+    namespace = var.namespace
+    labels = {
+      app                          = "wordpress"
+      component                    = "metrics"
+      "app.kubernetes.io/name"     = "wordpress"
+      "app.kubernetes.io/instance" = local.effective_fullname
+    }
+  }
+
+  data = {
+    "wordpress-exporter.php"         = file("${path.module}/files/wordpress-exporter.php")
+    "wordpress-metrics-plugin.php"   = file("${path.module}/files/wordpress-metrics-plugin.php")
+    "simple-metrics-exporter.php"    = file("${path.module}/files/simple-metrics-exporter.php")
+    "metrics-exporter-entrypoint.sh" = file("${path.module}/files/metrics-exporter-entrypoint.sh")
+    "simple-entrypoint.sh"           = file("${path.module}/files/simple-entrypoint.sh")
+  }
+
+  depends_on = [kubernetes_namespace.ns]
+}
+
+#############################################
+# WordPress Metrics Service (for Prometheus scraping)
+#############################################
+resource "kubernetes_service" "wordpress_metrics" {
+  count = var.enable_metrics_exporter ? 1 : 0
+
+  metadata {
+    name      = "${local.effective_fullname}-metrics"
+    namespace = var.namespace
+    labels = {
+      app                          = "wordpress"
+      component                    = "metrics"
+      "app.kubernetes.io/name"     = "wordpress"
+      "app.kubernetes.io/instance" = local.effective_fullname
+    }
+    annotations = {
+      "prometheus.io/scrape" = "true"
+      "prometheus.io/port"   = "9090"
+      "prometheus.io/path"   = "/metrics"
+    }
+  }
+
+  spec {
+    selector = {
+      "app.kubernetes.io/name"     = "wordpress"
+      "app.kubernetes.io/instance" = local.effective_fullname
+    }
+
+    port {
+      name        = "metrics"
+      port        = 9090
+      target_port = 9090
+      protocol    = "TCP"
+    }
+
+    type = "ClusterIP"
+  }
 
   depends_on = [helm_release.wordpress]
 }

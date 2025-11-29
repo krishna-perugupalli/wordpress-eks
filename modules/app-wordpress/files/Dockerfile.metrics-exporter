@@ -1,0 +1,57 @@
+# WordPress Metrics Exporter Sidecar Container
+# This container runs alongside WordPress pods to expose Prometheus metrics
+#
+# OPTIONAL: This Dockerfile is provided for users who want to build a custom
+# container image with all exporter files pre-packaged. The default implementation
+# uses a standard php:8.2-cli-alpine image with ConfigMap-mounted scripts.
+#
+# To use this custom image:
+# 1. Build: docker build -f Dockerfile.metrics-exporter -t your-registry/wp-metrics:1.0.0 .
+# 2. Push: docker push your-registry/wp-metrics:1.0.0
+# 3. Configure: Set metrics_exporter_image = "your-registry/wp-metrics:1.0.0" in Terraform
+#
+# See README.md for detailed instructions and trade-offs between approaches.
+
+FROM php:8.2-fpm-alpine
+
+# Install required PHP extensions and tools
+RUN apk add --no-cache \
+    curl \
+    wget \
+    mysql-client \
+    && docker-php-ext-install \
+    mysqli \
+    pdo_mysql
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S wordpress && \
+    adduser -u 1001 -S wordpress -G wordpress
+
+# Create directories
+RUN mkdir -p /var/www/html/wp-content/plugins/wordpress-metrics \
+    && chown -R wordpress:wordpress /var/www/html
+
+# Copy WordPress metrics files
+COPY wordpress-exporter.php /var/www/html/wp-metrics.php
+COPY wordpress-metrics-plugin.php /var/www/html/wp-content/plugins/wordpress-metrics/wordpress-metrics.php
+
+# Copy entrypoint script
+COPY metrics-exporter-entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Set ownership
+RUN chown -R wordpress:wordpress /var/www/html
+
+# Switch to non-root user
+USER wordpress
+
+# Expose metrics port
+EXPOSE 9090
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:9090/metrics || exit 1
+
+# Set entrypoint
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["php-fpm"]

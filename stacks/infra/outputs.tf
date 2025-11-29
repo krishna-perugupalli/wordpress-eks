@@ -240,11 +240,11 @@ output "alb_origin_protection_enabled" {
 output "alb_origin_protection_config" {
   description = "ALB origin protection configuration details"
   value       = module.standalone_alb.origin_protection_config
-  sensitive = true
+  sensitive   = true
 }
 
 output "alb_listener_rule_arns" {
   description = "ARNs of the ALB origin secret validation listener rules"
   value       = module.standalone_alb.listener_rule_arns
-  sensitive = true
+  sensitive   = true
 }

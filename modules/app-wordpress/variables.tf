@@ -308,3 +308,40 @@ variable "redis_auth_env_var_name" {
   type        = string
   default     = "REDIS_AUTH_TOKEN"
 }
+
+# ----- WordPress Metrics Exporter -----
+variable "enable_metrics_exporter" {
+  description = "Enable WordPress metrics exporter sidecar container for Prometheus monitoring"
+  type        = bool
+  default     = false
+}
+
+variable "metrics_exporter_image" {
+  description = "Container image for WordPress metrics exporter sidecar"
+  type        = string
+  default     = "php:8.2-cli-alpine"
+}
+
+variable "metrics_exporter_resources_requests_cpu" {
+  description = "CPU requests for metrics exporter sidecar"
+  type        = string
+  default     = "50m"
+}
+
+variable "metrics_exporter_resources_requests_memory" {
+  description = "Memory requests for metrics exporter sidecar"
+  type        = string
+  default     = "64Mi"
+}
+
+variable "metrics_exporter_resources_limits_cpu" {
+  description = "CPU limits for metrics exporter sidecar"
+  type        = string
+  default     = "200m"
+}
+
+variable "metrics_exporter_resources_limits_memory" {
+  description = "Memory limits for metrics exporter sidecar"
+  type        = string
+  default     = "256Mi"
+}
