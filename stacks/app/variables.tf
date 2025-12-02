@@ -29,6 +29,56 @@ variable "tags" {
 }
 
 # ---------------------------
+# Optional Tagging (AWS Best Practices)
+# ---------------------------
+variable "cost_center" {
+  description = "Cost center for billing allocation and chargeback (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "application" {
+  description = "Application name for resource grouping (optional, defaults to 'wordpress-platform')"
+  type        = string
+  default     = "wordpress-platform"
+}
+
+variable "business_unit" {
+  description = "Business unit or department ownership (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "compliance_requirements" {
+  description = "Comma-separated compliance requirements (e.g., 'HIPAA,SOC2,PCI-DSS') (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "data_classification" {
+  description = "Default data classification level: public, internal, confidential, restricted (optional)"
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.data_classification == "" || contains(["public", "internal", "confidential", "restricted"], var.data_classification)
+    error_message = "data_classification must be empty or one of: public, internal, confidential, restricted"
+  }
+}
+
+variable "technical_contact" {
+  description = "Technical contact email (optional, defaults to owner_email)"
+  type        = string
+  default     = ""
+}
+
+variable "product_owner" {
+  description = "Product owner email or name (optional)"
+  type        = string
+  default     = ""
+}
+
+# ---------------------------
 # DB
 # ---------------------------
 variable "db_name" {

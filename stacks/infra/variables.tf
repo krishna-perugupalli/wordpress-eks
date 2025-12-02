@@ -4,6 +4,42 @@ variable "region" {
   default     = "us-east-1"
 }
 
+# ---------------------------
+# Environment Cost Optimization
+# ---------------------------
+variable "environment_profile" {
+  description = <<-EOT
+    Environment profile for automatic cost optimization and resource sizing.
+    
+    This single variable controls NAT Gateway strategy, Aurora ACU limits, CloudFront enablement,
+    and backup retention periods. Choose the profile that matches your use case.
+    
+    Profiles and Cost Impact:
+    - production: HA NAT (3 gateways), Aurora 2-16 ACU, CloudFront enabled, 7-day backups
+                  Cost: ~$500-900/month | Use for: Production workloads requiring high availability
+    
+    - staging: Single NAT, Aurora 1-8 ACU, CloudFront disabled, 1-day backups
+               Cost: ~$250-450/month (50% savings) | Use for: Pre-production testing and validation
+    
+    - development: Single NAT, Aurora 0.5-2 ACU, CloudFront disabled, 1-day backups
+                   Cost: ~$200-350/month (60% savings) | Use for: Development and experimentation
+    
+    Trade-offs:
+    - Staging/Development use single NAT Gateway (AZ failure impacts connectivity)
+    - Staging/Development disable CloudFront (direct ALB access, no global CDN)
+    - Development uses minimal Aurora capacity (may not handle production load)
+    
+    See docs/operations/environment-profile-migration.md for migration guidance.
+  EOT
+  type        = string
+  default     = "production"
+
+  validation {
+    condition     = contains(["production", "staging", "development"], var.environment_profile)
+    error_message = "environment_profile must be one of: production, staging, development"
+  }
+}
+
 variable "project" {
   description = "Project/environment short name; used as cluster name and tag prefix (e.g., wp-sbx)"
   type        = string
@@ -29,6 +65,56 @@ variable "tags" {
 }
 
 # ---------------------------
+# Optional Tagging (AWS Best Practices)
+# ---------------------------
+variable "cost_center" {
+  description = "Cost center for billing allocation and chargeback (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "application" {
+  description = "Application name for resource grouping (optional, defaults to 'wordpress-platform')"
+  type        = string
+  default     = "wordpress-platform"
+}
+
+variable "business_unit" {
+  description = "Business unit or department ownership (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "compliance_requirements" {
+  description = "Comma-separated compliance requirements (e.g., 'HIPAA,SOC2,PCI-DSS') (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "data_classification" {
+  description = "Default data classification level: public, internal, confidential, restricted (optional)"
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.data_classification == "" || contains(["public", "internal", "confidential", "restricted"], var.data_classification)
+    error_message = "data_classification must be empty or one of: public, internal, confidential, restricted"
+  }
+}
+
+variable "technical_contact" {
+  description = "Technical contact email (optional, defaults to owner_email)"
+  type        = string
+  default     = ""
+}
+
+variable "product_owner" {
+  description = "Product owner email or name (optional)"
+  type        = string
+  default     = ""
+}
+
+# ---------------------------
 # Foundation (VPC / networking)
 # ---------------------------
 variable "vpc_cidr" {
@@ -50,7 +136,16 @@ variable "public_cidrs" {
 }
 
 variable "nat_gateway_mode" {
-  description = "NAT gateway strategy: single or ha"
+  description = <<-EOT
+    NAT gateway strategy: single (one NAT in one AZ) or ha (one NAT per AZ for high availability).
+    
+    Note: This variable is automatically set by environment_profile:
+    - production: ha (3 NAT Gateways, ~$96/month)
+    - staging: single (1 NAT Gateway, ~$32/month)
+    - development: single (1 NAT Gateway, ~$32/month)
+    
+    Manual override is possible but not recommended. Use environment_profile instead.
+  EOT
   type        = string
   default     = "single"
   validation {
@@ -177,19 +272,52 @@ variable "db_create_random_password" {
 }
 
 variable "db_serverless_min_acu" {
-  description = "Aurora Serverless v2 min ACUs"
+  description = <<-EOT
+    Aurora Serverless v2 minimum ACUs (Aurora Capacity Units).
+    1 ACU = 2 GiB memory + corresponding CPU. Range: 0.5-128 ACU.
+    
+    Cost: ~$87/month per ACU (0.5 ACU = ~$43.50/month minimum).
+    
+    Note: This variable is automatically set by environment_profile:
+    - production: 2 ACU (~$174/month baseline)
+    - staging: 1 ACU (~$87/month baseline)
+    - development: 0.5 ACU (~$43.50/month baseline)
+    
+    Manual override is possible but not recommended. Use environment_profile instead.
+  EOT
   type        = number
   default     = 2
 }
 
 variable "db_serverless_max_acu" {
-  description = "Aurora Serverless v2 max ACUs"
+  description = <<-EOT
+    Aurora Serverless v2 maximum ACUs (Aurora Capacity Units).
+    1 ACU = 2 GiB memory + corresponding CPU. Range: 0.5-128 ACU.
+    
+    Cost: Scales up to max during load spikes (~$87/month per ACU when at max).
+    
+    Note: This variable is automatically set by environment_profile:
+    - production: 16 ACU (~$1,392/month at max load)
+    - staging: 8 ACU (~$696/month at max load)
+    - development: 2 ACU (~$174/month at max load)
+    
+    Manual override is possible but not recommended. Use environment_profile instead.
+  EOT
   type        = number
   default     = 16
 }
 
 variable "db_backup_retention_days" {
-  description = "Aurora backup retention in days"
+  description = <<-EOT
+    Aurora automated backup retention period in days (1-35 days).
+    
+    Note: This variable is automatically set by environment_profile:
+    - production: 7 days (compliance and recovery requirements)
+    - staging: 1 day (minimal retention for cost savings)
+    - development: 1 day (minimal retention for cost savings)
+    
+    Manual override is possible but not recommended. Use environment_profile instead.
+  EOT
   type        = number
   default     = 7
 }
@@ -422,7 +550,19 @@ variable "waf_enable_managed_rules" {
 # ---------------------------
 
 variable "enable_cloudfront" {
-  description = "Enable CloudFront distribution deployment"
+  description = <<-EOT
+    Enable CloudFront CDN distribution for global content delivery.
+    
+    Cost: ~$20-50/month baseline + data transfer charges.
+    
+    Note: CloudFront is automatically controlled by environment_profile:
+    - production: Enabled (if this variable is true)
+    - staging: Disabled (forced off regardless of this variable)
+    - development: Disabled (forced off regardless of this variable)
+    
+    CloudFront is only deployed in production environments. For staging/development,
+    traffic goes directly to the ALB.
+  EOT
   type        = bool
   default     = false
 }

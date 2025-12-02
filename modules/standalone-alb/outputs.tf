@@ -66,13 +66,14 @@ output "dns_validation" {
 # Origin Protection Outputs
 output "origin_protection_enabled" {
   description = "Whether origin protection is enabled on the ALB"
-  value       = var.enable_origin_protection
+  value       = var.enable_origin_protection && var.cloudfront_enabled
 }
 
 output "origin_protection_config" {
   description = "Origin protection configuration details"
   value = {
-    enabled               = var.enable_origin_protection
+    enabled               = var.enable_origin_protection && var.cloudfront_enabled
+    cloudfront_enabled    = var.cloudfront_enabled
     response_code         = var.origin_protection_response_code
     response_body         = var.origin_protection_response_body
     secret_header_name    = "X-Origin-Secret"
@@ -84,7 +85,7 @@ output "origin_protection_config" {
 output "listener_rule_arns" {
   description = "ARNs of the origin secret validation listener rules"
   value = {
-    http_rule  = var.enable_origin_protection && var.origin_secret_value != "" ? aws_lb_listener_rule.origin_secret_validation_http[0].arn : null
-    https_rule = var.enable_origin_protection && var.origin_secret_value != "" ? aws_lb_listener_rule.origin_secret_validation_https[0].arn : null
+    http_rule  = var.enable_origin_protection && var.cloudfront_enabled && var.origin_secret_value != "" ? aws_lb_listener_rule.origin_secret_validation_http[0].arn : null
+    https_rule = var.enable_origin_protection && var.cloudfront_enabled && var.origin_secret_value != "" ? aws_lb_listener_rule.origin_secret_validation_https[0].arn : null
   }
 }

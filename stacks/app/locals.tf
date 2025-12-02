@@ -1,11 +1,29 @@
 locals {
   name = var.project
+
+  # Base tags - always included
+  base_tags = {
+    Project   = var.project
+    Env       = var.env
+    Owner     = var.owner_email
+    ManagedBy = "Terraform"
+  }
+
+  # Optional tags - only included if provided (non-empty)
+  optional_tags = merge(
+    var.cost_center != "" ? { CostCenter = var.cost_center } : {},
+    var.application != "" ? { Application = var.application } : {},
+    var.business_unit != "" ? { BusinessUnit = var.business_unit } : {},
+    var.compliance_requirements != "" ? { Compliance = var.compliance_requirements } : {},
+    var.data_classification != "" ? { DataClassification = var.data_classification } : {},
+    var.technical_contact != "" ? { TechnicalContact = var.technical_contact } : {},
+    var.product_owner != "" ? { ProductOwner = var.product_owner } : {}
+  )
+
+  # Merge all tags: base + optional + custom
   tags = merge(
-    {
-      Project = var.project
-      Env     = var.env
-      Owner   = var.owner_email
-    },
+    local.base_tags,
+    local.optional_tags,
     var.tags
   )
 

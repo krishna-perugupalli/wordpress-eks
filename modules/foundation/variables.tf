@@ -28,13 +28,19 @@ variable "public_cidrs" {
 }
 
 variable "nat_gateway_mode" {
-  description = "NAT strategy: 'single' (one NAT in AZ0) or 'per_az' (one per AZ)"
+  description = "NAT strategy: 'single' (one NAT in AZ0), 'per_az' (one per AZ), or 'none' (use VPC Endpoints)"
   type        = string
   default     = "single"
   validation {
-    condition     = contains(["single", "per_az"], var.nat_gateway_mode)
-    error_message = "nat_gateway_mode must be 'single' or 'per_az'."
+    condition     = contains(["single", "per_az", "none"], var.nat_gateway_mode)
+    error_message = "nat_gateway_mode must be 'single', 'per_az', or 'none'."
   }
+}
+
+variable "enable_vpc_endpoints" {
+  description = "Enable VPC Endpoints for AWS services (S3, ECR, Secrets Manager) instead of NAT Gateway"
+  type        = bool
+  default     = false
 }
 
 # Feature toggles

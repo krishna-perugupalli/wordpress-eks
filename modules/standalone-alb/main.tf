@@ -124,10 +124,10 @@ resource "aws_lb_listener" "http" {
 
   # Default action: redirect to HTTPS when origin protection is disabled, or return error when enabled
   default_action {
-    type = var.enable_origin_protection ? "fixed-response" : "redirect"
+    type = var.enable_origin_protection && var.cloudfront_enabled ? "fixed-response" : "redirect"
 
     dynamic "redirect" {
-      for_each = var.enable_origin_protection ? [] : [1]
+      for_each = var.enable_origin_protection && var.cloudfront_enabled ? [] : [1]
       content {
         port        = "443"
         protocol    = "HTTPS"
@@ -136,7 +136,7 @@ resource "aws_lb_listener" "http" {
     }
 
     dynamic "fixed_response" {
-      for_each = var.enable_origin_protection ? [1] : []
+      for_each = var.enable_origin_protection && var.cloudfront_enabled ? [1] : []
       content {
         content_type = "text/plain"
         message_body = var.origin_protection_response_body
@@ -150,7 +150,7 @@ resource "aws_lb_listener" "http" {
 
 # Origin Secret Validation Rule for HTTP (redirect to HTTPS with valid secret)
 resource "aws_lb_listener_rule" "origin_secret_validation_http" {
-  count        = var.enable_origin_protection && var.origin_secret_value != "" ? 1 : 0
+  count        = var.enable_origin_protection && var.cloudfront_enabled && var.origin_secret_value != "" ? 1 : 0
   listener_arn = aws_lb_listener.http.arn
   priority     = 100
 
@@ -183,11 +183,11 @@ resource "aws_lb_listener" "https" {
 
   # Default action when origin protection is disabled or no rules match
   default_action {
-    type             = var.enable_origin_protection ? "fixed-response" : "forward"
-    target_group_arn = var.enable_origin_protection ? null : aws_lb_target_group.wordpress.arn
+    type             = var.enable_origin_protection && var.cloudfront_enabled ? "fixed-response" : "forward"
+    target_group_arn = var.enable_origin_protection && var.cloudfront_enabled ? null : aws_lb_target_group.wordpress.arn
 
     dynamic "fixed_response" {
-      for_each = var.enable_origin_protection ? [1] : []
+      for_each = var.enable_origin_protection && var.cloudfront_enabled ? [1] : []
       content {
         content_type = "text/plain"
         message_body = var.origin_protection_response_body
@@ -201,7 +201,7 @@ resource "aws_lb_listener" "https" {
 
 # Origin Secret Validation Rule for HTTPS
 resource "aws_lb_listener_rule" "origin_secret_validation_https" {
-  count        = var.enable_origin_protection && var.origin_secret_value != "" ? 1 : 0
+  count        = var.enable_origin_protection && var.cloudfront_enabled && var.origin_secret_value != "" ? 1 : 0
   listener_arn = aws_lb_listener.https.arn
   priority     = 100
 

@@ -1,15 +1,25 @@
 ############################################
 # Environment / Metadata
 ############################################
-region      = "eu-north-1"
-project     = "wp-sbx"
-env         = "sandbox"
-owner_email = "admin@example.com"
+region              = "eu-north-1"
+project             = "wp-sbx"
+env                 = "sandbox"
+environment_profile = "development" # production | staging | development
+owner_email         = "admin@example.com"
 
-# Extra global tags (merged with Project/Env/Owner)
+# Optional AWS Best Practice Tags (leave empty to omit)
+cost_center             = "platform-engineering"
+application             = "wordpress-platform"
+business_unit           = "Engineering"
+compliance_requirements = "SOC2,GDPR"
+data_classification     = "internal"
+technical_contact       = "devops@example.com"
+product_owner           = "john.doe@example.com"
+
+# Extra global tags (merged with all above tags)
 tags = {
-  CostCenter = "ENG"
-  ManagedBy  = "Terraform"
+  Department  = "IT"
+  Criticality = "high"
 }
 
 ############################################

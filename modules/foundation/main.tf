@@ -12,6 +12,7 @@ locals {
 
   single_nat = var.nat_gateway_mode == "single"
   per_az_nat = var.nat_gateway_mode == "per_az"
+  no_nat     = var.nat_gateway_mode == "none"
 
 }
 
@@ -162,6 +163,21 @@ resource "aws_route_table_association" "private_assoc" {
 }
 
 #############################################
+# Private RT(s) for VPC Endpoints (no NAT)
+#############################################
+resource "aws_route_table" "private_vpc_endpoints" {
+  for_each = var.enable_vpc_endpoints && var.nat_gateway_mode == "none" ? aws_subnet.private : {}
+  vpc_id   = aws_vpc.this.id
+  tags     = merge(var.tags, { Name = "${var.name}-private-rt-${each.key}-vpc-endpoints" })
+}
+
+resource "aws_route_table_association" "private_vpc_endpoints_assoc" {
+  for_each       = var.enable_vpc_endpoints && var.nat_gateway_mode == "none" ? aws_subnet.private : {}
+  subnet_id      = each.value.id
+  route_table_id = aws_route_table.private_vpc_endpoints[each.key].id
+}
+
+#############################################
 # KMS
 #############################################
 resource "aws_kms_key" "rds" {
@@ -288,6 +304,90 @@ resource "aws_ecr_repository" "wp" {
     kms_key         = aws_kms_key.s3.arn
   }
   tags = var.tags
+}
+
+#############################################
+# VPC Endpoints (when NAT Gateway is disabled)
+#############################################
+
+# Security group for VPC Endpoints
+resource "aws_security_group" "vpc_endpoints" {
+  count       = var.enable_vpc_endpoints ? 1 : 0
+  name        = "${var.name}-vpc-endpoints"
+  description = "Security group for VPC Endpoints"
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    description = "HTTPS from VPC"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
+    description = "Allow all outbound"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(var.tags, { Name = "${var.name}-vpc-endpoints-sg" })
+}
+
+# S3 Gateway Endpoint (free)
+resource "aws_vpc_endpoint" "s3" {
+  count             = var.enable_vpc_endpoints ? 1 : 0
+  vpc_id            = aws_vpc.this.id
+  service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
+  vpc_endpoint_type = "Gateway"
+
+  route_table_ids = concat(
+    [aws_route_table.public.id],
+    var.nat_gateway_mode == "none" ? [for rt in aws_route_table.private_vpc_endpoints : rt.id] : []
+  )
+
+  tags = merge(var.tags, { Name = "${var.name}-s3-endpoint" })
+}
+
+# ECR API Interface Endpoint
+resource "aws_vpc_endpoint" "ecr_api" {
+  count               = var.enable_vpc_endpoints ? 1 : 0
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.${data.aws_region.current.name}.ecr.api"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [for s in aws_subnet.private : s.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
+  private_dns_enabled = true
+
+  tags = merge(var.tags, { Name = "${var.name}-ecr-api-endpoint" })
+}
+
+# ECR DKR Interface Endpoint
+resource "aws_vpc_endpoint" "ecr_dkr" {
+  count               = var.enable_vpc_endpoints ? 1 : 0
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.${data.aws_region.current.name}.ecr.dkr"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [for s in aws_subnet.private : s.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
+  private_dns_enabled = true
+
+  tags = merge(var.tags, { Name = "${var.name}-ecr-dkr-endpoint" })
+}
+
+# Secrets Manager Interface Endpoint
+resource "aws_vpc_endpoint" "secretsmanager" {
+  count               = var.enable_vpc_endpoints ? 1 : 0
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.${data.aws_region.current.name}.secretsmanager"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [for s in aws_subnet.private : s.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints[0].id]
+  private_dns_enabled = true
+
+  tags = merge(var.tags, { Name = "${var.name}-secretsmanager-endpoint" })
 }
 
 #############################################

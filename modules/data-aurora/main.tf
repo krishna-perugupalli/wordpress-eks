@@ -136,6 +136,13 @@ resource "aws_rds_cluster" "this" {
     }
   }
 
+  lifecycle {
+    precondition {
+      condition     = !var.serverless_v2 || var.serverless_max_acu >= var.serverless_min_acu
+      error_message = "serverless_max_acu must be greater than or equal to serverless_min_acu."
+    }
+  }
+
   copy_tags_to_snapshot     = var.copy_tags_to_snapshot
   skip_final_snapshot       = var.skip_final_snapshot
   final_snapshot_identifier = "${var.name}-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"

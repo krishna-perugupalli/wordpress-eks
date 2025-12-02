@@ -56,6 +56,75 @@ Refer to the [Getting Started Guide](./docs/getting-started.md) for the exact Te
 - **EKS Add-ons**: IRSA-enabled AWS controllers (LBC, ESO, CloudWatch Agent, Fluent Bit, EFS CSI), Karpenter node provisioning, namespace-specific service accounts.
 - **App Layer**: Bitnami WordPress chart configured for external database, ESO-managed secrets, TargetGroupBinding for ALB integration, horizontal autoscaling, and EFS-backed storage.
 
+## Environment Profiles for Cost Optimization
+
+This platform supports three environment profiles that automatically optimize resource sizing and costs based on your use case:
+
+| Profile | NAT Strategy | Aurora ACU | CloudFront | Backup Retention | Monthly Cost | Use Case |
+|---------|-------------|------------|------------|------------------|--------------|----------|
+| **production** | HA (3 NATs) | 2-16 ACU | Enabled | 7 days | $500-900 | Production workloads requiring high availability |
+| **staging** | Single NAT | 1-8 ACU | Disabled | 1 day | $250-450 | Pre-production testing and validation |
+| **development** | Single NAT | 0.5-2 ACU | Disabled | 1 day | $200-350 | Development and experimentation |
+
+### Cost Savings
+- **Staging**: ~50% reduction vs production ($3,000-5,400 annual savings)
+- **Development**: ~60% reduction vs production ($3,600-6,600 annual savings)
+
+### How to Use
+Set the `environment_profile` variable in your Terraform configuration:
+
+```hcl
+# For production
+environment_profile = "production"
+
+# For staging
+environment_profile = "staging"
+
+# For development
+environment_profile = "development"
+```
+
+See example configurations in `examples/production.tfvars`, `examples/staging.tfvars`, and `examples/development.tfvars`.
+
+### Trade-offs by Profile
+
+**Production**
+- High availability with multi-AZ NAT Gateways
+- Maximum Aurora scaling headroom (2-16 ACU)
+- CloudFront CDN for global performance
+- 7-day backup retention for compliance
+- Highest cost (~$500-900/month) **
+
+**Staging**
+- Full functional parity with production
+- Sufficient Aurora capacity for testing (1-8 ACU)
+- Single NAT Gateway (AZ failure impacts connectivity)
+- No CloudFront (direct ALB access only) **
+- 1-day backup retention **
+- 50% cost savings (~$250-450/month)
+
+**Development**
+- Full functional parity with production
+- Minimal Aurora capacity for development (0.5-2 ACU)
+- Single NAT Gateway (AZ failure impacts connectivity) **
+- No CloudFront (direct ALB access only) **
+- 1-day backup retention **
+- Single-AZ deployments where possible **
+- 60% cost savings (~$200-350/month)
+
+### Future Enhancement: VPC Endpoints
+
+While the current implementation uses NAT Gateway for internet connectivity (required for WordPress plugins, OS updates, and external integrations), VPC Endpoints can be added as a future enhancement for:
+
+- **Enhanced Security**: Private AWS service communication without internet routing
+- **Compliance**: Meet requirements for workloads that must not traverse public internet
+- **Hybrid Approach**: Combine NAT Gateway (for general internet) with VPC Endpoints (for AWS services)
+- **Cost Optimization**: Reduce NAT data transfer charges for AWS service traffic
+
+The foundation module already supports VPC Endpoints through the `enable_vpc_endpoints` variable. See the [Cost Optimization Guide](./docs/operations/cost-optimization.md) for implementation details.
+
+**Note**: VPC Endpoints alone cannot replace NAT Gateway for WordPress deployments that require external internet access for plugins, themes, and third-party integrations.
+
 ## Tooling & Automation
 - **Terraform Cloud** for remote state, execution, and cross-workspace dependencies.
 - **Make targets** for local validation (`make fmt`, `make lint`, `make validate-infra`, `make validate-app`) and full plan/apply (`make plan-all`, `make apply-all`).
@@ -75,6 +144,7 @@ Complete documentation is organized by category for easy navigation:
 - **[Getting Started](./docs/getting-started.md)** - Deploy the platform from scratch
 - **[Architecture Overview](./docs/architecture.md)** - System design and component relationships
 - **[Operations Runbook](./docs/runbook.md)** - Day-2 operations and troubleshooting
+- **[Tagging Strategy](./docs/tagging-strategy.md)** - AWS tagging best practices and cost allocation
 - **[Monitoring Setup](./docs/features/monitoring/README.md)** - Prometheus, Grafana, and AlertManager
 
 ### Documentation Categories

@@ -121,13 +121,17 @@ variable "deregistration_delay" {
   default     = 30
 }
 
-
-
 variable "origin_secret_value" {
   description = "Shared secret header value for CloudFront origin protection. When set, ALB will validate X-Origin-Secret header and reject requests without valid secret."
   type        = string
   sensitive   = true
   default     = ""
+}
+
+variable "cloudfront_enabled" {
+  description = "Whether CloudFront is enabled. Origin protection only applies when CloudFront is enabled."
+  type        = bool
+  default     = false
 }
 
 variable "enable_origin_protection" {
