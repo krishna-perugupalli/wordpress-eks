@@ -34,7 +34,7 @@ locals {
   # Environment-based configuration map
   env_config = {
     production = {
-      nat_strategy       = "ha"
+      nat_strategy       = "per_az" # High availability: one NAT per AZ
       aurora_min_acu     = 2
       aurora_max_acu     = 16
       aurora_backup_days = 7
@@ -66,7 +66,7 @@ locals {
   config = local.env_config[var.environment_profile]
 
   # Derived values for module consumption
-  nat_gateway_mode         = local.config.nat_strategy == "ha" ? "ha" : (local.config.nat_strategy == "single" ? "single" : "none")
+  nat_gateway_mode         = local.config.nat_strategy
   use_vpc_endpoints        = local.config.nat_strategy == "vpc_endpoints"
   db_serverless_min_acu    = local.config.aurora_min_acu
   db_serverless_max_acu    = local.config.aurora_max_acu
@@ -89,6 +89,47 @@ locals {
 data "aws_caller_identity" "current" {}
 
 #############################################
+# Validation: Environment Profile Configuration
+#############################################
+resource "terraform_data" "environment_profile_validation" {
+  lifecycle {
+    precondition {
+      condition     = contains(["production", "staging", "development"], var.environment_profile)
+      error_message = <<-EOT
+        ❌ Invalid environment_profile: "${var.environment_profile}"
+        
+        The environment_profile variable must be set to one of: production, staging, development
+        This variable automatically configures NAT Gateway strategy, Aurora capacity, and other settings.
+        
+        Example configuration:
+          environment_profile = "production"  # Uses per_az NAT (HA), Aurora 2-16 ACU
+          environment_profile = "staging"     # Uses single NAT, Aurora 1-8 ACU
+          environment_profile = "development" # Uses single NAT, Aurora 0.5-2 ACU
+        
+        See docs/operations/environment-profile-migration.md for details.
+      EOT
+    }
+    precondition {
+      condition     = contains(["single", "per_az", "none"], local.nat_gateway_mode)
+      error_message = <<-EOT
+        ❌ Invalid NAT Gateway configuration derived from environment_profile.
+        
+        environment_profile: ${var.environment_profile}
+        Derived nat_gateway_mode: ${local.nat_gateway_mode}
+        
+        This is likely a configuration error. The environment_profile should automatically
+        set the correct NAT strategy:
+          - production  → per_az (high availability)
+          - staging     → single
+          - development → single
+        
+        If you see this error, please check your environment_profile variable.
+      EOT
+    }
+  }
+}
+
+#############################################
 # Foundation (VPC, subnets, NAT, KMS base)
 #############################################
 module "foundation" {
@@ -99,6 +140,8 @@ module "foundation" {
   public_cidrs     = var.public_cidrs
   nat_gateway_mode = local.nat_gateway_mode
   tags             = local.tags
+
+  depends_on = [terraform_data.environment_profile_validation]
 }
 
 #############################################

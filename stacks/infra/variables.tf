@@ -137,20 +137,27 @@ variable "public_cidrs" {
 
 variable "nat_gateway_mode" {
   description = <<-EOT
-    NAT gateway strategy: single (one NAT in one AZ) or ha (one NAT per AZ for high availability).
+    NAT gateway strategy: single (one NAT in one AZ) or per_az (one NAT per AZ for high availability).
     
-    Note: This variable is automatically set by environment_profile:
-    - production: ha (3 NAT Gateways, ~$96/month)
-    - staging: single (1 NAT Gateway, ~$32/month)
-    - development: single (1 NAT Gateway, ~$32/month)
+    ⚠️  IMPORTANT: This variable is automatically set by environment_profile.
+    You should NOT set this variable manually. Instead, use environment_profile:
     
-    Manual override is possible but not recommended. Use environment_profile instead.
+    - production  → per_az (3 NAT Gateways, ~$96/month, high availability)
+    - staging     → single (1 NAT Gateway, ~$32/month)
+    - development → single (1 NAT Gateway, ~$32/month)
+    
+    If you see an error about nat_gateway_mode, check that environment_profile is set correctly.
   EOT
   type        = string
   default     = "single"
   validation {
-    condition     = contains(["single", "ha"], var.nat_gateway_mode)
-    error_message = "nat_gateway_mode must be one of: single, ha."
+    condition     = contains(["single", "per_az", "none"], var.nat_gateway_mode)
+    error_message = <<-EOT
+      nat_gateway_mode must be one of: single, per_az, none.
+      
+      ⚠️  This variable is automatically set by environment_profile.
+      If you're seeing this error, ensure environment_profile is set to: production, staging, or development
+    EOT
   }
 }
 
