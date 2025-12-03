@@ -7,7 +7,7 @@
 set -e
 
 NAMESPACE="${1:-observability}"
-CLUSTER_NAME="${2:-wordpress-eks}"
+CLUSTER_NAME="${2:-eks}"
 
 echo "🔒 Validating Security and Compliance Features"
 echo "================================================"

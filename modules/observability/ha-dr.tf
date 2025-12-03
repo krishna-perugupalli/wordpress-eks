@@ -320,7 +320,7 @@ resource "aws_cloudwatch_metric_alarm" "alertmanager_unavailable" {
 resource "aws_cloudwatch_metric_alarm" "wordpress_critical_fallback" {
   count = var.enable_cloudwatch_fallback && var.enable_wordpress_exporter ? 1 : 0
 
-  alarm_name          = "${var.name}-wordpress-critical-fallback"
+  alarm_name          = "${var.name}-critical-fallback"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = 2
   metric_name         = "pod_cpu_utilization"
@@ -340,7 +340,7 @@ resource "aws_cloudwatch_metric_alarm" "wordpress_critical_fallback" {
   }
 
   tags = merge(var.tags, {
-    Name      = "${var.name}-wordpress-critical-fallback"
+    Name      = "${var.name}-critical-fallback"
     Component = "monitoring-fallback"
     Severity  = "critical"
   })

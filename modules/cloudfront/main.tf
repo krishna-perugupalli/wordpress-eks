@@ -141,7 +141,7 @@ resource "aws_cloudfront_origin_request_policy" "minimal" {
 }
 
 resource "aws_cloudfront_origin_request_policy" "wordpress_dynamic" {
-  name = "${var.name}-wordpress-dynamic"
+  name = "${var.name}-dynamic"
 
   cookies_config {
     cookie_behavior = "all"

@@ -109,7 +109,7 @@ Migrating from production-like configuration to staging profile will:
    watch -n 5 'aws ec2 describe-nat-gateways --region <REGION> | jq ".NatGateways[] | {State: .State, SubnetId: .SubnetId}"'
    
    # Verify WordPress connectivity
-   curl -I https://your-wordpress-domain.com
+   curl -I https://your-domain.com
    ```
 
 7. **Verify application health**:
@@ -374,10 +374,10 @@ kubectl get pods -n wordpress
 kubectl get svc -n wordpress
 
 # Test WordPress connectivity
-curl -I https://your-wordpress-domain.com
+curl -I https://your-domain.com
 
 # Check WordPress admin
-curl -I https://your-wordpress-domain.com/wp-admin/
+curl -I https://your-domain.com/wp-admin/
 ```
 
 ### 3. Cost Validation
