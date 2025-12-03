@@ -51,6 +51,7 @@ locals {
   # Note: X-Forwarded-Proto, Authorization, and Accept-Encoding are NOT allowed
   # Use CloudFront-Forwarded-Proto instead of X-Forwarded-Proto
   # CloudFront handles Accept-Encoding automatically
+  # Keep minimal to avoid "TooManyHeadersInOriginRequestPolicy" error (max ~10 headers)
   wordpress_dynamic_headers = [
     "Host",
     "CloudFront-Forwarded-Proto",
@@ -58,12 +59,7 @@ locals {
     "X-Forwarded-For",
     "User-Agent",
     "Referer",
-    "Accept",
-    "Accept-Language",
-    "Content-Type",
-    "Cache-Control",
-    "If-Modified-Since",
-    "If-None-Match"
+    "Cache-Control"
   ]
 
   # Custom headers for response headers policy
