@@ -561,51 +561,52 @@ resource "kubernetes_network_policy" "grafana_ingress" {
 }
 
 #############################################
-# Security Context Constraints
+# Pod Security Standards (PSS)
 #############################################
 
-# Pod Security Policy for monitoring components (if PSP is enabled)
-resource "kubernetes_manifest" "monitoring_psp" {
-  count = var.enable_tls_encryption ? 1 : 0
+# PSS replaced PodSecurityPolicy in Kubernetes 1.25+
+# Enforces security policies at the namespace level using labels
+# Three modes: enforce (blocks), audit (logs), warn (shows warnings)
+# Three levels: privileged, baseline, restricted
 
-  manifest = {
-    apiVersion = "policy/v1beta1"
-    kind       = "PodSecurityPolicy"
-    metadata = {
-      name = "${local.security_name}-restricted"
-      annotations = {
-        "seccomp.security.alpha.kubernetes.io/allowedProfileNames" = "runtime/default"
-        "apparmor.security.beta.kubernetes.io/allowedProfileNames" = "runtime/default"
-      }
-    }
-    spec = {
-      privileged               = false
-      allowPrivilegeEscalation = false
-      requiredDropCapabilities = ["ALL"]
-      volumes = [
-        "configMap",
-        "emptyDir",
-        "projected",
-        "secret",
-        "downwardAPI",
-        "persistentVolumeClaim"
-      ]
-      hostNetwork = false
-      hostIPC     = false
-      hostPID     = false
-      runAsUser = {
-        rule = "MustRunAsNonRoot"
-      }
-      seLinux = {
-        rule = "RunAsAny"
-      }
-      supplementalGroups = {
-        rule = "RunAsAny"
-      }
-      fsGroup = {
-        rule = "RunAsAny"
-      }
-      readOnlyRootFilesystem = false
-    }
+resource "kubernetes_labels" "namespace_pss" {
+  api_version = "v1"
+  kind        = "Namespace"
+  metadata {
+    name = var.namespace
+  }
+
+  labels = {
+    # Enforce restricted security standards (blocks non-compliant pods)
+    "pod-security.kubernetes.io/enforce" = "restricted"
+    "pod-security.kubernetes.io/enforce-version" = "latest"
+    
+    # Audit mode logs violations without blocking
+    "pod-security.kubernetes.io/audit" = "restricted"
+    "pod-security.kubernetes.io/audit-version" = "latest"
+    
+    # Warn mode shows warnings to users
+    "pod-security.kubernetes.io/warn" = "restricted"
+    "pod-security.kubernetes.io/warn-version" = "latest"
   }
 }
+
+# Alternative: Use baseline for less restrictive enforcement
+# Uncomment below and comment above if restricted is too strict
+#
+# resource "kubernetes_labels" "namespace_pss_baseline" {
+#   api_version = "v1"
+#   kind        = "Namespace"
+#   metadata {
+#     name = var.namespace
+#   }
+#
+#   labels = {
+#     "pod-security.kubernetes.io/enforce" = "baseline"
+#     "pod-security.kubernetes.io/enforce-version" = "latest"
+#     "pod-security.kubernetes.io/audit" = "baseline"
+#     "pod-security.kubernetes.io/audit-version" = "latest"
+#     "pod-security.kubernetes.io/warn" = "baseline"
+#     "pod-security.kubernetes.io/warn-version" = "latest"
+#   }
+# }
