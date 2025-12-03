@@ -6,11 +6,14 @@ locals {
   origin_secret = var.origin_secret_value
 
   # Define disallowed headers for origin request policies
+  # Based on AWS CloudFront documentation and actual API errors
   disallowed_headers = [
     "X-Real-IP",
     "X-Forwarded-Server",
+    "X-Forwarded-Proto", # Not allowed - use CloudFront-Forwarded-Proto instead
     "X-Original-URL",
     "X-Rewrite-URL",
+    "Authorization", # Not allowed in origin request policies
     "Proxy",
     "Proxy-Authorization",
     "Proxy-Connection",
@@ -32,6 +35,7 @@ locals {
   ]
 
   # Headers for minimal origin request policy
+  # Note: X-Forwarded-Proto is NOT allowed - use CloudFront-Forwarded-Proto instead
   minimal_headers = [
     "Host",
     "CloudFront-Viewer-Country",
@@ -41,13 +45,14 @@ locals {
     "CloudFront-Is-Mobile-Viewer",
     "CloudFront-Is-SmartTV-Viewer",
     "CloudFront-Is-Tablet-Viewer",
-    "X-Forwarded-Proto",
     "X-Forwarded-Host",
     "X-Forwarded-For",
     "User-Agent"
   ]
 
   # Headers for WordPress dynamic origin request policy
+  # Note: X-Forwarded-Proto and Authorization are NOT allowed
+  # Use CloudFront-Forwarded-Proto instead of X-Forwarded-Proto
   wordpress_dynamic_headers = [
     "Host",
     "CloudFront-Viewer-Country",
@@ -57,12 +62,10 @@ locals {
     "CloudFront-Is-Mobile-Viewer",
     "CloudFront-Is-SmartTV-Viewer",
     "CloudFront-Is-Tablet-Viewer",
-    "X-Forwarded-Proto",
     "X-Forwarded-Host",
     "X-Forwarded-For",
     "User-Agent",
     "Referer",
-    "Authorization",
     "Accept",
     "Accept-Language",
     "Accept-Encoding",
@@ -110,6 +113,8 @@ check "origin_request_policy_headers_validation" {
       
       Disallowed headers that cannot be used in CloudFront origin request policies:
       - X-Real-IP (use CloudFront Function to add from CloudFront-Viewer-Address)
+      - X-Forwarded-Proto (use CloudFront-Forwarded-Proto instead)
+      - Authorization (not allowed in origin request policies)
       - X-Forwarded-Server, X-Original-URL, X-Rewrite-URL
       - Proxy, Proxy-Authorization, Proxy-Connection
       - TE, Trailer, Transfer-Encoding, Upgrade, Via
@@ -117,7 +122,8 @@ check "origin_request_policy_headers_validation" {
       To resolve:
       1. Remove disallowed headers from local.minimal_headers
       2. For X-Real-IP: Use CloudFront Function to extract from CloudFront-Viewer-Address
-      3. Use only CloudFront-allowed headers
+      3. For X-Forwarded-Proto: Use CloudFront-Forwarded-Proto instead
+      4. Use only CloudFront-allowed headers
       
       See: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-cloudfront-headers.html
     EOT
@@ -134,6 +140,8 @@ check "origin_request_policy_headers_validation" {
       
       Disallowed headers that cannot be used in CloudFront origin request policies:
       - X-Real-IP (use CloudFront Function to add from CloudFront-Viewer-Address)
+      - X-Forwarded-Proto (use CloudFront-Forwarded-Proto instead)
+      - Authorization (not allowed in origin request policies)
       - X-Forwarded-Server, X-Original-URL, X-Rewrite-URL
       - Proxy, Proxy-Authorization, Proxy-Connection
       - TE, Trailer, Transfer-Encoding, Upgrade, Via
@@ -141,7 +149,8 @@ check "origin_request_policy_headers_validation" {
       To resolve:
       1. Remove disallowed headers from local.wordpress_dynamic_headers
       2. For X-Real-IP: Use CloudFront Function to extract from CloudFront-Viewer-Address
-      3. Use only CloudFront-allowed headers
+      3. For X-Forwarded-Proto: Use CloudFront-Forwarded-Proto instead
+      4. Use only CloudFront-allowed headers
       
       See: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-cloudfront-headers.html
     EOT
@@ -154,7 +163,7 @@ check "wordpress_required_headers_validation" {
     condition = alltrue([
       contains(local.minimal_headers, "Host"),
       contains(local.minimal_headers, "X-Forwarded-Host"),
-      contains(local.minimal_headers, "X-Forwarded-Proto")
+      contains(local.minimal_headers, "CloudFront-Forwarded-Proto")
     ])
     error_message = <<-EOT
       Origin request policy WordPress-required headers validation failed for minimal policy:
@@ -162,7 +171,9 @@ check "wordpress_required_headers_validation" {
       WordPress requires specific headers to function correctly behind CloudFront:
       - Host: Required for WordPress to identify the site domain
       - X-Forwarded-Host: Required to prevent redirect loops
-      - X-Forwarded-Proto: Required for HTTPS detection
+      - CloudFront-Forwarded-Proto: Required for HTTPS detection (X-Forwarded-Proto is not allowed)
+      
+      Note: X-Forwarded-Proto is added by CloudFront Function, not origin request policy.
       
       To resolve:
       Add missing headers to local.minimal_headers in main.tf
@@ -175,7 +186,7 @@ check "wordpress_required_headers_validation" {
     condition = alltrue([
       contains(local.wordpress_dynamic_headers, "Host"),
       contains(local.wordpress_dynamic_headers, "X-Forwarded-Host"),
-      contains(local.wordpress_dynamic_headers, "X-Forwarded-Proto")
+      contains(local.wordpress_dynamic_headers, "CloudFront-Forwarded-Proto")
     ])
     error_message = <<-EOT
       Origin request policy WordPress-required headers validation failed for wordpress_dynamic policy:
@@ -183,7 +194,9 @@ check "wordpress_required_headers_validation" {
       WordPress requires specific headers to function correctly behind CloudFront:
       - Host: Required for WordPress to identify the site domain
       - X-Forwarded-Host: Required to prevent redirect loops
-      - X-Forwarded-Proto: Required for HTTPS detection
+      - CloudFront-Forwarded-Proto: Required for HTTPS detection (X-Forwarded-Proto is not allowed)
+      
+      Note: X-Forwarded-Proto is added by CloudFront Function, not origin request policy.
       
       To resolve:
       Add missing headers to local.wordpress_dynamic_headers in main.tf
@@ -251,13 +264,15 @@ resource "aws_cloudfront_cache_policy" "bypass_auth" {
       header_behavior = "none"
     }
 
-    # Forward all query strings; needed for WP routes like ?p=, ?s=, etc.
+    # AWS CloudFront requirement: When caching is disabled (TTL=0), query_string_behavior must be "none"
+    # Query strings cannot be part of the cache key when caching is disabled
+    # Note: Query strings are still forwarded to origin via origin_request_policy
     query_strings_config {
-      query_string_behavior = "all"
+      query_string_behavior = "none"
     }
   }
 
-  comment = "No-cache policy for dynamic WordPress paths; forwards cookies and query strings."
+  comment = "No-cache policy for dynamic WordPress paths; query strings and cookies forwarded via origin request policy."
 }
 
 resource "aws_cloudfront_cache_policy" "static_long" {
