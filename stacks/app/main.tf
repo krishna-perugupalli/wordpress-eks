@@ -49,6 +49,33 @@ module "edge_ingress" {
 }
 
 # ---------------------------
+# cert-manager (TLS Certificate Management)
+# ---------------------------
+module "cert_manager" {
+  source = "../../modules/cert-manager"
+  count  = var.enable_cert_manager ? 1 : 0
+
+  name      = local.name
+  namespace = var.cert_manager_namespace
+
+  cert_manager_version      = var.cert_manager_version
+  enable_prometheus_metrics = var.enable_prometheus_stack
+
+  # ClusterIssuer configuration
+  create_letsencrypt_issuer = var.create_letsencrypt_issuer
+  letsencrypt_email         = var.letsencrypt_email
+  create_selfsigned_issuer  = var.create_selfsigned_issuer
+
+  # Resource configuration
+  resource_requests = var.cert_manager_resource_requests
+  resource_limits   = var.cert_manager_resource_limits
+
+  tags = local.tags
+
+  depends_on = [module.edge_ingress]
+}
+
+# ---------------------------
 # Enhanced Observability (CloudWatch + Prometheus Stack)
 # ---------------------------
 module "observability" {
@@ -137,7 +164,10 @@ module "observability" {
 
   tags = local.tags
 
-  depends_on = [module.edge_ingress]
+  depends_on = [
+    module.edge_ingress,
+    module.cert_manager
+  ]
 }
 
 #############################################

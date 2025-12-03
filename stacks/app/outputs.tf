@@ -14,6 +14,34 @@ output "target_group_arn" {
 }
 
 #############################################
+# cert-manager Outputs
+#############################################
+output "cert_manager_enabled" {
+  description = "Whether cert-manager is enabled"
+  value       = var.enable_cert_manager
+}
+
+output "cert_manager_namespace" {
+  description = "Namespace where cert-manager is installed"
+  value       = var.enable_cert_manager ? module.cert_manager[0].namespace : null
+}
+
+output "letsencrypt_prod_issuer" {
+  description = "Name of the Let's Encrypt production ClusterIssuer"
+  value       = var.enable_cert_manager ? module.cert_manager[0].letsencrypt_prod_issuer : null
+}
+
+output "letsencrypt_staging_issuer" {
+  description = "Name of the Let's Encrypt staging ClusterIssuer"
+  value       = var.enable_cert_manager ? module.cert_manager[0].letsencrypt_staging_issuer : null
+}
+
+output "selfsigned_issuer" {
+  description = "Name of the self-signed ClusterIssuer"
+  value       = var.enable_cert_manager ? module.cert_manager[0].selfsigned_issuer : null
+}
+
+#############################################
 # Enhanced Observability Outputs
 #############################################
 output "monitoring_namespace" {

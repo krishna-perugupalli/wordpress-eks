@@ -254,6 +254,69 @@ variable "karpenter_taints" {
 }
 
 # ---------------------------
+# cert-manager
+# ---------------------------
+variable "enable_cert_manager" {
+  description = "Enable cert-manager for TLS certificate management"
+  type        = bool
+  default     = true
+}
+
+variable "cert_manager_namespace" {
+  description = "Namespace for cert-manager installation"
+  type        = string
+  default     = "cert-manager"
+}
+
+variable "cert_manager_version" {
+  description = "cert-manager Helm chart version"
+  type        = string
+  default     = "v1.16.2"
+}
+
+variable "create_letsencrypt_issuer" {
+  description = "Create Let's Encrypt ClusterIssuers (prod and staging)"
+  type        = bool
+  default     = true
+}
+
+variable "letsencrypt_email" {
+  description = "Email address for Let's Encrypt account registration"
+  type        = string
+  default     = ""
+}
+
+variable "create_selfsigned_issuer" {
+  description = "Create self-signed ClusterIssuer for internal certificates"
+  type        = bool
+  default     = true
+}
+
+variable "cert_manager_resource_requests" {
+  description = "Resource requests for cert-manager controller"
+  type = object({
+    cpu    = string
+    memory = string
+  })
+  default = {
+    cpu    = "10m"
+    memory = "32Mi"
+  }
+}
+
+variable "cert_manager_resource_limits" {
+  description = "Resource limits for cert-manager controller"
+  type = object({
+    cpu    = string
+    memory = string
+  })
+  default = {
+    cpu    = "100m"
+    memory = "128Mi"
+  }
+}
+
+# ---------------------------
 # Observability
 # ---------------------------
 variable "observability_namespace" {
@@ -636,9 +699,9 @@ variable "enable_tls_encryption" {
 }
 
 variable "tls_cert_manager_issuer" {
-  description = "Cert-manager issuer for TLS certificates"
+  description = "Cert-manager issuer for TLS certificates (use 'selfsigned-issuer' for internal monitoring)"
   type        = string
-  default     = "letsencrypt-prod"
+  default     = "selfsigned-issuer"
 }
 
 variable "enable_pii_scrubbing" {
