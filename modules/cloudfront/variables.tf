@@ -48,18 +48,63 @@ variable "default_ttl" {
   description = "Default TTL for bypass_auth cache policy."
   type        = number
   default     = 60
+  validation {
+    condition     = var.default_ttl >= 0
+    error_message = <<-EOT
+      Cache policy TTL validation failed:
+      default_ttl must be >= 0.
+      
+      Current value: ${var.default_ttl}
+      
+      AWS CloudFront requirement: TTL values must be non-negative integers.
+      
+      To resolve:
+      - Set default_ttl to 0 or greater
+      - For no-cache behavior, use TTL=0 with cookie_behavior="none"
+    EOT
+  }
 }
 
 variable "max_ttl" {
   description = "Max TTL for bypass_auth cache policy."
   type        = number
   default     = 300
+  validation {
+    condition     = var.max_ttl >= 0
+    error_message = <<-EOT
+      Cache policy TTL validation failed:
+      max_ttl must be >= 0.
+      
+      Current value: ${var.max_ttl}
+      
+      AWS CloudFront requirement: TTL values must be non-negative integers.
+      
+      To resolve:
+      - Set max_ttl to 0 or greater
+      - For no-cache behavior, use TTL=0 with cookie_behavior="none"
+    EOT
+  }
 }
 
 variable "min_ttl" {
   description = "Min TTL for bypass_auth cache policy."
   type        = number
   default     = 0
+  validation {
+    condition     = var.min_ttl >= 0
+    error_message = <<-EOT
+      Cache policy TTL validation failed:
+      min_ttl must be >= 0.
+      
+      Current value: ${var.min_ttl}
+      
+      AWS CloudFront requirement: TTL values must be non-negative integers.
+      
+      To resolve:
+      - Set min_ttl to 0 or greater
+      - For no-cache behavior, use TTL=0 with cookie_behavior="none"
+    EOT
+  }
 }
 
 variable "static_ttl" {

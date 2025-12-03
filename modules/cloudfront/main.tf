@@ -4,14 +4,226 @@
 locals {
   cf_aliases    = concat([var.domain_name], var.aliases)
   origin_secret = var.origin_secret_value
+
+  # Define disallowed headers for origin request policies
+  disallowed_headers = [
+    "X-Real-IP",
+    "X-Forwarded-Server",
+    "X-Original-URL",
+    "X-Rewrite-URL",
+    "Proxy",
+    "Proxy-Authorization",
+    "Proxy-Connection",
+    "TE",
+    "Trailer",
+    "Transfer-Encoding",
+    "Upgrade",
+    "Via"
+  ]
+
+  # Define security headers that must not be in custom_headers_config
+  security_headers = [
+    "X-Content-Type-Options",
+    "X-Frame-Options",
+    "Strict-Transport-Security",
+    "Content-Security-Policy",
+    "Referrer-Policy",
+    "X-XSS-Protection"
+  ]
+
+  # Headers for minimal origin request policy
+  minimal_headers = [
+    "Host",
+    "CloudFront-Viewer-Country",
+    "CloudFront-Forwarded-Proto",
+    "CloudFront-Viewer-Protocol",
+    "CloudFront-Is-Desktop-Viewer",
+    "CloudFront-Is-Mobile-Viewer",
+    "CloudFront-Is-SmartTV-Viewer",
+    "CloudFront-Is-Tablet-Viewer",
+    "X-Forwarded-Proto",
+    "X-Forwarded-Host",
+    "X-Forwarded-For",
+    "User-Agent"
+  ]
+
+  # Headers for WordPress dynamic origin request policy
+  wordpress_dynamic_headers = [
+    "Host",
+    "CloudFront-Viewer-Country",
+    "CloudFront-Forwarded-Proto",
+    "CloudFront-Viewer-Protocol",
+    "CloudFront-Is-Desktop-Viewer",
+    "CloudFront-Is-Mobile-Viewer",
+    "CloudFront-Is-SmartTV-Viewer",
+    "CloudFront-Is-Tablet-Viewer",
+    "X-Forwarded-Proto",
+    "X-Forwarded-Host",
+    "X-Forwarded-For",
+    "User-Agent",
+    "Referer",
+    "Authorization",
+    "Accept",
+    "Accept-Language",
+    "Accept-Encoding",
+    "Content-Type",
+    "Content-Length",
+    "Cache-Control",
+    "Pragma",
+    "If-Modified-Since",
+    "If-None-Match"
+  ]
+
+  # Custom headers for response headers policy
+  custom_headers = [
+    {
+      header   = "Permissions-Policy"
+      value    = "geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()"
+      override = false
+    },
+    {
+      header   = "X-Robots-Tag"
+      value    = "noindex, nofollow"
+      override = false
+    }
+  ]
 }
 
 #############################################
 # CloudFront Module
 #############################################
 
-# All validation is handled at the infrastructure stack level
-# This module trusts that inputs have been validated upstream
+#############################################
+# Validation checks
+#############################################
+
+# Validate origin request policy headers don't contain disallowed headers
+check "origin_request_policy_headers_validation" {
+  assert {
+    condition = alltrue([
+      for header in local.minimal_headers :
+      !contains(local.disallowed_headers, header)
+    ])
+    error_message = <<-EOT
+      Origin request policy headers validation failed for minimal policy:
+      Headers list contains disallowed headers.
+      
+      Disallowed headers that cannot be used in CloudFront origin request policies:
+      - X-Real-IP (use CloudFront Function to add from CloudFront-Viewer-Address)
+      - X-Forwarded-Server, X-Original-URL, X-Rewrite-URL
+      - Proxy, Proxy-Authorization, Proxy-Connection
+      - TE, Trailer, Transfer-Encoding, Upgrade, Via
+      
+      To resolve:
+      1. Remove disallowed headers from local.minimal_headers
+      2. For X-Real-IP: Use CloudFront Function to extract from CloudFront-Viewer-Address
+      3. Use only CloudFront-allowed headers
+      
+      See: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-cloudfront-headers.html
+    EOT
+  }
+
+  assert {
+    condition = alltrue([
+      for header in local.wordpress_dynamic_headers :
+      !contains(local.disallowed_headers, header)
+    ])
+    error_message = <<-EOT
+      Origin request policy headers validation failed for wordpress_dynamic policy:
+      Headers list contains disallowed headers.
+      
+      Disallowed headers that cannot be used in CloudFront origin request policies:
+      - X-Real-IP (use CloudFront Function to add from CloudFront-Viewer-Address)
+      - X-Forwarded-Server, X-Original-URL, X-Rewrite-URL
+      - Proxy, Proxy-Authorization, Proxy-Connection
+      - TE, Trailer, Transfer-Encoding, Upgrade, Via
+      
+      To resolve:
+      1. Remove disallowed headers from local.wordpress_dynamic_headers
+      2. For X-Real-IP: Use CloudFront Function to extract from CloudFront-Viewer-Address
+      3. Use only CloudFront-allowed headers
+      
+      See: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-cloudfront-headers.html
+    EOT
+  }
+}
+
+# Validate WordPress-required headers are present
+check "wordpress_required_headers_validation" {
+  assert {
+    condition = alltrue([
+      contains(local.minimal_headers, "Host"),
+      contains(local.minimal_headers, "X-Forwarded-Host"),
+      contains(local.minimal_headers, "X-Forwarded-Proto")
+    ])
+    error_message = <<-EOT
+      Origin request policy WordPress-required headers validation failed for minimal policy:
+      
+      WordPress requires specific headers to function correctly behind CloudFront:
+      - Host: Required for WordPress to identify the site domain
+      - X-Forwarded-Host: Required to prevent redirect loops
+      - X-Forwarded-Proto: Required for HTTPS detection
+      
+      To resolve:
+      Add missing headers to local.minimal_headers in main.tf
+      
+      See: https://wordpress.org/support/article/administration-over-ssl/
+    EOT
+  }
+
+  assert {
+    condition = alltrue([
+      contains(local.wordpress_dynamic_headers, "Host"),
+      contains(local.wordpress_dynamic_headers, "X-Forwarded-Host"),
+      contains(local.wordpress_dynamic_headers, "X-Forwarded-Proto")
+    ])
+    error_message = <<-EOT
+      Origin request policy WordPress-required headers validation failed for wordpress_dynamic policy:
+      
+      WordPress requires specific headers to function correctly behind CloudFront:
+      - Host: Required for WordPress to identify the site domain
+      - X-Forwarded-Host: Required to prevent redirect loops
+      - X-Forwarded-Proto: Required for HTTPS detection
+      
+      To resolve:
+      Add missing headers to local.wordpress_dynamic_headers in main.tf
+      
+      See: https://wordpress.org/support/article/administration-over-ssl/
+    EOT
+  }
+}
+
+# Validate custom headers don't contain security headers
+check "response_headers_policy_validation" {
+  assert {
+    condition = alltrue([
+      for header_config in local.custom_headers :
+      !contains(local.security_headers, header_config.header)
+    ])
+    error_message = <<-EOT
+      Response headers policy validation failed:
+      Custom headers list contains security headers that must be in security_headers_config.
+      
+      Security headers that MUST be in security_headers_config (not custom_headers_config):
+      - X-Content-Type-Options (use content_type_options block)
+      - X-Frame-Options (use frame_options block)
+      - Strict-Transport-Security (use strict_transport_security block)
+      - Content-Security-Policy (use content_security_policy block)
+      - Referrer-Policy (use referrer_policy block)
+      - X-XSS-Protection (use xss_protection block)
+      
+      To resolve:
+      1. Remove security headers from local.custom_headers
+      2. Configure security headers in security_headers_config block
+      3. Use custom_headers_config only for non-security headers
+      
+      AWS CloudFront requirement: Security headers cannot be duplicated between
+      security_headers_config and custom_headers_config blocks.
+      
+      See: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/adding-response-headers.html
+    EOT
+  }
+}
 
 #############################################
 # Cache policies
@@ -27,9 +239,11 @@ resource "aws_cloudfront_cache_policy" "bypass_auth" {
     enable_accept_encoding_brotli = true
     enable_accept_encoding_gzip   = true
 
-    # Forward all cookies so auth/session works; effectively disables caching
+    # AWS CloudFront requirement: When TTL=0 (caching disabled), cookie_behavior must be "none"
+    # Cookies cannot be part of the cache key when caching is disabled
+    # Note: Cookies are still forwarded to origin via origin_request_policy
     cookies_config {
-      cookie_behavior = "all"
+      cookie_behavior = "none"
     }
 
     # When caching is disabled (TTL=0), headers cannot be part of the cache key
@@ -117,21 +331,9 @@ resource "aws_cloudfront_origin_request_policy" "minimal" {
   headers_config {
     header_behavior = "whitelist"
     headers {
-      items = [
-        "Host",
-        "CloudFront-Viewer-Country",
-        "CloudFront-Forwarded-Proto",
-        "CloudFront-Viewer-Protocol",
-        "CloudFront-Is-Desktop-Viewer",
-        "CloudFront-Is-Mobile-Viewer",
-        "CloudFront-Is-SmartTV-Viewer",
-        "CloudFront-Is-Tablet-Viewer",
-        "X-Forwarded-Proto",
-        "X-Forwarded-Host",
-        "X-Forwarded-For",
-        "X-Real-IP",
-        "User-Agent"
-      ]
+      # Note: X-Real-IP is not allowed in CloudFront origin request policies
+      # It is added via CloudFront Function from CloudFront-Viewer-Address instead
+      items = local.minimal_headers
     }
   }
 
@@ -150,32 +352,9 @@ resource "aws_cloudfront_origin_request_policy" "wordpress_dynamic" {
   headers_config {
     header_behavior = "whitelist"
     headers {
-      items = [
-        "Host",
-        "CloudFront-Viewer-Country",
-        "CloudFront-Forwarded-Proto",
-        "CloudFront-Viewer-Protocol",
-        "CloudFront-Is-Desktop-Viewer",
-        "CloudFront-Is-Mobile-Viewer",
-        "CloudFront-Is-SmartTV-Viewer",
-        "CloudFront-Is-Tablet-Viewer",
-        "X-Forwarded-Proto",
-        "X-Forwarded-Host",
-        "X-Forwarded-For",
-        "X-Real-IP",
-        "User-Agent",
-        "Referer",
-        "Authorization",
-        "Accept",
-        "Accept-Language",
-        "Accept-Encoding",
-        "Content-Type",
-        "Content-Length",
-        "Cache-Control",
-        "Pragma",
-        "If-Modified-Since",
-        "If-None-Match"
-      ]
+      # Note: X-Real-IP is not allowed in CloudFront origin request policies
+      # It is added via CloudFront Function from CloudFront-Viewer-Address instead
+      items = local.wordpress_dynamic_headers
     }
   }
 
@@ -187,6 +366,9 @@ resource "aws_cloudfront_origin_request_policy" "wordpress_dynamic" {
 resource "aws_cloudfront_response_headers_policy" "security" {
   name = "${var.name}-security"
 
+  # AWS CloudFront requirement: Security headers must be in security_headers_config only
+  # Do NOT duplicate security headers in custom_headers_config
+  # Security headers: X-Content-Type-Options, X-Frame-Options, HSTS, CSP, Referrer-Policy, XSS-Protection
   security_headers_config {
     content_security_policy {
       content_security_policy = "upgrade-insecure-requests; block-all-mixed-content; frame-ancestors 'self';"
@@ -216,26 +398,15 @@ resource "aws_cloudfront_response_headers_policy" "security" {
     }
   }
 
+  # Custom headers for non-security headers only (Permissions-Policy, X-Robots-Tag, etc.)
   custom_headers_config {
-    items {
-      header   = "X-Content-Type-Options"
-      value    = "nosniff"
-      override = true
-    }
-    items {
-      header   = "X-Frame-Options"
-      value    = "SAMEORIGIN"
-      override = true
-    }
-    items {
-      header   = "Permissions-Policy"
-      value    = "geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()"
-      override = false
-    }
-    items {
-      header   = "X-Robots-Tag"
-      value    = "noindex, nofollow"
-      override = false
+    dynamic "items" {
+      for_each = local.custom_headers
+      content {
+        header   = items.value.header
+        value    = items.value.value
+        override = items.value.override
+      }
     }
   }
 
