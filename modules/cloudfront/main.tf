@@ -13,7 +13,9 @@ locals {
     "X-Forwarded-Proto", # Not allowed - use CloudFront-Forwarded-Proto instead
     "X-Original-URL",
     "X-Rewrite-URL",
-    "Authorization", # Not allowed in origin request policies
+    "Authorization",   # Not allowed in origin request policies
+    "Accept-Encoding", # Not allowed - CloudFront handles encoding automatically
+    "Content-Length",  # Not allowed - CloudFront manages this
     "Proxy",
     "Proxy-Authorization",
     "Proxy-Connection",
@@ -36,43 +38,30 @@ locals {
 
   # Headers for minimal origin request policy
   # Note: X-Forwarded-Proto is NOT allowed - use CloudFront-Forwarded-Proto instead
+  # Keep minimal to avoid "TooManyHeadersInOriginRequestPolicy" error
   minimal_headers = [
     "Host",
-    "CloudFront-Viewer-Country",
     "CloudFront-Forwarded-Proto",
-    "CloudFront-Viewer-Protocol",
-    "CloudFront-Is-Desktop-Viewer",
-    "CloudFront-Is-Mobile-Viewer",
-    "CloudFront-Is-SmartTV-Viewer",
-    "CloudFront-Is-Tablet-Viewer",
     "X-Forwarded-Host",
     "X-Forwarded-For",
     "User-Agent"
   ]
 
   # Headers for WordPress dynamic origin request policy
-  # Note: X-Forwarded-Proto and Authorization are NOT allowed
+  # Note: X-Forwarded-Proto, Authorization, and Accept-Encoding are NOT allowed
   # Use CloudFront-Forwarded-Proto instead of X-Forwarded-Proto
+  # CloudFront handles Accept-Encoding automatically
   wordpress_dynamic_headers = [
     "Host",
-    "CloudFront-Viewer-Country",
     "CloudFront-Forwarded-Proto",
-    "CloudFront-Viewer-Protocol",
-    "CloudFront-Is-Desktop-Viewer",
-    "CloudFront-Is-Mobile-Viewer",
-    "CloudFront-Is-SmartTV-Viewer",
-    "CloudFront-Is-Tablet-Viewer",
     "X-Forwarded-Host",
     "X-Forwarded-For",
     "User-Agent",
     "Referer",
     "Accept",
     "Accept-Language",
-    "Accept-Encoding",
     "Content-Type",
-    "Content-Length",
     "Cache-Control",
-    "Pragma",
     "If-Modified-Since",
     "If-None-Match"
   ]
@@ -115,6 +104,8 @@ check "origin_request_policy_headers_validation" {
       - X-Real-IP (use CloudFront Function to add from CloudFront-Viewer-Address)
       - X-Forwarded-Proto (use CloudFront-Forwarded-Proto instead)
       - Authorization (not allowed in origin request policies)
+      - Accept-Encoding (CloudFront handles encoding automatically)
+      - Content-Length (CloudFront manages this)
       - X-Forwarded-Server, X-Original-URL, X-Rewrite-URL
       - Proxy, Proxy-Authorization, Proxy-Connection
       - TE, Trailer, Transfer-Encoding, Upgrade, Via
@@ -123,7 +114,8 @@ check "origin_request_policy_headers_validation" {
       1. Remove disallowed headers from local.minimal_headers
       2. For X-Real-IP: Use CloudFront Function to extract from CloudFront-Viewer-Address
       3. For X-Forwarded-Proto: Use CloudFront-Forwarded-Proto instead
-      4. Use only CloudFront-allowed headers
+      4. For Accept-Encoding: CloudFront handles this automatically
+      5. Use only CloudFront-allowed headers
       
       See: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-cloudfront-headers.html
     EOT
@@ -142,6 +134,8 @@ check "origin_request_policy_headers_validation" {
       - X-Real-IP (use CloudFront Function to add from CloudFront-Viewer-Address)
       - X-Forwarded-Proto (use CloudFront-Forwarded-Proto instead)
       - Authorization (not allowed in origin request policies)
+      - Accept-Encoding (CloudFront handles encoding automatically)
+      - Content-Length (CloudFront manages this)
       - X-Forwarded-Server, X-Original-URL, X-Rewrite-URL
       - Proxy, Proxy-Authorization, Proxy-Connection
       - TE, Trailer, Transfer-Encoding, Upgrade, Via
@@ -150,7 +144,8 @@ check "origin_request_policy_headers_validation" {
       1. Remove disallowed headers from local.wordpress_dynamic_headers
       2. For X-Real-IP: Use CloudFront Function to extract from CloudFront-Viewer-Address
       3. For X-Forwarded-Proto: Use CloudFront-Forwarded-Proto instead
-      4. Use only CloudFront-allowed headers
+      4. For Accept-Encoding: CloudFront handles this automatically
+      5. Use only CloudFront-allowed headers
       
       See: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-cloudfront-headers.html
     EOT
@@ -249,8 +244,9 @@ resource "aws_cloudfront_cache_policy" "bypass_auth" {
   min_ttl     = 0
 
   parameters_in_cache_key_and_forwarded_to_origin {
-    enable_accept_encoding_brotli = true
-    enable_accept_encoding_gzip   = true
+    # AWS CloudFront requirement: When caching is disabled (TTL=0), encoding settings must be false
+    enable_accept_encoding_brotli = false
+    enable_accept_encoding_gzip   = false
 
     # AWS CloudFront requirement: When TTL=0 (caching disabled), cookie_behavior must be "none"
     # Cookies cannot be part of the cache key when caching is disabled
