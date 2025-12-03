@@ -90,7 +90,29 @@ resource "helm_release" "cert_manager" {
     value = local.cert_manager_namespace
   }
 
+  # Startup API check configuration - increase timeout
+  set {
+    name  = "startupapicheck.timeout"
+    value = "5m"
+  }
+
+  set {
+    name  = "startupapicheck.backoffLimit"
+    value = "10"
+  }
+
+  # Webhook configuration - ensure it's ready before checks
+  set {
+    name  = "webhook.timeoutSeconds"
+    value = "30"
+  }
+
   values = var.additional_helm_values != null ? [var.additional_helm_values] : []
+
+  # Wait for resources to be ready
+  wait          = true
+  wait_for_jobs = true
+  timeout       = 600
 
   depends_on = [
     kubernetes_namespace.cert_manager
