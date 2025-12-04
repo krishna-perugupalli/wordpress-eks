@@ -451,17 +451,22 @@ resource "kubernetes_config_map" "additional_scrape_configs" {
             source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_service_name", "__meta_kubernetes_endpoint_port_name"]
             action        = "keep"
             regex         = "default;kubernetes;https"
+          },
+          {
+            action       = "replace"
+            target_label = "job"
+            replacement  = "kubernetes-apiservers"
           }
         ]
         metric_relabel_configs = [
           {
             source_labels = ["__name__"]
-            regex         = "apiserver_.*|etcd_.*|rest_client_.*"
+            regex         = "apiserver_.*|etcd_.*|rest_client_.*|workqueue_.*"
             action        = "keep"
           }
         ]
       },
-      # Kubernetes nodes metrics
+      # Kubernetes nodes (kubelet) metrics
       {
         job_name = "kubernetes-nodes"
         kubernetes_sd_configs = [
@@ -479,12 +484,140 @@ resource "kubernetes_config_map" "additional_scrape_configs" {
           {
             action = "labelmap"
             regex  = "__meta_kubernetes_node_label_(.+)"
+          },
+          {
+            action       = "replace"
+            target_label = "__address__"
+            regex        = "([^:]+)(?::\\d+)?"
+            replacement  = "$1:10250"
+          },
+          {
+            action       = "replace"
+            target_label = "__metrics_path__"
+            replacement  = "/metrics"
+          },
+          {
+            action       = "replace"
+            target_label = "job"
+            replacement  = "kubernetes-nodes"
           }
         ]
         metric_relabel_configs = [
           {
             source_labels = ["__name__"]
-            regex         = "kubelet_.*|node_.*"
+            regex         = "kubelet_.*|node_.*|container_.*"
+            action        = "keep"
+          }
+        ]
+      },
+      # Kubelet cAdvisor metrics
+      {
+        job_name = "kubernetes-nodes-cadvisor"
+        kubernetes_sd_configs = [
+          {
+            role = "node"
+          }
+        ]
+        scheme = "https"
+        tls_config = {
+          ca_file              = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+          insecure_skip_verify = true
+        }
+        bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        relabel_configs = [
+          {
+            action = "labelmap"
+            regex  = "__meta_kubernetes_node_label_(.+)"
+          },
+          {
+            action       = "replace"
+            target_label = "__address__"
+            regex        = "([^:]+)(?::\\d+)?"
+            replacement  = "$1:10250"
+          },
+          {
+            action       = "replace"
+            target_label = "__metrics_path__"
+            replacement  = "/metrics/cadvisor"
+          },
+          {
+            action       = "replace"
+            target_label = "job"
+            replacement  = "kubernetes-nodes-cadvisor"
+          }
+        ]
+        metric_relabel_configs = [
+          {
+            source_labels = ["__name__"]
+            regex         = "container_.*|machine_.*"
+            action        = "keep"
+          }
+        ]
+      },
+      # Kubernetes Controller Manager metrics (EKS managed - may not be accessible)
+      {
+        job_name = "kubernetes-controller-manager"
+        kubernetes_sd_configs = [
+          {
+            role = "endpoints"
+          }
+        ]
+        scheme = "https"
+        tls_config = {
+          ca_file              = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+          insecure_skip_verify = true
+        }
+        bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        relabel_configs = [
+          {
+            source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_service_name", "__meta_kubernetes_endpoint_port_name"]
+            action        = "keep"
+            regex         = "kube-system;kube-controller-manager;https"
+          },
+          {
+            action       = "replace"
+            target_label = "job"
+            replacement  = "kubernetes-controller-manager"
+          }
+        ]
+        metric_relabel_configs = [
+          {
+            source_labels = ["__name__"]
+            regex         = "controller_.*|workqueue_.*|rest_client_.*"
+            action        = "keep"
+          }
+        ]
+      },
+      # Kubernetes Scheduler metrics (EKS managed - may not be accessible)
+      {
+        job_name = "kubernetes-scheduler"
+        kubernetes_sd_configs = [
+          {
+            role = "endpoints"
+          }
+        ]
+        scheme = "https"
+        tls_config = {
+          ca_file              = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+          insecure_skip_verify = true
+        }
+        bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        relabel_configs = [
+          {
+            source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_service_name", "__meta_kubernetes_endpoint_port_name"]
+            action        = "keep"
+            regex         = "kube-system;kube-scheduler;https"
+          },
+          {
+            action       = "replace"
+            target_label = "job"
+            replacement  = "kubernetes-scheduler"
+          }
+        ]
+        metric_relabel_configs = [
+          {
+            source_labels = ["__name__"]
+            regex         = "scheduler_.*|workqueue_.*|rest_client_.*"
             action        = "keep"
           }
         ]
@@ -568,7 +701,7 @@ resource "kubernetes_deployment" "mysql_exporter" {
             name = "DATA_SOURCE_NAME"
             value_from {
               secret_key_ref {
-                name = var.mysql_connection_config != null ? kubernetes_secret.mysql_monitoring_user_updated[0].metadata[0].name : kubernetes_secret.mysql_monitoring_user[0].metadata[0].name
+                name = var.mysql_connection_config != null ? "mysql-connection-credentials" : kubernetes_secret.mysql_monitoring_user[0].metadata[0].name
                 key  = "dsn"
               }
             }
@@ -753,9 +886,9 @@ resource "kubernetes_service" "mysql_exporter" {
 # Redis Exporter Deployment
 #############################################
 
-# Redis monitoring credentials secret
+# Redis monitoring credentials secret (placeholder - only used when redis_connection_config is null)
 resource "kubernetes_secret" "redis_monitoring_credentials" {
-  count = var.enable_redis_exporter ? 1 : 0
+  count = var.enable_redis_exporter && var.redis_connection_config == null ? 1 : 0
 
   metadata {
     name      = "redis-monitoring-credentials"
@@ -828,10 +961,16 @@ resource "kubernetes_deployment" "redis_exporter" {
             name = "REDIS_PASSWORD"
             value_from {
               secret_key_ref {
-                name = var.redis_connection_config != null ? kubernetes_secret.redis_monitoring_credentials_updated[0].metadata[0].name : kubernetes_secret.redis_monitoring_credentials[0].metadata[0].name
+                name = var.redis_connection_config != null ? "redis-connection-credentials" : kubernetes_secret.redis_monitoring_credentials[0].metadata[0].name
                 key  = "password"
               }
             }
+          }
+
+          # Enable TLS if configured
+          env {
+            name  = "REDIS_EXPORTER_SKIP_TLS_VERIFICATION"
+            value = var.redis_connection_config != null && var.redis_connection_config.tls_enabled ? "false" : "true"
           }
 
           # Connection pooling and timeout settings
@@ -865,30 +1004,7 @@ resource "kubernetes_deployment" "redis_exporter" {
             value = "/metrics"
           }
 
-          # Enable TLS if configured
-          dynamic "env" {
-            for_each = var.redis_connection_config != null && var.redis_connection_config.tls_enabled ? [1] : []
-            content {
-              name  = "REDIS_EXPORTER_TLS_CLIENT_CERT_FILE"
-              value = "/etc/ssl/certs/redis-client.crt"
-            }
-          }
 
-          dynamic "env" {
-            for_each = var.redis_connection_config != null && var.redis_connection_config.tls_enabled ? [1] : []
-            content {
-              name  = "REDIS_EXPORTER_TLS_CLIENT_KEY_FILE"
-              value = "/etc/ssl/private/redis-client.key"
-            }
-          }
-
-          dynamic "env" {
-            for_each = var.redis_connection_config != null && var.redis_connection_config.tls_enabled ? [1] : []
-            content {
-              name  = "REDIS_EXPORTER_SKIP_TLS_VERIFICATION"
-              value = "false"
-            }
-          }
 
           # Collect additional Redis metrics
           env {
@@ -1008,242 +1124,116 @@ resource "kubernetes_service" "redis_exporter" {
 # Database Connection Pooling and Authentication
 #############################################
 
-# MySQL connection configuration secret
-resource "kubernetes_secret" "mysql_connection_config" {
+# MySQL connection credentials ExternalSecret
+# This syncs the MySQL password from AWS Secrets Manager to a Kubernetes secret
+# and constructs the proper DSN format with connection parameters
+resource "kubectl_manifest" "mysql_connection_credentials" {
   count = var.enable_mysql_exporter && var.mysql_connection_config != null ? 1 : 0
 
-  metadata {
-    name      = "mysql-connection-config"
-    namespace = var.namespace
-    labels = {
-      app       = "mysql-exporter"
-      component = "config"
-    }
-  }
-
-  data = {
-    dsn = base64encode(
-      "monitoring:${var.mysql_connection_config.password_secret_ref}@tcp(${var.mysql_connection_config.host}:${var.mysql_connection_config.port})/${var.mysql_connection_config.database}?timeout=5s&readTimeout=5s&writeTimeout=5s"
-    )
-    host     = base64encode(var.mysql_connection_config.host)
-    port     = base64encode(tostring(var.mysql_connection_config.port))
-    username = base64encode(var.mysql_connection_config.username)
-    database = base64encode(var.mysql_connection_config.database)
-  }
-
-  type = "Opaque"
-}
-
-# MySQL monitoring setup ConfigMap
-resource "kubernetes_config_map" "mysql_monitoring_setup" {
-  count = var.enable_mysql_exporter ? 1 : 0
-
-  metadata {
-    name      = "mysql-monitoring-setup"
-    namespace = var.namespace
-    labels = {
-      app       = "mysql-exporter"
-      component = "setup"
-    }
-  }
-
-  data = {
-    "setup.sql" = file("${path.module}/files/mysql-monitoring-setup.sql")
-  }
-}
-
-# MySQL monitoring user setup Job
-resource "kubernetes_job" "mysql_monitoring_setup" {
-  count = var.enable_mysql_exporter && var.mysql_connection_config != null ? 1 : 0
-
-  metadata {
-    name      = "mysql-monitoring-setup"
-    namespace = var.namespace
-    labels = {
-      app       = "mysql-exporter"
-      component = "setup"
-    }
-  }
-
-  spec {
-    template {
-      metadata {
-        labels = {
-          app       = "mysql-monitoring-setup"
-          component = "setup"
-        }
-      }
-
-      spec {
-        container {
-          name  = "mysql-setup"
-          image = "mysql:8.0"
-
-          command = [
-            "/bin/bash",
-            "-c",
-            <<-EOT
-              # Replace placeholder with actual password
-              sed "s/MONITORING_PASSWORD_PLACEHOLDER/$MONITORING_PASSWORD/g" /scripts/setup.sql > /tmp/setup.sql
-              
-              # Execute the setup script
-              mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_ROOT_USER -p$MYSQL_ROOT_PASSWORD < /tmp/setup.sql
-              
-              echo "MySQL monitoring user setup completed successfully"
-            EOT
-          ]
-
-          env {
-            name  = "MYSQL_HOST"
-            value = var.mysql_connection_config.host
-          }
-
-          env {
-            name  = "MYSQL_PORT"
-            value = tostring(var.mysql_connection_config.port)
-          }
-
-          env {
-            name  = "MYSQL_ROOT_USER"
-            value = "root"
-          }
-
-          env {
-            name = "MYSQL_ROOT_PASSWORD"
-            value_from {
-              secret_key_ref {
-                name = var.mysql_connection_config.password_secret_ref
-                key  = "password"
-              }
-            }
-          }
-
-          env {
-            name  = "MONITORING_PASSWORD"
-            value = "monitoring_secure_password_${random_password.mysql_monitoring_password[0].result}"
-          }
-
-          volume_mount {
-            name       = "setup-scripts"
-            mount_path = "/scripts"
-            read_only  = true
-          }
-
-          resources {
-            requests = {
-              cpu    = "100m"
-              memory = "128Mi"
-            }
-            limits = {
-              cpu    = "200m"
-              memory = "256Mi"
-            }
-          }
-        }
-
-        volume {
-          name = "setup-scripts"
-          config_map {
-            name = kubernetes_config_map.mysql_monitoring_setup[0].metadata[0].name
-          }
-        }
-
-        restart_policy = "OnFailure"
+  yaml_body = yamlencode({
+    apiVersion = "external-secrets.io/v1beta1"
+    kind       = "ExternalSecret"
+    metadata = {
+      name      = "mysql-connection-credentials"
+      namespace = var.namespace
+      labels = {
+        app       = "mysql-exporter"
+        component = "credentials"
       }
     }
-
-    backoff_limit = 3
-  }
-
-  wait_for_completion = true
-  timeouts {
-    create = "5m"
-    update = "5m"
-  }
-}
-
-# Generate secure password for MySQL monitoring user
-resource "random_password" "mysql_monitoring_password" {
-  count   = var.enable_mysql_exporter ? 1 : 0
-  length  = 32
-  special = true
-}
-
-# Update MySQL exporter secret to use actual connection config
-resource "kubernetes_secret" "mysql_monitoring_user_updated" {
-  count = var.enable_mysql_exporter && var.mysql_connection_config != null ? 1 : 0
-
-  metadata {
-    name      = "mysql-monitoring-credentials"
-    namespace = var.namespace
-    labels = {
-      app       = "mysql-exporter"
-      component = "credentials"
+    spec = {
+      refreshInterval = "1h"
+      secretStoreRef = {
+        name = "aws-sm"
+        kind = "ClusterSecretStore"
+      }
+      target = {
+        name           = "mysql-connection-credentials"
+        creationPolicy = "Owner"
+        template = {
+          engineVersion = "v2"
+          data = {
+            # Construct DSN with proper format: username:password@tcp(host:port)/database?params
+            # Connection parameters:
+            # - timeout: Connection timeout
+            # - readTimeout: I/O read timeout
+            # - writeTimeout: I/O write timeout
+            # - parseTime: Parse DATE and DATETIME to time.Time
+            # - loc: Location for time.Time values
+            # - tls: TLS configuration (skip-verify for Aurora with TLS)
+            # - maxAllowedPacket: Max packet size
+            # - interpolateParams: Interpolate placeholders into query string
+            dsn      = "{{ .username }}:{{ .password }}@tcp(${var.mysql_connection_config.host}:${var.mysql_connection_config.port})/${var.mysql_connection_config.database}?timeout=5s&readTimeout=10s&writeTimeout=10s&parseTime=true&loc=UTC&tls=skip-verify&maxAllowedPacket=67108864&interpolateParams=true"
+            username = "{{ .username }}"
+            password = "{{ .password }}"
+            host     = "${var.mysql_connection_config.host}"
+            port     = "${var.mysql_connection_config.port}"
+            database = "${var.mysql_connection_config.database}"
+          }
+        }
+      }
+      data = [
+        {
+          secretKey = "username"
+          remoteRef = {
+            key      = var.mysql_connection_config.password_secret_ref
+            property = "username"
+          }
+        },
+        {
+          secretKey = "password"
+          remoteRef = {
+            key      = var.mysql_connection_config.password_secret_ref
+            property = "password"
+          }
+        }
+      ]
     }
-  }
-
-  data = {
-    username = base64encode("monitoring")
-    password = base64encode("monitoring_secure_password_${random_password.mysql_monitoring_password[0].result}")
-    dsn = base64encode(
-      "monitoring:monitoring_secure_password_${random_password.mysql_monitoring_password[0].result}@tcp(${var.mysql_connection_config.host}:${var.mysql_connection_config.port})/${var.mysql_connection_config.database}?timeout=5s&readTimeout=5s&writeTimeout=5s"
-    )
-  }
-
-  type = "Opaque"
-
-  depends_on = [kubernetes_job.mysql_monitoring_setup]
-
-  lifecycle {
-    replace_triggered_by = [kubernetes_secret.mysql_monitoring_user]
-  }
+  })
 }
 
-# Redis connection configuration secret
-resource "kubernetes_secret" "redis_connection_config" {
+# Redis connection credentials ExternalSecret
+# This syncs the Redis auth token from AWS Secrets Manager to a Kubernetes secret
+resource "kubectl_manifest" "redis_connection_credentials" {
   count = var.enable_redis_exporter && var.redis_connection_config != null ? 1 : 0
 
-  metadata {
-    name      = "redis-connection-config"
-    namespace = var.namespace
-    labels = {
-      app       = "redis-exporter"
-      component = "config"
+  yaml_body = yamlencode({
+    apiVersion = "external-secrets.io/v1beta1"
+    kind       = "ExternalSecret"
+    metadata = {
+      name      = "redis-connection-credentials"
+      namespace = var.namespace
+      labels = {
+        app       = "redis-exporter"
+        component = "credentials"
+      }
     }
-  }
-
-  data = {
-    host        = base64encode(var.redis_connection_config.host)
-    port        = base64encode(tostring(var.redis_connection_config.port))
-    password    = base64encode(var.redis_connection_config.password_secret_ref)
-    tls_enabled = base64encode(tostring(var.redis_connection_config.tls_enabled))
-  }
-
-  type = "Opaque"
-}
-
-# Update Redis exporter secret to use actual connection config
-resource "kubernetes_secret" "redis_monitoring_credentials_updated" {
-  count = var.enable_redis_exporter && var.redis_connection_config != null ? 1 : 0
-
-  metadata {
-    name      = "redis-monitoring-credentials"
-    namespace = var.namespace
-    labels = {
-      app       = "redis-exporter"
-      component = "credentials"
+    spec = {
+      refreshInterval = "1h"
+      secretStoreRef = {
+        name = "aws-sm"
+        kind = "ClusterSecretStore"
+      }
+      target = {
+        name           = "redis-connection-credentials"
+        creationPolicy = "Owner"
+        template = {
+          engineVersion = "v2"
+          data = {
+            password = "{{ .token | toString }}"
+          }
+        }
+      }
+      data = [
+        {
+          secretKey = "token"
+          remoteRef = {
+            key = var.redis_connection_config.password_secret_ref
+          }
+        }
+      ]
     }
-  }
-
-  data = {
-    password = base64encode(var.redis_connection_config.password_secret_ref)
-  }
-
-  type = "Opaque"
-
-  lifecycle {
-    replace_triggered_by = [kubernetes_secret.redis_monitoring_credentials]
-  }
+  })
 }
 
 #############################################

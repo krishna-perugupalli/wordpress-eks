@@ -151,30 +151,10 @@ resource "aws_iam_role_policy" "grafana" {
 }
 
 #############################################
-# Storage Class for Grafana (if needed)
+# Storage Class for Grafana
+# Note: Using cluster-wide gp3 StorageClass created in parent module
+# No custom StorageClass needed - removed to use cluster default
 #############################################
-resource "kubernetes_storage_class" "grafana" {
-  count = var.grafana_storage_class == "grafana-gp3" ? 1 : 0
-
-  metadata {
-    name = "grafana-gp3"
-    annotations = {
-      "storageclass.kubernetes.io/is-default-class" = "false"
-    }
-  }
-
-  storage_provisioner    = "ebs.csi.aws.com"
-  reclaim_policy         = "Retain"
-  volume_binding_mode    = "WaitForFirstConsumer"
-  allow_volume_expansion = true
-
-  parameters = {
-    type      = "gp3"
-    encrypted = "true"
-    kmsKeyId  = var.kms_key_arn != null ? var.kms_key_arn : ""
-    fsType    = "ext4"
-  }
-}
 
 #############################################
 # ConfigMap for Grafana Data Sources
@@ -558,8 +538,23 @@ resource "helm_release" "grafana" {
         }
       ]
 
-      # Pod anti-affinity for HA
+      # Pod anti-affinity for HA and node affinity for Karpenter nodes
       affinity = {
+        nodeAffinity = {
+          requiredDuringSchedulingIgnoredDuringExecution = {
+            nodeSelectorTerms = [
+              {
+                matchExpressions = [
+                  {
+                    key      = "karpenter.sh/capacity-type"
+                    operator = "In"
+                    values   = ["on-demand", "spot"]
+                  }
+                ]
+              }
+            ]
+          }
+        }
         podAntiAffinity = {
           preferredDuringSchedulingIgnoredDuringExecution = [
             {
@@ -609,7 +604,6 @@ resource "helm_release" "grafana" {
   depends_on = [
     aws_iam_role_policy.grafana,
     kubernetes_secret.grafana_admin,
-    kubernetes_config_map.grafana_datasources,
-    kubernetes_storage_class.grafana
+    kubernetes_config_map.grafana_datasources
   ]
 }

@@ -295,7 +295,7 @@ resource "kubectl_manifest" "cost_monitoring_deployment" {
               image = "python:3.11-slim"
               command = ["/bin/bash", "-c"]
               args = [
-                "pip install --no-cache-dir boto3 prometheus_client pyyaml && python /app/exporter.py"
+                "pip install --no-cache-dir boto3==1.34.0 prometheus_client==0.19.0 pyyaml==6.0.1 || { echo 'Failed to install Python dependencies'; exit 1; } && python /app/exporter.py"
               ]
               ports = [
                 {
@@ -336,12 +336,12 @@ resource "kubectl_manifest" "cost_monitoring_deployment" {
               ]
               resources = {
                 requests = {
-                  cpu    = "200m"
-                  memory = "256Mi"
+                  cpu    = "100m"
+                  memory = "128Mi"
                 }
                 limits = {
-                  cpu    = "500m"
-                  memory = "512Mi"
+                  cpu    = "200m"
+                  memory = "256Mi"
                 }
               }
               livenessProbe = {
@@ -359,7 +359,7 @@ resource "kubectl_manifest" "cost_monitoring_deployment" {
                   path = "/metrics"
                   port = 9090
                 }
-                initialDelaySeconds = 30
+                initialDelaySeconds = 60
                 periodSeconds       = 30
                 timeoutSeconds      = 10
                 failureThreshold    = 3

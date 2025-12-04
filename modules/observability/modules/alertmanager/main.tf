@@ -410,30 +410,10 @@ resource "kubernetes_config_map" "alertmanager_config" {
 }
 
 #############################################
-# Storage Class for AlertManager (if needed)
+# Storage Class for AlertManager
+# Note: Using cluster-wide gp3 StorageClass created in storage-class.tf
+# Custom StorageClass creation removed - using cluster default
 #############################################
-resource "kubernetes_storage_class" "alertmanager" {
-  count = var.alertmanager_storage_class == "alertmanager-gp3" ? 1 : 0
-
-  metadata {
-    name = "alertmanager-gp3"
-    annotations = {
-      "storageclass.kubernetes.io/is-default-class" = "false"
-    }
-  }
-
-  storage_provisioner    = "ebs.csi.aws.com"
-  reclaim_policy         = "Retain"
-  volume_binding_mode    = "WaitForFirstConsumer"
-  allow_volume_expansion = true
-
-  parameters = {
-    type      = "gp3"
-    encrypted = "true"
-    kmsKeyId  = var.kms_key_arn != null ? var.kms_key_arn : ""
-    fsType    = "ext4"
-  }
-}
 
 #############################################
 # AlertManager Helm Release
@@ -734,8 +714,23 @@ resource "helm_release" "alertmanager" {
         }
       ]
 
-      # Affinity for HA deployment
+      # Affinity for HA deployment and node affinity for Karpenter nodes
       affinity = {
+        nodeAffinity = {
+          requiredDuringSchedulingIgnoredDuringExecution = {
+            nodeSelectorTerms = [
+              {
+                matchExpressions = [
+                  {
+                    key      = "karpenter.sh/capacity-type"
+                    operator = "In"
+                    values   = ["on-demand", "spot"]
+                  }
+                ]
+              }
+            ]
+          }
+        }
         podAntiAffinity = {
           preferredDuringSchedulingIgnoredDuringExecution = [
             {
@@ -785,7 +780,6 @@ resource "helm_release" "alertmanager" {
   depends_on = [
     aws_iam_role_policy.alertmanager,
     kubernetes_secret.alertmanager_notifications,
-    kubernetes_config_map.alertmanager_config,
-    kubernetes_storage_class.alertmanager
+    kubernetes_config_map.alertmanager_config
   ]
 }

@@ -561,12 +561,12 @@ resource "kubectl_manifest" "cloudwatch_exporter_deployment" {
               ]
               resources = {
                 requests = {
-                  cpu    = "200m"
-                  memory = "256Mi"
+                  cpu    = "100m"
+                  memory = "128Mi"
                 }
                 limits = {
-                  cpu    = "500m"
-                  memory = "512Mi"
+                  cpu    = "200m"
+                  memory = "256Mi"
                 }
               }
               livenessProbe = {
@@ -605,6 +605,12 @@ resource "kubectl_manifest" "cloudwatch_exporter_deployment" {
               name = "config"
               configMap = {
                 name = kubernetes_config_map.cloudwatch_exporter_config[0].metadata[0].name
+                items = [
+                  {
+                    key  = "config.yml"
+                    path = "config.yml"
+                  }
+                ]
               }
             }
           ]

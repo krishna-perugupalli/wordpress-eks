@@ -59,12 +59,12 @@ output "monitoring_credentials" {
   value = {
     mysql_secret_name = var.enable_mysql_exporter ? (
       var.mysql_connection_config != null ?
-      kubernetes_secret.mysql_monitoring_user_updated[0].metadata[0].name :
+      "mysql-connection-credentials" :
       kubernetes_secret.mysql_monitoring_user[0].metadata[0].name
     ) : null
     redis_secret_name = var.enable_redis_exporter ? (
       var.redis_connection_config != null ?
-      kubernetes_secret.redis_monitoring_credentials_updated[0].metadata[0].name :
+      "redis-connection-credentials" :
       kubernetes_secret.redis_monitoring_credentials[0].metadata[0].name
     ) : null
   }

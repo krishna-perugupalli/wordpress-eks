@@ -119,30 +119,10 @@ resource "aws_iam_role_policy" "prometheus" {
 }
 
 #############################################
-# Storage Class for Prometheus (if needed)
+# Storage Class for Prometheus
+# Note: Using cluster-wide gp3 StorageClass created in storage-class.tf
+# No custom StorageClass needed - removed to use cluster default
 #############################################
-resource "kubernetes_storage_class" "prometheus" {
-  count = var.prometheus_storage_class == "prometheus-gp3" ? 1 : 0
-
-  metadata {
-    name = "prometheus-gp3"
-    annotations = {
-      "storageclass.kubernetes.io/is-default-class" = "false"
-    }
-  }
-
-  storage_provisioner    = "ebs.csi.aws.com"
-  reclaim_policy         = "Retain"
-  volume_binding_mode    = "WaitForFirstConsumer"
-  allow_volume_expansion = true
-
-  parameters = {
-    type      = "gp3"
-    encrypted = "true"
-    kmsKeyId  = var.kms_key_arn != null ? var.kms_key_arn : ""
-    fsType    = "ext4"
-  }
-}
 
 #############################################
 # kube-prometheus-stack Helm Release
@@ -151,7 +131,7 @@ resource "helm_release" "kube_prometheus_stack" {
   name       = "prometheus"
   repository = "https://prometheus-community.github.io/helm-charts"
   chart      = "kube-prometheus-stack"
-  version    = "61.3.2" # Latest stable version
+  version    = "77.1.0" # Kubernetes 1.33 compatible - includes Prometheus Operator v0.83.0+, kube-state-metrics v2.14.0+, Prometheus v3.1.0+
   namespace  = var.namespace
 
   # Wait for CRDs to be ready
@@ -218,8 +198,23 @@ resource "helm_release" "kube_prometheus_stack" {
             }
           ]
 
-          # Pod anti-affinity for HA
+          # Pod anti-affinity for HA and node affinity for Karpenter nodes
           affinity = {
+            nodeAffinity = {
+              requiredDuringSchedulingIgnoredDuringExecution = {
+                nodeSelectorTerms = [
+                  {
+                    matchExpressions = [
+                      {
+                        key      = "karpenter.sh/capacity-type"
+                        operator = "In"
+                        values   = ["on-demand", "spot"]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
             podAntiAffinity = {
               preferredDuringSchedulingIgnoredDuringExecution = [
                 {
@@ -448,7 +443,6 @@ resource "helm_release" "kube_prometheus_stack" {
   ]
 
   depends_on = [
-    aws_iam_role_policy.prometheus,
-    kubernetes_storage_class.prometheus
+    aws_iam_role_policy.prometheus
   ]
 }
