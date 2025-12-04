@@ -563,11 +563,10 @@ resource "kubernetes_network_policy" "grafana_ingress" {
 #############################################
 # Pod Security Standards (PSS)
 #############################################
-
-# PSS replaced PodSecurityPolicy in Kubernetes 1.25+
-# Enforces security policies at the namespace level using labels
-# Three modes: enforce (blocks), audit (logs), warn (shows warnings)
-# Three levels: privileged, baseline, restricted
+# NOTE: Using "privileged" for observability namespace because:
+# - Audit collector DaemonSet requires hostPath volumes to read /var/log
+# - Monitoring components need host-level access for metrics collection
+# - This is a dedicated monitoring namespace with controlled access
 
 resource "kubernetes_labels" "namespace_pss" {
   api_version = "v1"
@@ -577,16 +576,17 @@ resource "kubernetes_labels" "namespace_pss" {
   }
 
   labels = {
-    # Use baseline to allow DaemonSets with host access
-    "pod-security.kubernetes.io/enforce" = "baseline"
+    # Use privileged for monitoring namespace that needs host access
+    # This is required for DaemonSets that need hostPath volumes
+    "pod-security.kubernetes.io/enforce" = "privileged"
     "pod-security.kubernetes.io/enforce-version" = "latest"
     
     # Audit mode logs violations without blocking
-    "pod-security.kubernetes.io/audit" = "baseline"
+    "pod-security.kubernetes.io/audit" = "privileged"
     "pod-security.kubernetes.io/audit-version" = "latest"
     
     # Warn mode shows warnings to users
-    "pod-security.kubernetes.io/warn" = "baseline"
+    "pod-security.kubernetes.io/warn" = "privileged"
     "pod-security.kubernetes.io/warn-version" = "latest"
   }
 }
