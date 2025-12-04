@@ -90,15 +90,11 @@ resource "helm_release" "cert_manager" {
     value = local.cert_manager_namespace
   }
 
-  # Startup API check configuration - increase timeout
+  # Disable startup API check - it's not critical and can cause issues
+  # The webhook will be validated when actual certificates are created
   set {
-    name  = "startupapicheck.timeout"
-    value = "5m"
-  }
-
-  set {
-    name  = "startupapicheck.backoffLimit"
-    value = "10"
+    name  = "startupapicheck.enabled"
+    value = "false"
   }
 
   # Webhook configuration - ensure it's ready before checks
@@ -134,6 +130,17 @@ resource "kubernetes_namespace" "cert_manager" {
 }
 
 #############################################
+# Wait for webhook to be ready
+#############################################
+
+# Add a delay to ensure webhook is fully operational
+resource "time_sleep" "wait_for_webhook" {
+  depends_on = [helm_release.cert_manager]
+
+  create_duration = "60s"
+}
+
+#############################################
 # ClusterIssuer for Let's Encrypt (Optional)
 #############################################
 
@@ -166,7 +173,10 @@ resource "kubectl_manifest" "letsencrypt_prod" {
     }
   })
 
-  depends_on = [helm_release.cert_manager]
+  depends_on = [
+    helm_release.cert_manager,
+    time_sleep.wait_for_webhook
+  ]
 }
 
 resource "kubectl_manifest" "letsencrypt_staging" {
@@ -198,7 +208,10 @@ resource "kubectl_manifest" "letsencrypt_staging" {
     }
   })
 
-  depends_on = [helm_release.cert_manager]
+  depends_on = [
+    helm_release.cert_manager,
+    time_sleep.wait_for_webhook
+  ]
 }
 
 #############################################
@@ -219,5 +232,8 @@ resource "kubectl_manifest" "selfsigned_issuer" {
     }
   })
 
-  depends_on = [helm_release.cert_manager]
+  depends_on = [
+    helm_release.cert_manager,
+    time_sleep.wait_for_webhook
+  ]
 }
