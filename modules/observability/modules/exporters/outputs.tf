@@ -74,7 +74,7 @@ output "monitoring_credentials" {
 output "cloudwatch_exporter" {
   description = "CloudWatch exporter deployment information"
   value = var.enable_cloudwatch_exporter ? {
-    deployment_name          = kubernetes_deployment.cloudwatch_exporter[0].metadata[0].name
+    deployment_name          = "cloudwatch-exporter"
     service_name             = kubernetes_service.cloudwatch_exporter[0].metadata[0].name
     namespace                = var.namespace
     metrics_port             = 9106
@@ -88,7 +88,7 @@ output "cloudwatch_exporter" {
 output "cost_monitoring" {
   description = "Cost monitoring deployment information"
   value = var.enable_cost_monitoring ? {
-    deployment_name = kubernetes_deployment.cost_monitoring[0].metadata[0].name
+    deployment_name = "cost-monitoring"
     service_name    = kubernetes_service.cost_monitoring[0].metadata[0].name
     namespace       = var.namespace
     metrics_port    = 9090
