@@ -253,167 +253,162 @@ resource "kubernetes_config_map" "cost_exporter_script" {
 }
 
 # Cost Monitoring Deployment
-resource "kubernetes_deployment" "cost_monitoring" {
+resource "kubectl_manifest" "cost_monitoring_deployment" {
   count = var.enable_cost_monitoring ? 1 : 0
 
-  metadata {
-    name      = "cost-monitoring"
-    namespace = var.namespace
-    labels = {
-      app       = "cost-monitoring"
-      component = "metrics"
-      version   = "v1.0.0"
-    }
-  }
-
-  spec {
-    replicas = 1
-    selector {
-      match_labels = {
-        app = "cost-monitoring"
+  yaml_body = yamlencode({
+    apiVersion = "apps/v1"
+    kind       = "Deployment"
+    metadata = {
+      name      = "cost-monitoring"
+      namespace = var.namespace
+      labels = {
+        app       = "cost-monitoring"
+        component = "metrics"
+        version   = "v1.0.0"
       }
     }
-
-    template {
-      metadata {
-        labels = {
-          app       = "cost-monitoring"
-          component = "metrics"
-        }
-        annotations = {
-          "prometheus.io/scrape" = "true"
-          "prometheus.io/port"   = "9090"
-          "prometheus.io/path"   = "/metrics"
+    spec = {
+      replicas = 1
+      selector = {
+        matchLabels = {
+          app = "cost-monitoring"
         }
       }
-
-      spec {
-        service_account_name = kubernetes_service_account.cost_monitoring[0].metadata[0].name
-
-        container {
-          name  = "cost-exporter"
-          image = "python:3.11-slim"
-
-          command = ["/bin/bash", "-c"]
-          args = [
-            <<-EOT
-            pip install --no-cache-dir boto3 prometheus_client pyyaml && \
-            python /app/exporter.py
-            EOT
+      template = {
+        metadata = {
+          labels = {
+            app       = "cost-monitoring"
+            component = "metrics"
+          }
+          annotations = {
+            "prometheus.io/scrape" = "true"
+            "prometheus.io/port"   = "9090"
+            "prometheus.io/path"   = "/metrics"
+          }
+        }
+        spec = {
+          serviceAccountName = kubernetes_service_account.cost_monitoring[0].metadata[0].name
+          containers = [
+            {
+              name  = "cost-exporter"
+              image = "python:3.11-slim"
+              command = ["/bin/bash", "-c"]
+              args = [
+                "pip install --no-cache-dir boto3 prometheus_client pyyaml && python /app/exporter.py"
+              ]
+              ports = [
+                {
+                  name          = "metrics"
+                  containerPort = 9090
+                  protocol      = "TCP"
+                }
+              ]
+              env = [
+                {
+                  name  = "AWS_REGION"
+                  value = var.region
+                },
+                {
+                  name  = "AWS_SDK_LOAD_CONFIG"
+                  value = "true"
+                },
+                {
+                  name  = "CONFIG_FILE"
+                  value = "/config/config.yaml"
+                },
+                {
+                  name  = "METRICS_PORT"
+                  value = "9090"
+                }
+              ]
+              volumeMounts = [
+                {
+                  name      = "config"
+                  mountPath = "/config"
+                  readOnly  = true
+                },
+                {
+                  name      = "app"
+                  mountPath = "/app"
+                  readOnly  = true
+                }
+              ]
+              resources = {
+                requests = {
+                  cpu    = "200m"
+                  memory = "256Mi"
+                }
+                limits = {
+                  cpu    = "500m"
+                  memory = "512Mi"
+                }
+              }
+              livenessProbe = {
+                httpGet = {
+                  path = "/metrics"
+                  port = 9090
+                }
+                initialDelaySeconds = 60
+                periodSeconds       = 60
+                timeoutSeconds      = 10
+                failureThreshold    = 3
+              }
+              readinessProbe = {
+                httpGet = {
+                  path = "/metrics"
+                  port = 9090
+                }
+                initialDelaySeconds = 30
+                periodSeconds       = 30
+                timeoutSeconds      = 10
+                failureThreshold    = 3
+              }
+              securityContext = {
+                runAsNonRoot             = true
+                runAsUser                = 65534
+                readOnlyRootFilesystem   = false
+                allowPrivilegeEscalation = false
+                capabilities = {
+                  drop = ["ALL"]
+                }
+              }
+            }
           ]
-
-          port {
-            name           = "metrics"
-            container_port = 9090
-            protocol       = "TCP"
-          }
-
-          env {
-            name  = "AWS_REGION"
-            value = var.region
-          }
-
-          env {
-            name  = "AWS_SDK_LOAD_CONFIG"
-            value = "true"
-          }
-
-          env {
-            name  = "CONFIG_FILE"
-            value = "/config/config.yaml"
-          }
-
-          env {
-            name  = "METRICS_PORT"
-            value = "9090"
-          }
-
-          volume_mount {
-            name       = "config"
-            mount_path = "/config"
-            read_only  = true
-          }
-
-          volume_mount {
-            name       = "app"
-            mount_path = "/app"
-            read_only  = true
-          }
-
-          resources {
-            requests = {
-              cpu    = "200m"
-              memory = "256Mi"
+          volumes = [
+            {
+              name = "config"
+              configMap = {
+                name = kubernetes_config_map.cost_monitoring_config[0].metadata[0].name
+                items = [
+                  {
+                    key  = "config.yaml"
+                    path = "config.yaml"
+                  }
+                ]
+              }
+            },
+            {
+              name = "app"
+              configMap = {
+                name = kubernetes_config_map.cost_exporter_script[0].metadata[0].name
+                items = [
+                  {
+                    key  = "exporter.py"
+                    path = "exporter.py"
+                  }
+                ]
+              }
             }
-            limits = {
-              cpu    = "500m"
-              memory = "512Mi"
-            }
+          ]
+          securityContext = {
+            fsGroup = 65534
           }
-
-          liveness_probe {
-            http_get {
-              path = "/metrics"
-              port = 9090
-            }
-            initial_delay_seconds = 60
-            period_seconds        = 60
-            timeout_seconds       = 10
-            failure_threshold     = 3
-          }
-
-          readiness_probe {
-            http_get {
-              path = "/metrics"
-              port = 9090
-            }
-            initial_delay_seconds = 30
-            period_seconds        = 30
-            timeout_seconds       = 10
-            failure_threshold     = 3
-          }
-
-          security_context {
-            run_as_non_root            = true
-            run_as_user                = 65534
-            read_only_root_filesystem  = false
-            allow_privilege_escalation = false
-            capabilities {
-              drop = ["ALL"]
-            }
-          }
+          restartPolicy = "Always"
         }
-
-        volume {
-          name = "config"
-          config_map {
-            name = kubernetes_config_map.cost_monitoring_config[0].metadata[0].name
-            items {
-              key  = "config.yaml"
-              path = "config.yaml"
-            }
-          }
-        }
-
-        volume {
-          name = "app"
-          config_map {
-            name = kubernetes_config_map.cost_exporter_script[0].metadata[0].name
-            items {
-              key  = "exporter.py"
-              path = "exporter.py"
-            }
-          }
-        }
-
-        security_context {
-          fs_group = 65534
-        }
-
-        restart_policy = "Always"
       }
     }
-  }
+  })
 }
 
 # Cost Monitoring Service

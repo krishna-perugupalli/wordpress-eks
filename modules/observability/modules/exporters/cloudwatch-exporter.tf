@@ -492,133 +492,130 @@ resource "kubernetes_config_map" "cloudwatch_exporter_config" {
 }
 
 # CloudWatch Exporter Deployment
-resource "kubernetes_deployment" "cloudwatch_exporter" {
+resource "kubectl_manifest" "cloudwatch_exporter_deployment" {
   count = var.enable_cloudwatch_exporter ? 1 : 0
 
-  metadata {
-    name      = "cloudwatch-exporter"
-    namespace = var.namespace
-    labels = {
-      app       = "cloudwatch-exporter"
-      component = "metrics"
-      version   = "v0.15.5"
-    }
-  }
-
-  spec {
-    replicas = 1
-    selector {
-      match_labels = {
-        app = "cloudwatch-exporter"
+  yaml_body = yamlencode({
+    apiVersion = "apps/v1"
+    kind       = "Deployment"
+    metadata = {
+      name      = "cloudwatch-exporter"
+      namespace = var.namespace
+      labels = {
+        app       = "cloudwatch-exporter"
+        component = "metrics"
+        version   = "v0.15.5"
       }
     }
-
-    template {
-      metadata {
-        labels = {
-          app       = "cloudwatch-exporter"
-          component = "metrics"
-        }
-        annotations = {
-          "prometheus.io/scrape" = "true"
-          "prometheus.io/port"   = "9106"
-          "prometheus.io/path"   = "/metrics"
+    spec = {
+      replicas = 1
+      selector = {
+        matchLabels = {
+          app = "cloudwatch-exporter"
         }
       }
-
-      spec {
-        service_account_name = kubernetes_service_account.cloudwatch_exporter[0].metadata[0].name
-
-        container {
-          name  = "cloudwatch-exporter"
-          image = "prom/cloudwatch-exporter:v0.15.5"
-
-          args = [
-            "--config.file=/config/config.yml"
+      template = {
+        metadata = {
+          labels = {
+            app       = "cloudwatch-exporter"
+            component = "metrics"
+          }
+          annotations = {
+            "prometheus.io/scrape" = "true"
+            "prometheus.io/port"   = "9106"
+            "prometheus.io/path"   = "/metrics"
+          }
+        }
+        spec = {
+          serviceAccountName = kubernetes_service_account.cloudwatch_exporter[0].metadata[0].name
+          containers = [
+            {
+              name  = "cloudwatch-exporter"
+              image = "prom/cloudwatch-exporter:v0.15.5"
+              args = [
+                "--config.file=/config/config.yml"
+              ]
+              ports = [
+                {
+                  name          = "metrics"
+                  containerPort = 9106
+                  protocol      = "TCP"
+                }
+              ]
+              env = [
+                {
+                  name  = "AWS_REGION"
+                  value = var.region
+                },
+                {
+                  name  = "AWS_SDK_LOAD_CONFIG"
+                  value = "true"
+                }
+              ]
+              volumeMounts = [
+                {
+                  name      = "config"
+                  mountPath = "/config"
+                  readOnly  = true
+                }
+              ]
+              resources = {
+                requests = {
+                  cpu    = "200m"
+                  memory = "256Mi"
+                }
+                limits = {
+                  cpu    = "500m"
+                  memory = "512Mi"
+                }
+              }
+              livenessProbe = {
+                httpGet = {
+                  path = "/metrics"
+                  port = 9106
+                }
+                initialDelaySeconds = 30
+                periodSeconds       = 30
+                timeoutSeconds      = 10
+                failureThreshold    = 3
+              }
+              readinessProbe = {
+                httpGet = {
+                  path = "/metrics"
+                  port = 9106
+                }
+                initialDelaySeconds = 5
+                periodSeconds       = 10
+                timeoutSeconds      = 5
+                failureThreshold    = 3
+              }
+              securityContext = {
+                runAsNonRoot             = true
+                runAsUser                = 65534
+                readOnlyRootFilesystem   = true
+                allowPrivilegeEscalation = false
+                capabilities = {
+                  drop = ["ALL"]
+                }
+              }
+            }
           ]
-
-          port {
-            name           = "metrics"
-            container_port = 9106
-            protocol       = "TCP"
-          }
-
-          env {
-            name  = "AWS_REGION"
-            value = var.region
-          }
-
-          # Use IRSA for AWS credentials
-          env {
-            name  = "AWS_SDK_LOAD_CONFIG"
-            value = "true"
-          }
-
-          volume_mount {
-            name       = "config"
-            mount_path = "/config"
-            read_only  = true
-          }
-
-          resources {
-            requests = {
-              cpu    = "200m"
-              memory = "256Mi"
+          volumes = [
+            {
+              name = "config"
+              configMap = {
+                name = kubernetes_config_map.cloudwatch_exporter_config[0].metadata[0].name
+              }
             }
-            limits = {
-              cpu    = "500m"
-              memory = "512Mi"
-            }
+          ]
+          securityContext = {
+            fsGroup = 65534
           }
-
-          liveness_probe {
-            http_get {
-              path = "/metrics"
-              port = 9106
-            }
-            initial_delay_seconds = 30
-            period_seconds        = 30
-            timeout_seconds       = 10
-            failure_threshold     = 3
-          }
-
-          readiness_probe {
-            http_get {
-              path = "/metrics"
-              port = 9106
-            }
-            initial_delay_seconds = 5
-            period_seconds        = 10
-            timeout_seconds       = 5
-            failure_threshold     = 3
-          }
-
-          security_context {
-            run_as_non_root            = true
-            run_as_user                = 65534
-            read_only_root_filesystem  = true
-            allow_privilege_escalation = false
-            capabilities {
-              drop = ["ALL"]
-            }
-          }
+          restartPolicy = "Always"
         }
-
-        volume {
-          name = "config"
-          config_map {
-            name = kubernetes_config_map.cloudwatch_exporter_config[0].metadata[0].name
-          }
-        }
-
-        security_context {
-          fs_group = 65534
-        }
-
-        restart_policy = "Always"
       }
     }
-  }
+  })
 }
 
 # CloudWatch Exporter Service
