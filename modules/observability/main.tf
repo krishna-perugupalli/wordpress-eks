@@ -97,8 +97,7 @@ module "prometheus" {
   tags        = var.tags
 
   depends_on = [
-    kubernetes_namespace.ns,
-    module.exporters
+    kubernetes_namespace.ns
   ]
 }
 
@@ -217,7 +216,10 @@ module "exporters" {
   kms_key_arn = var.kms_key_arn
   tags        = var.tags
 
-  depends_on = [kubernetes_namespace.ns]
+  depends_on = [
+    kubernetes_namespace.ns,
+    module.prometheus
+  ]
 }
 
 #############################################
