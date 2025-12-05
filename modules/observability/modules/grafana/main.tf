@@ -173,13 +173,13 @@ resource "kubernetes_config_map" "grafana_datasources" {
         var.prometheus_url != null ? [{
           name      = "Prometheus"
           type      = "prometheus"
-          access    = "proxy"
+          access    = "proxy" # Grafana backend makes requests
           url       = var.prometheus_url
           isDefault = true
           editable  = false
           jsonData = {
             timeInterval = "30s"
-            httpMethod   = "POST"
+            httpMethod   = "POST" # Better performance
           }
         }] : [],
         # CloudWatch data source (if enabled)
@@ -327,13 +327,13 @@ resource "helm_release" "grafana" {
             var.prometheus_url != null ? [{
               name      = "Prometheus"
               type      = "prometheus"
-              access    = "proxy"
+              access    = "proxy" # Grafana backend makes requests
               url       = var.prometheus_url
               isDefault = true
               editable  = false
               jsonData = {
                 timeInterval = "30s"
-                httpMethod   = "POST"
+                httpMethod   = "POST" # Better performance
               }
             }] : [],
             var.enable_cloudwatch_datasource ? [{
@@ -515,11 +515,12 @@ resource "helm_release" "grafana" {
       replicas = var.grafana_replica_count
 
       # Topology spread constraints for multi-AZ deployment
+      # Relaxed for small clusters to allow scheduling
       topologySpreadConstraints = [
         {
-          maxSkew           = 1
+          maxSkew           = 2 # Increased from 1 for small clusters
           topologyKey       = "topology.kubernetes.io/zone"
-          whenUnsatisfiable = "DoNotSchedule"
+          whenUnsatisfiable = "ScheduleAnyway" # Changed from DoNotSchedule to allow scheduling
           labelSelector = {
             matchLabels = {
               "app.kubernetes.io/name" = "grafana"
@@ -538,12 +539,14 @@ resource "helm_release" "grafana" {
         }
       ]
 
-      # Pod anti-affinity for HA and node affinity for Karpenter nodes
+      # Pod anti-affinity for HA - node affinity relaxed to allow scheduling on any worker node
       affinity = {
         nodeAffinity = {
-          requiredDuringSchedulingIgnoredDuringExecution = {
-            nodeSelectorTerms = [
-              {
+          # Changed to preferred (not required) to allow scheduling on any worker node
+          preferredDuringSchedulingIgnoredDuringExecution = [
+            {
+              weight = 100
+              preference = {
                 matchExpressions = [
                   {
                     key      = "karpenter.sh/capacity-type"
@@ -552,8 +555,8 @@ resource "helm_release" "grafana" {
                   }
                 ]
               }
-            ]
-          }
+            }
+          ]
         }
         podAntiAffinity = {
           preferredDuringSchedulingIgnoredDuringExecution = [
@@ -575,6 +578,15 @@ resource "helm_release" "grafana" {
           ]
         }
       }
+
+      # Tolerations to avoid scheduling on control plane nodes
+      tolerations = [
+        {
+          key      = "node-role.kubernetes.io/control-plane"
+          operator = "Exists"
+          effect   = "NoSchedule"
+        }
+      ]
 
       # Liveness and readiness probes for automatic recovery
       livenessProbe = {

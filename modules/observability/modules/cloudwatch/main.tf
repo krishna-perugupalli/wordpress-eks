@@ -47,155 +47,7 @@ resource "aws_cloudwatch_log_group" "host" {
   tags              = var.tags
 }
 
-#############################################
-# Fluent Bit ConfigMap
-#############################################
-resource "kubernetes_config_map" "fluentbit_config" {
-  count = var.install_fluent_bit ? 1 : 0
-  metadata {
-    name      = "fluent-bit-config"
-    namespace = var.namespace
-  }
-
-  data = {
-    "fluent-bit.conf" = <<-EOT
-      [SERVICE]
-          Flush         5
-          Daemon        off
-          Log_Level     info
-          Parsers_File  parsers.conf
-
-      [INPUT]
-          Name              tail
-          Tag               kube.*
-          Path              /var/log/containers/*.log
-          Parser            docker
-          DB                /var/log/flb_kube.db
-          Mem_Buf_Limit     5MB
-          Skip_Long_Lines   On
-          Refresh_Interval  10
-
-      [INPUT]
-          Name              tail
-          Tag               dataplane.kube-proxy
-          Path              /var/log/containers/kube-proxy*.log
-          Parser            docker
-          DB                /var/log/flb_dataplane_kube-proxy.db
-          Mem_Buf_Limit     5MB
-          Skip_Long_Lines   On
-          Refresh_Interval  10
-
-      [INPUT]
-          Name              tail
-          Tag               dataplane.aws-node
-          Path              /var/log/containers/aws-node*.log
-          Parser            docker
-          DB                /var/log/flb_dataplane_aws-node.db
-          Mem_Buf_Limit     5MB
-          Skip_Long_Lines   On
-          Refresh_Interval  10
-
-      [INPUT]
-          Name              tail
-          Tag               dataplane.coredns
-          Path              /var/log/containers/coredns*.log
-          Parser            docker
-          DB                /var/log/flb_dataplane_coredns.db
-          Mem_Buf_Limit     5MB
-          Skip_Long_Lines   On
-          Refresh_Interval  10
-
-      [INPUT]
-          Name              tail
-          Tag               host.messages
-          Path              /var/log/messages
-          Parser            syslog
-          DB                /var/log/flb_host_messages.db
-          Mem_Buf_Limit     5MB
-          Skip_Long_Lines   On
-          Refresh_Interval  10
-
-      [INPUT]
-          Name              tail
-          Tag               host.secure
-          Path              /var/log/secure
-          Parser            syslog
-          DB                /var/log/flb_host_secure.db
-          Mem_Buf_Limit     5MB
-          Skip_Long_Lines   On
-          Refresh_Interval  10
-
-      [INPUT]
-          Name              tail
-          Tag               host.dmesg
-          Path              /var/log/dmesg
-          Parser            syslog
-          DB                /var/log/flb_host_dmesg.db
-          Mem_Buf_Limit     5MB
-          Skip_Long_Lines   On
-          Refresh_Interval  10
-
-      [FILTER]
-          Name                kubernetes
-          Match               kube.*
-          Kube_URL            https://kubernetes.default.svc:443
-          Kube_CA_File        /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-          Kube_Token_File     /var/run/secrets/kubernetes.io/serviceaccount/token
-          Kube_Tag_Prefix     kube.var.log.containers.
-          Merge_Log           On
-          Keep_Log            Off
-          K8S-Logging.Parser  On
-          K8S-Logging.Exclude On
-
-      [OUTPUT]
-          Name                  cloudwatch
-          Match                 kube.*
-          region                ${var.region}
-          log_group_name        ${local.lg_app}
-          log_stream_prefix     app
-          auto_create_group     true
-
-      [OUTPUT]
-          Name                  cloudwatch
-          Match                 dataplane.*
-          region                ${var.region}
-          log_group_name        ${local.lg_dataplane}
-          log_stream_prefix     dataplane
-          auto_create_group     true
-
-      [OUTPUT]
-          Name                  cloudwatch
-          Match                 host.*
-          region                ${var.region}
-          log_group_name        ${local.lg_host}
-          log_stream_prefix     host
-          auto_create_group     true
-    EOT
-
-    "parsers.conf" = <<-EOT
-      [PARSER]
-          Name        docker
-          Format      json
-          Time_Key    time
-          Time_Format %Y-%m-%dT%H:%M:%S.%LZ
-          Time_Keep   On
-
-      [PARSER]
-          Name        syslog
-          Format      regex
-          Regex       ^(?<time>[^ ]* {1,2}[^ ]* [^ ]*) (?<host>[^ ]*) (?<ident>[a-zA-Z0-9_\/\.\-]*)(?:\[(?<pid>[0-9]+)\])?(?:[^\:]*\:)? *(?<message>.*)$
-          Time_Key    time
-          Time_Format %b %d %H:%M:%S
-
-      [PARSER]
-          Name        json
-          Format      json
-          Time_Key    time
-          Time_Format %Y-%m-%dT%H:%M:%S.%LZ
-          Time_Keep   On
-    EOT
-  }
-}
+# Note: Fluent Bit ConfigMap removed - using Helm chart's built-in configuration instead
 
 #############################################
 # IRSA: CloudWatch Agent (metrics)
@@ -357,7 +209,7 @@ resource "helm_release" "fluentbit" {
   namespace  = var.namespace
   repository = "https://aws.github.io/eks-charts"
   chart      = "aws-for-fluent-bit"
-  version    = "0.1.32"
+  version    = "0.1.34"
 
   set {
     name  = "serviceAccount.create"
@@ -368,91 +220,114 @@ resource "helm_release" "fluentbit" {
     value = "fluent-bit"
   }
 
-  # Disable default CloudWatch configuration (we use custom ConfigMap)
-  set {
-    name  = "cloudWatch.enabled"
-    value = "false"
-  }
-  set {
-    name  = "cloudWatchLogs.enabled"
-    value = "false"
-  }
-
-  # Use custom ConfigMap for configuration
-  set {
-    name  = "existingConfigMap"
-    value = kubernetes_config_map.fluentbit_config[0].metadata[0].name
-  }
-
-  # Configure volume mounts for custom config
+  # Use Helm chart's built-in CloudWatch Logs configuration
   values = [yamlencode({
-    config = {
-      # Reference the ConfigMap files
-      service       = kubernetes_config_map.fluentbit_config[0].data["fluent-bit.conf"]
-      customParsers = kubernetes_config_map.fluentbit_config[0].data["parsers.conf"]
+    # CloudWatch Logs configuration for application logs
+    cloudWatchLogs = {
+      enabled         = true
+      match           = "kube.*"
+      region          = var.region
+      logGroupName    = local.lg_app
+      logStreamPrefix = "app"
+      autoCreateGroup = true
     }
-    # Mount the ConfigMap as a volume
-    volumes = [
-      {
-        name = "config"
-        configMap = {
-          name = kubernetes_config_map.fluentbit_config[0].metadata[0].name
-        }
-      }
-    ]
-    volumeMounts = [
-      {
-        name      = "config"
-        mountPath = "/fluent-bit/etc/fluent-bit.conf"
-        subPath   = "fluent-bit.conf"
-        readOnly  = true
-      },
-      {
-        name      = "config"
-        mountPath = "/fluent-bit/etc/parsers.conf"
-        subPath   = "parsers.conf"
-        readOnly  = true
-      }
-    ]
-  })]
 
-  # Ensure AWS SDK inside Fluent Bit always uses the IRSA role/token
-  set {
-    name  = "extraEnvs[0].name"
-    value = "AWS_ROLE_ARN"
-  }
-  set {
-    name  = "extraEnvs[0].value"
-    value = aws_iam_role.fluentbit[0].arn
-  }
-  set {
-    name  = "extraEnvs[1].name"
-    value = "AWS_WEB_IDENTITY_TOKEN_FILE"
-  }
-  set {
-    name  = "extraEnvs[1].value"
-    value = "/var/run/secrets/eks.amazonaws.com/serviceaccount/token"
-  }
-  set {
-    name  = "extraEnvs[2].name"
-    value = "AWS_REGION"
-  }
-  set {
-    name  = "extraEnvs[2].value"
-    value = var.region
-  }
-  set {
-    name  = "extraEnvs[3].name"
-    value = "AWS_DEFAULT_REGION"
-  }
-  set {
-    name  = "extraEnvs[3].value"
-    value = var.region
-  }
+    # Disable unused outputs
+    firehose = {
+      enabled = false
+    }
+    kinesis = {
+      enabled = false
+    }
+    cloudWatch = {
+      enabled = false
+    }
+
+    # Additional outputs for dataplane and host logs
+    extraOutputs = <<-EOT
+      [OUTPUT]
+          Name                  cloudwatch_logs
+          Match                 dataplane.*
+          region                ${var.region}
+          log_group_name        ${local.lg_dataplane}
+          log_stream_prefix     dataplane
+          auto_create_group     true
+
+      [OUTPUT]
+          Name                  cloudwatch_logs
+          Match                 host.*
+          region                ${var.region}
+          log_group_name        ${local.lg_host}
+          log_stream_prefix     host
+          auto_create_group     true
+    EOT
+
+    # Additional inputs for dataplane and host logs
+    additionalInputs = <<-EOT
+      [INPUT]
+          Name              tail
+          Tag               dataplane.kube-proxy
+          Path              /var/log/containers/kube-proxy*.log
+          multiline.parser  docker, cri
+          DB                /var/log/flb_dataplane_kube-proxy.db
+          Mem_Buf_Limit     5MB
+          Skip_Long_Lines   On
+          Refresh_Interval  10
+
+      [INPUT]
+          Name              tail
+          Tag               dataplane.aws-node
+          Path              /var/log/containers/aws-node*.log
+          multiline.parser  docker, cri
+          DB                /var/log/flb_dataplane_aws-node.db
+          Mem_Buf_Limit     5MB
+          Skip_Long_Lines   On
+          Refresh_Interval  10
+
+      [INPUT]
+          Name              tail
+          Tag               dataplane.coredns
+          Path              /var/log/containers/coredns*.log
+          multiline.parser  docker, cri
+          DB                /var/log/flb_dataplane_coredns.db
+          Mem_Buf_Limit     5MB
+          Skip_Long_Lines   On
+          Refresh_Interval  10
+
+      [INPUT]
+          Name              tail
+          Tag               host.messages
+          Path              /var/log/messages
+          Parser            syslog
+          DB                /var/log/flb_host_messages.db
+          Mem_Buf_Limit     5MB
+          Skip_Long_Lines   On
+          Refresh_Interval  10
+
+      [INPUT]
+          Name              tail
+          Tag               host.secure
+          Path              /var/log/secure
+          Parser            syslog
+          DB                /var/log/flb_host_secure.db
+          Mem_Buf_Limit     5MB
+          Skip_Long_Lines   On
+          Refresh_Interval  10
+
+      [INPUT]
+          Name              tail
+          Tag               host.dmesg
+          Path              /var/log/dmesg
+          Parser            syslog
+          DB                /var/log/flb_host_dmesg.db
+          Mem_Buf_Limit     5MB
+          Skip_Long_Lines   On
+          Refresh_Interval  10
+    EOT
+  })]
 
   depends_on = [
     kubernetes_service_account.fluentbit,
-    kubernetes_config_map.fluentbit_config,
     aws_cloudwatch_log_group.app,
     aws_cloudwatch_log_group.dataplane,
     aws_cloudwatch_log_group.host

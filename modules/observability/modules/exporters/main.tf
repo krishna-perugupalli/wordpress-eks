@@ -952,9 +952,14 @@ resource "kubernetes_deployment" "redis_exporter" {
             protocol       = "TCP"
           }
 
+          # Redis connection address - use rediss:// scheme for TLS connections
           env {
-            name  = "REDIS_ADDR"
-            value = var.redis_connection_config != null ? "${var.redis_connection_config.host}:${var.redis_connection_config.port}" : "localhost:6379"
+            name = "REDIS_ADDR"
+            value = var.redis_connection_config != null ? (
+              var.redis_connection_config.tls_enabled ?
+              "rediss://${var.redis_connection_config.host}:${var.redis_connection_config.port}" :
+              "${var.redis_connection_config.host}:${var.redis_connection_config.port}"
+            ) : "localhost:6379"
           }
 
           env {
@@ -967,10 +972,16 @@ resource "kubernetes_deployment" "redis_exporter" {
             }
           }
 
-          # Enable TLS if configured
+          # Configure for single-node Redis (not cluster mode)
+          env {
+            name  = "REDIS_EXPORTER_IS_CLUSTER"
+            value = "false"
+          }
+
+          # TLS verification - skip verification for self-signed certs (common in ElastiCache)
           env {
             name  = "REDIS_EXPORTER_SKIP_TLS_VERIFICATION"
-            value = var.redis_connection_config != null && var.redis_connection_config.tls_enabled ? "false" : "true"
+            value = var.redis_connection_config != null && var.redis_connection_config.tls_enabled ? "true" : "true"
           }
 
           # Connection pooling and timeout settings
@@ -1155,15 +1166,15 @@ resource "kubectl_manifest" "mysql_connection_credentials" {
           data = {
             # Construct DSN with proper format: username:password@tcp(host:port)/database?params
             # Connection parameters:
-            # - timeout: Connection timeout
-            # - readTimeout: I/O read timeout
-            # - writeTimeout: I/O write timeout
+            # - timeout: Connection timeout (5s)
+            # - readTimeout: I/O read timeout (5s)
+            # - writeTimeout: I/O write timeout (5s)
             # - parseTime: Parse DATE and DATETIME to time.Time
             # - loc: Location for time.Time values
             # - tls: TLS configuration (skip-verify for Aurora with TLS)
             # - maxAllowedPacket: Max packet size
             # - interpolateParams: Interpolate placeholders into query string
-            dsn      = "{{ .username }}:{{ .password }}@tcp(${var.mysql_connection_config.host}:${var.mysql_connection_config.port})/${var.mysql_connection_config.database}?timeout=5s&readTimeout=10s&writeTimeout=10s&parseTime=true&loc=UTC&tls=skip-verify&maxAllowedPacket=67108864&interpolateParams=true"
+            dsn      = "{{ .username }}:{{ .password }}@tcp(${var.mysql_connection_config.host}:${var.mysql_connection_config.port})/${var.mysql_connection_config.database}?timeout=5s&readTimeout=5s&writeTimeout=5s&parseTime=true&loc=UTC&tls=skip-verify&maxAllowedPacket=67108864&interpolateParams=true"
             username = "{{ .username }}"
             password = "{{ .password }}"
             host     = "${var.mysql_connection_config.host}"

@@ -511,7 +511,8 @@ resource "kubectl_manifest" "cloudwatch_exporter_deployment" {
       replicas = 1
       selector = {
         matchLabels = {
-          app = "cloudwatch-exporter"
+          app       = "cloudwatch-exporter"
+          component = "metrics"
         }
       }
       template = {
@@ -644,7 +645,8 @@ resource "kubernetes_service" "cloudwatch_exporter" {
 
   spec {
     selector = {
-      app = "cloudwatch-exporter"
+      app       = "cloudwatch-exporter"
+      component = "metrics"
     }
 
     port {

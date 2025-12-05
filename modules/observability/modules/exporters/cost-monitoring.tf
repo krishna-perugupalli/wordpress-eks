@@ -289,13 +289,39 @@ resource "kubectl_manifest" "cost_monitoring_deployment" {
         }
         spec = {
           serviceAccountName = kubernetes_service_account.cost_monitoring[0].metadata[0].name
+          initContainers = [
+            {
+              name  = "init-user-dir"
+              image = "python:3.11-slim"
+              command = ["/bin/sh", "-c"]
+              args = [
+                "mkdir -p /tmp/.local/{lib/python3.11/site-packages,bin} && chown -R 65534:65534 /tmp/.local && chmod -R 755 /tmp/.local"
+              ]
+              securityContext = {
+                runAsUser = 0
+                fsGroup    = 65534
+              }
+              volumeMounts = [
+                {
+                  name      = "tmp-storage"
+                  mountPath = "/tmp"
+                }
+              ]
+              resources = {
+                requests = {
+                  cpu    = "10m"
+                  memory = "32Mi"
+                }
+              }
+            }
+          ]
           containers = [
             {
               name  = "cost-exporter"
               image = "python:3.11-slim"
               command = ["/bin/bash", "-c"]
               args = [
-                "pip install --no-cache-dir boto3==1.34.0 prometheus_client==0.19.0 pyyaml==6.0.1 || { echo 'Failed to install Python dependencies'; exit 1; } && python /app/exporter.py"
+                "pip install --no-cache-dir --user boto3==1.34.0 prometheus_client==0.19.0 pyyaml==6.0.1 || { echo 'Failed to install Python dependencies'; exit 1; } && python /app/exporter.py"
               ]
               ports = [
                 {
@@ -305,6 +331,14 @@ resource "kubectl_manifest" "cost_monitoring_deployment" {
                 }
               ]
               env = [
+                {
+                  name  = "HOME"
+                  value = "/tmp"
+                },
+                {
+                  name  = "PYTHONUSERBASE"
+                  value = "/tmp/.local"
+                },
                 {
                   name  = "AWS_REGION"
                   value = var.region
@@ -332,6 +366,10 @@ resource "kubectl_manifest" "cost_monitoring_deployment" {
                   name      = "app"
                   mountPath = "/app"
                   readOnly  = true
+                },
+                {
+                  name      = "tmp-storage"
+                  mountPath = "/tmp"
                 }
               ]
               resources = {
@@ -398,6 +436,12 @@ resource "kubectl_manifest" "cost_monitoring_deployment" {
                     path = "exporter.py"
                   }
                 ]
+              }
+            },
+            {
+              name = "tmp-storage"
+              emptyDir = {
+                medium = "Memory"
               }
             }
           ]

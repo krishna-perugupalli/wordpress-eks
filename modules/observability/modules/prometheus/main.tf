@@ -165,6 +165,14 @@ resource "helm_release" "kube_prometheus_stack" {
           retention     = local.prometheus_retention
           retentionSize = "45GB" # Leave some buffer from storage size
 
+          # Listen configuration - must be false to accept external connections
+          listenLocal = false
+
+          # Web configuration - listen on all interfaces
+          web = {
+            listenAddress = "0.0.0.0:9090"
+          }
+
           # Resource configuration
           resources = {
             requests = var.prometheus_resource_requests
@@ -265,6 +273,19 @@ resource "helm_release" "kube_prometheus_stack" {
             fsGroup      = 65534
           }
 
+          # Readiness probe configuration
+          readinessProbe = {
+            httpGet = {
+              path   = "/-/ready"
+              port   = 9090
+              scheme = "HTTP"
+            }
+            initialDelaySeconds = 30
+            periodSeconds       = 10
+            timeoutSeconds      = 5
+            failureThreshold    = 3
+          }
+
           # Service discovery configuration
           serviceMonitorSelectorNilUsesHelmValues = false
           podMonitorSelectorNilUsesHelmValues     = false
@@ -360,8 +381,9 @@ resource "helm_release" "kube_prometheus_stack" {
 
         # Service configuration
         service = {
-          type = "ClusterIP"
-          port = 9090
+          type       = "ClusterIP"
+          port       = 9090
+          targetPort = 9090
         }
       }
 
@@ -378,6 +400,42 @@ resource "helm_release" "kube_prometheus_stack" {
       # Node exporter configuration
       nodeExporter = {
         enabled = true
+      }
+
+      # Prometheus Node Exporter configuration
+      # Fix DaemonSet scheduling to allow on all worker nodes
+      prometheus-node-exporter = {
+        # Remove restrictive node affinity - allow on all nodes
+        affinity = {}
+
+        # Add toleration for control-plane nodes
+        tolerations = [
+          {
+            key      = "node-role.kubernetes.io/control-plane"
+            operator = "Exists"
+            effect   = "NoSchedule"
+          }
+        ]
+
+        # Disable hostPort to avoid port conflicts
+        # Use hostNetwork=false for better isolation
+        hostNetwork = false
+        hostPID     = true
+        hostRootFsMount = {
+          enabled = true
+        }
+
+        # Resource configuration
+        resources = {
+          requests = {
+            cpu    = "100m"
+            memory = "128Mi"
+          }
+          limits = {
+            cpu    = "200m"
+            memory = "256Mi"
+          }
+        }
       }
 
       # Kube-state-metrics configuration

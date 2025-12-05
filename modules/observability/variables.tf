@@ -262,9 +262,9 @@ variable "alertmanager_storage_class" {
 }
 
 variable "alertmanager_replica_count" {
-  description = "Number of AlertManager replicas for high availability"
+  description = "Number of AlertManager replicas for high availability (1 for small clusters, 2+ for production)"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "alertmanager_resource_requests" {
