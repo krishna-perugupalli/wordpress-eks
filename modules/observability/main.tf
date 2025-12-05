@@ -1,8 +1,3 @@
-#############################################
-# Enhanced Observability Module
-# Supports both CloudWatch and Prometheus stack
-#############################################
-
 data "aws_caller_identity" "current" {}
 
 #############################################
@@ -11,7 +6,7 @@ data "aws_caller_identity" "current" {}
 locals {
   ns                = var.namespace
   oidc_hostpath     = replace(var.cluster_oidc_issuer_url, "https://", "")
-  kms_logs_key_trim = var.kms_logs_key_arn != null ? trimspace(var.kms_logs_key_arn) : ""
+  kms_logs_key_trim = trimspace(coalesce(var.kms_logs_key_arn, ""))
   has_kms_logs_key  = local.kms_logs_key_trim != ""
 
   lg_app       = "/aws/eks/${var.cluster_name}/application"
@@ -20,238 +15,355 @@ locals {
 
   account_number = data.aws_caller_identity.current.account_id
 
-  # Prometheus stack configuration
-  prometheus_enabled   = var.enable_prometheus_stack
-  grafana_enabled      = var.enable_grafana
-  alertmanager_enabled = var.enable_alertmanager
 }
 
 #############################################
-# Namespace
+# CloudWatch Log Groups (encrypted, retention)
 #############################################
-resource "kubernetes_namespace" "ns" {
-  metadata {
-    name = local.ns
-    labels = {
-      "name"       = local.ns
-      "monitoring" = "enabled"
+resource "aws_cloudwatch_log_group" "app" {
+  count             = var.install_fluent_bit ? 1 : 0
+  name              = local.lg_app
+  kms_key_id        = local.has_kms_logs_key ? local.kms_logs_key_trim : null
+  retention_in_days = var.cw_retention_days
+  tags              = var.tags
+}
+
+resource "aws_cloudwatch_log_group" "dataplane" {
+  count             = var.install_fluent_bit ? 1 : 0
+  name              = local.lg_dataplane
+  kms_key_id        = local.has_kms_logs_key ? local.kms_logs_key_trim : null
+  retention_in_days = var.cw_retention_days
+  tags              = var.tags
+}
+
+resource "aws_cloudwatch_log_group" "host" {
+  count             = var.install_fluent_bit ? 1 : 0
+  name              = local.lg_host
+  kms_key_id        = local.has_kms_logs_key ? local.kms_logs_key_trim : null
+  retention_in_days = var.cw_retention_days
+  tags              = var.tags
+}
+
+#############################################
+# IRSA: CloudWatch Agent (metrics)
+#############################################
+data "aws_iam_policy_document" "cwagent_trust" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    principals {
+      type        = "Federated"
+      identifiers = [var.oidc_provider_arn]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_hostpath}:sub"
+      values   = ["system:serviceaccount:${local.ns}:cloudwatch-agent"]
     }
   }
 }
 
-#############################################
-# CloudWatch Components (Legacy Support)
-#############################################
-module "cloudwatch" {
-  source = "./modules/cloudwatch"
-  count  = var.enable_cloudwatch ? 1 : 0
+resource "aws_iam_role" "cwagent" {
+  count              = var.install_cloudwatch_agent ? 1 : 0
+  name               = "${var.name}-cwagent"
+  assume_role_policy = data.aws_iam_policy_document.cwagent_trust.json
+  tags               = var.tags
+}
 
-  name                     = var.name
-  region                   = var.region
-  cluster_name             = var.cluster_name
-  cluster_oidc_issuer_url  = var.cluster_oidc_issuer_url
-  oidc_provider_arn        = var.oidc_provider_arn
-  namespace                = local.ns
-  kms_logs_key_arn         = var.kms_logs_key_arn
-  cw_retention_days        = var.cw_retention_days
-  install_cloudwatch_agent = var.install_cloudwatch_agent
-  install_fluent_bit       = var.install_fluent_bit
-  tags                     = var.tags
+resource "aws_iam_role_policy_attachment" "cwagent_attach" {
+  count      = var.install_cloudwatch_agent ? 1 : 0
+  role       = aws_iam_role.cwagent[0].name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
+#############################################
+# IRSA: Fluent Bit (logs → CloudWatch Logs)
+#############################################
+data "aws_iam_policy_document" "fluentbit_trust" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    principals {
+      type        = "Federated"
+      identifiers = [var.oidc_provider_arn]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_hostpath}:sub"
+      values   = ["system:serviceaccount:${local.ns}:fluent-bit"]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "fluentbit" {
+  statement {
+    sid    = "CWLogsWrite"
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:DescribeLogStreams",
+      "logs:PutLogEvents",
+      "logs:PutRetentionPolicy"
+    ]
+    resources = [
+      "arn:aws:logs:${var.region}:${local.account_number}:log-group:${local.lg_app}:*",
+      "arn:aws:logs:${var.region}:${local.account_number}:log-group:${local.lg_dataplane}:*",
+      "arn:aws:logs:${var.region}:${local.account_number}:log-group:${local.lg_host}:*",
+      "arn:aws:logs:${var.region}:${local.account_number}:log-group:/aws/eks/*:*"
+    ]
+  }
+
+  dynamic "statement" {
+    for_each = local.has_kms_logs_key ? [1] : []
+    content {
+      sid    = "AllowCWLogsKmsUsage"
+      effect = "Allow"
+      actions = [
+        "kms:Encrypt",
+        "kms:Decrypt",
+        "kms:ReEncrypt*",
+        "kms:GenerateDataKey*",
+        "kms:DescribeKey"
+      ]
+      resources = [local.kms_logs_key_trim]
+      condition {
+        test     = "StringEquals"
+        variable = "kms:ViaService"
+        values   = ["logs.${var.region}.amazonaws.com"]
+      }
+    }
+  }
+}
+
+resource "aws_iam_role" "fluentbit" {
+  count              = var.install_fluent_bit ? 1 : 0
+  name               = "${var.name}-fluentbit"
+  assume_role_policy = data.aws_iam_policy_document.fluentbit_trust.json
+  tags               = var.tags
+}
+
+resource "aws_iam_policy" "fluentbit" {
+  count  = var.install_fluent_bit ? 1 : 0
+  name   = "${var.name}-fluentbit-cwlogs"
+  policy = data.aws_iam_policy_document.fluentbit.json
+  tags   = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "fluentbit_attach" {
+  count      = var.install_fluent_bit ? 1 : 0
+  role       = aws_iam_role.fluentbit[0].name
+  policy_arn = aws_iam_policy.fluentbit[0].arn
+}
+
+#############################################
+# Namespace + ServiceAccounts
+#############################################
+resource "kubernetes_namespace" "ns" {
+  metadata { name = local.ns }
+}
+
+resource "kubernetes_service_account" "cwagent" {
+  count = var.install_cloudwatch_agent ? 1 : 0
+  metadata {
+    name      = "cloudwatch-agent"
+    namespace = local.ns
+    annotations = {
+      "eks.amazonaws.com/role-arn" = aws_iam_role.cwagent[0].arn
+    }
+  }
+  automount_service_account_token = true
+
+  depends_on = [kubernetes_namespace.ns]
+}
+
+resource "kubernetes_service_account" "fluentbit" {
+  count = var.install_fluent_bit ? 1 : 0
+  metadata {
+    name      = "fluent-bit"
+    namespace = local.ns
+    annotations = {
+      "eks.amazonaws.com/role-arn" = aws_iam_role.fluentbit[0].arn
+    }
+  }
+  automount_service_account_token = true
 
   depends_on = [kubernetes_namespace.ns]
 }
 
 #############################################
-# Prometheus Stack Components
+# Helm: CloudWatch Agent (Container Insights)
 #############################################
-module "prometheus" {
-  source = "./modules/prometheus"
-  count  = local.prometheus_enabled ? 1 : 0
+# EKS managed add-on for CloudWatch Observability
+resource "aws_eks_addon" "cloudwatch_observability" {
+  cluster_name                = var.cluster_name # pass this into the module
+  addon_name                  = "amazon-cloudwatch-observability"
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+  # addon_version               = var.cloudwatch_addon_version  # optional: pin if you want
+  tags = var.tags
+}
 
-  name                    = var.name
-  region                  = var.region
-  cluster_name            = var.cluster_name
-  cluster_oidc_issuer_url = var.cluster_oidc_issuer_url
-  oidc_provider_arn       = var.oidc_provider_arn
-  namespace               = local.ns
+#############################################
+# Helm: aws-for-fluent-bit (logs → CloudWatch Logs)
+#############################################
+resource "helm_release" "fluentbit" {
+  count      = var.install_fluent_bit ? 1 : 0
+  name       = "aws-for-fluent-bit"
+  namespace  = local.ns
+  repository = "https://aws.github.io/eks-charts"
+  chart      = "aws-for-fluent-bit"
+  version    = "0.1.32"
 
-  # Prometheus configuration
-  prometheus_storage_size      = var.prometheus_storage_size
-  prometheus_retention_days    = var.prometheus_retention_days
-  prometheus_storage_class     = var.prometheus_storage_class
-  prometheus_replica_count     = var.prometheus_replica_count
-  prometheus_resource_requests = var.prometheus_resource_requests
-  prometheus_resource_limits   = var.prometheus_resource_limits
+  set {
+    name  = "serviceAccount.create"
+    value = "false"
+  }
+  set {
+    name  = "serviceAccount.name"
+    value = "fluent-bit"
+  }
 
-  # Service discovery configuration
-  enable_service_discovery     = var.enable_service_discovery
-  service_discovery_namespaces = var.service_discovery_namespaces
 
-  # Network resilience configuration
-  enable_network_resilience   = var.enable_network_resilience
-  remote_write_queue_capacity = var.remote_write_queue_capacity
-  remote_write_max_backoff    = var.remote_write_max_backoff
+  # Primary app logs
+  set {
+    name  = "cloudWatch.enabled"
+    value = "true"
+  }
+  set {
+    name  = "cloudWatch.match"
+    value = "kube.*"
+  }
+  set {
+    name  = "cloudWatch.region"
+    value = var.region
+  }
+  set {
+    name  = "cloudWatch.logGroupName"
+    value = local.lg_app
+  }
+  set {
+    name  = "cloudWatch.logStreamPrefix"
+    value = "app"
+  }
+  set {
+    name  = "cloudWatchLogs.enabled"
+    value = "false"
+  }
 
-  # KMS encryption
-  kms_key_arn = var.kms_key_arn
-  tags        = var.tags
+  values = [yamlencode({
+    additionalInputs = <<-EOT
+[INPUT]
+    Name              tail
+    Tag               dataplane.kube-proxy
+    Path              /var/log/containers/kube-proxy*.log
+    Parser            docker
+    DB                /var/log/flb_dataplane_kube-proxy.db
+    Mem_Buf_Limit     5MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+[INPUT]
+    Name              tail
+    Tag               dataplane.aws-node
+    Path              /var/log/containers/aws-node*.log
+    Parser            docker
+    DB                /var/log/flb_dataplane_aws-node.db
+    Mem_Buf_Limit     5MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+[INPUT]
+    Name              tail
+    Tag               dataplane.coredns
+    Path              /var/log/containers/coredns*.log
+    Parser            docker
+    DB                /var/log/flb_dataplane_coredns.db
+    Mem_Buf_Limit     5MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+[INPUT]
+    Name              tail
+    Tag               host.messages
+    Path              /var/log/messages
+    Parser            syslog
+    DB                /var/log/flb_host_messages.db
+    Mem_Buf_Limit     5MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+[INPUT]
+    Name              tail
+    Tag               host.secure
+    Path              /var/log/secure
+    Parser            syslog
+    DB                /var/log/flb_host_secure.db
+    Mem_Buf_Limit     5MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+[INPUT]
+    Name              tail
+    Tag               host.dmesg
+    Path              /var/log/dmesg
+    Parser            syslog
+    DB                /var/log/flb_host_dmesg.db
+    Mem_Buf_Limit     5MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+EOT
+    additionalOutputs = <<-EOT
+[OUTPUT]
+    Name                  cloudwatch
+    Match                 dataplane.*
+    region                ${var.region}
+    log_group_name        ${local.lg_dataplane}
+    log_stream_prefix     dataplane
+    auto_create_group     true
+[OUTPUT]
+    Name                  cloudwatch
+    Match                 host.*
+    region                ${var.region}
+    log_group_name        ${local.lg_host}
+    log_stream_prefix     host
+    auto_create_group     true
+EOT
+  })]
+
+  # Ensure AWS SDK inside Fluent Bit always uses the IRSA role/token
+  set {
+    name  = "extraEnvs[0].name"
+    value = "AWS_ROLE_ARN"
+  }
+  set {
+    name  = "extraEnvs[0].value"
+    value = aws_iam_role.fluentbit[0].arn
+  }
+  set {
+    name  = "extraEnvs[1].name"
+    value = "AWS_WEB_IDENTITY_TOKEN_FILE"
+  }
+  set {
+    name  = "extraEnvs[1].value"
+    value = "/var/run/secrets/eks.amazonaws.com/serviceaccount/token"
+  }
+  set {
+    name  = "extraEnvs[2].name"
+    value = "AWS_REGION"
+  }
+  set {
+    name  = "extraEnvs[2].value"
+    value = var.region
+  }
+  set {
+    name  = "extraEnvs[3].name"
+    value = "AWS_DEFAULT_REGION"
+  }
+  set {
+    name  = "extraEnvs[3].value"
+    value = var.region
+  }
 
   depends_on = [
-    kubernetes_namespace.ns
+    kubernetes_service_account.fluentbit,
+    aws_cloudwatch_log_group.app,
+    aws_cloudwatch_log_group.dataplane,
+    aws_cloudwatch_log_group.host
   ]
-}
-
-module "grafana" {
-  source = "./modules/grafana"
-  count  = local.grafana_enabled ? 1 : 0
-
-  name                    = var.name
-  region                  = var.region
-  cluster_name            = var.cluster_name
-  cluster_oidc_issuer_url = var.cluster_oidc_issuer_url
-  oidc_provider_arn       = var.oidc_provider_arn
-  namespace               = local.ns
-
-  # Grafana configuration
-  grafana_storage_size      = var.grafana_storage_size
-  grafana_storage_class     = var.grafana_storage_class
-  grafana_admin_password    = var.grafana_admin_password
-  grafana_resource_requests = var.grafana_resource_requests
-  grafana_resource_limits   = var.grafana_resource_limits
-  grafana_replica_count     = var.grafana_replica_count
-
-  # Authentication configuration
-  enable_aws_iam_auth   = var.enable_aws_iam_auth
-  grafana_iam_role_arns = var.grafana_iam_role_arns
-
-  # Dashboard configuration
-  enable_default_dashboards = var.enable_default_dashboards
-  custom_dashboard_configs  = var.custom_dashboard_configs
-
-  # Data source configuration
-  prometheus_url               = local.prometheus_enabled ? module.prometheus[0].prometheus_url : null
-  enable_cloudwatch_datasource = var.enable_cloudwatch_datasource
-
-  # KMS encryption
-  kms_key_arn = var.kms_key_arn
-  tags        = var.tags
-
-  depends_on = [kubernetes_namespace.ns]
-}
-
-module "alertmanager" {
-  source = "./modules/alertmanager"
-  count  = local.alertmanager_enabled ? 1 : 0
-
-  name                    = var.name
-  region                  = var.region
-  cluster_name            = var.cluster_name
-  cluster_oidc_issuer_url = var.cluster_oidc_issuer_url
-  oidc_provider_arn       = var.oidc_provider_arn
-  namespace               = local.ns
-
-  # AlertManager configuration
-  alertmanager_storage_size      = var.alertmanager_storage_size
-  alertmanager_storage_class     = var.alertmanager_storage_class
-  alertmanager_replica_count     = var.alertmanager_replica_count
-  alertmanager_resource_requests = var.alertmanager_resource_requests
-  alertmanager_resource_limits   = var.alertmanager_resource_limits
-
-  # Notification configuration
-  smtp_config               = var.smtp_config
-  sns_topic_arn             = var.sns_topic_arn
-  slack_webhook_url         = var.slack_webhook_url
-  pagerduty_integration_key = var.pagerduty_integration_key
-
-  # Alert routing configuration
-  alert_routing_config = var.alert_routing_config
-
-  # KMS encryption
-  kms_key_arn = var.kms_key_arn
-  tags        = var.tags
-
-  depends_on = [kubernetes_namespace.ns]
-}
-
-#############################################
-# Exporters and Metrics Collection
-#############################################
-module "exporters" {
-  source = "./modules/exporters"
-  count  = local.prometheus_enabled ? 1 : 0
-
-  name                    = var.name
-  region                  = var.region
-  cluster_name            = var.cluster_name
-  cluster_oidc_issuer_url = var.cluster_oidc_issuer_url
-  oidc_provider_arn       = var.oidc_provider_arn
-  namespace               = local.ns
-
-  # WordPress exporter configuration
-  enable_wordpress_exporter = var.enable_wordpress_exporter
-  wordpress_namespace       = var.wordpress_namespace
-  wordpress_service_name    = var.wordpress_service_name
-
-  # Database exporter configuration
-  enable_mysql_exporter   = var.enable_mysql_exporter
-  mysql_connection_config = var.mysql_connection_config
-
-  # Cache exporter configuration
-  enable_redis_exporter   = var.enable_redis_exporter
-  redis_connection_config = var.redis_connection_config
-
-  # AWS service monitoring
-  enable_cloudwatch_exporter = var.enable_cloudwatch_exporter
-  cloudwatch_metrics_config  = var.cloudwatch_metrics_config
-
-  # Cost monitoring
-  enable_cost_monitoring = var.enable_cost_monitoring
-  cost_allocation_tags   = var.cost_allocation_tags
-
-  # CloudFront monitoring
-  enable_cloudfront_monitoring = var.enable_cloudfront_monitoring
-  cloudfront_distribution_ids  = var.cloudfront_distribution_ids
-
-  # KMS encryption
-  kms_key_arn = var.kms_key_arn
-  tags        = var.tags
-
-  depends_on = [
-    kubernetes_namespace.ns,
-    module.prometheus
-  ]
-}
-
-#############################################
-# Security and Compliance
-#############################################
-module "security" {
-  source = "./modules/security"
-  count  = var.enable_security_features ? 1 : 0
-
-  name         = var.name
-  region       = var.region
-  cluster_name = var.cluster_name
-  namespace    = local.ns
-
-  # Encryption configuration
-  enable_tls_encryption   = var.enable_tls_encryption
-  tls_cert_manager_issuer = var.tls_cert_manager_issuer
-
-  # PII scrubbing configuration
-  enable_pii_scrubbing = var.enable_pii_scrubbing
-  pii_scrubbing_rules  = var.pii_scrubbing_rules
-
-  # Audit logging configuration
-  enable_audit_logging     = var.enable_audit_logging
-  audit_log_retention_days = var.audit_log_retention_days
-
-  # RBAC configuration
-  rbac_policies = var.rbac_policies
-
-  # KMS encryption
-  kms_key_arn = var.kms_key_arn
-  tags        = var.tags
-
-  depends_on = [kubernetes_namespace.ns]
 }

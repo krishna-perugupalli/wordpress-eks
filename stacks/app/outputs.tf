@@ -42,111 +42,24 @@ output "selfsigned_issuer" {
 }
 
 #############################################
-# Enhanced Observability Outputs
+# Basic Observability Outputs
 #############################################
 output "monitoring_namespace" {
-  description = "Namespace used for monitoring components"
+  description = "Namespace used for observability agents"
   value       = module.observability.namespace
 }
 
-output "monitoring_stack_summary" {
-  description = "Summary of enabled monitoring components"
-  value       = module.observability.monitoring_stack_summary
-}
-
-# CloudWatch outputs (legacy support)
-output "cloudwatch_enabled" {
-  description = "Whether CloudWatch monitoring is enabled"
-  value       = module.observability.cloudwatch_enabled
-}
-
 output "cloudwatch_log_groups" {
-  description = "CloudWatch log group names"
+  description = "CloudWatch log group names for app/dataplane/host"
   value       = module.observability.log_groups
 }
 
-# Prometheus stack outputs
-output "prometheus_enabled" {
-  description = "Whether Prometheus monitoring stack is enabled"
-  value       = module.observability.prometheus_enabled
+output "cwagent_role_arn" {
+  description = "IAM role ARN for CloudWatch Agent"
+  value       = module.observability.cwagent_role_arn
 }
 
-output "prometheus_url" {
-  description = "Prometheus server URL for internal cluster access"
-  value       = module.observability.prometheus_url
-}
-
-output "prometheus_external_url" {
-  description = "Prometheus server external URL (if exposed)"
-  value       = module.observability.prometheus_external_url
-}
-
-# Grafana outputs
-output "grafana_enabled" {
-  description = "Whether Grafana is enabled"
-  value       = module.observability.grafana_enabled
-}
-
-output "grafana_url" {
-  description = "Grafana URL for internal cluster access"
-  value       = module.observability.grafana_url
-}
-
-output "grafana_external_url" {
-  description = "Grafana external URL (if exposed)"
-  value       = module.observability.grafana_external_url
-}
-
-# AlertManager outputs
-output "alertmanager_enabled" {
-  description = "Whether AlertManager is enabled"
-  value       = module.observability.alertmanager_enabled
-}
-
-output "alertmanager_url" {
-  description = "AlertManager URL for internal cluster access"
-  value       = module.observability.alertmanager_url
-}
-
-# Exporters outputs
-output "wordpress_exporter_enabled" {
-  description = "Whether WordPress exporter is enabled"
-  value       = module.observability.wordpress_exporter_enabled
-}
-
-output "mysql_exporter_enabled" {
-  description = "Whether MySQL exporter is enabled"
-  value       = module.observability.mysql_exporter_enabled
-}
-
-output "redis_exporter_enabled" {
-  description = "Whether Redis exporter is enabled"
-  value       = module.observability.redis_exporter_enabled
-}
-
-output "cost_monitoring_enabled" {
-  description = "Whether cost monitoring is enabled"
-  value       = module.observability.cost_monitoring_enabled
-}
-
-output "cloudfront_monitoring_enabled" {
-  description = "Whether CloudFront CDN monitoring is enabled"
-  value       = module.observability.cloudfront_monitoring_enabled
-}
-
-# Security outputs
-output "security_features_enabled" {
-  description = "Whether security and compliance features are enabled"
-  value       = module.observability.security_features_enabled
-}
-
-output "audit_logging_enabled" {
-  description = "Whether audit logging is enabled"
-  value       = module.observability.audit_logging_enabled
-}
-
-# High availability outputs
-output "ha_dr_enabled" {
-  description = "Whether high availability and disaster recovery features are enabled"
-  value       = module.observability.ha_dr_enabled
+output "fluentbit_role_arn" {
+  description = "IAM role ARN for Fluent Bit"
+  value       = module.observability.fluentbit_role_arn
 }
