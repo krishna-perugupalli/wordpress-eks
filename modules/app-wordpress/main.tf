@@ -47,6 +47,25 @@ locals {
   ] : []
 }
 
+##############################################
+# CloudFront/Proxy HTTPS detection configuration
+##############################################
+locals {
+  # PHP code to trust X-Forwarded-Proto header from CloudFront/ALB
+  cloudfront_proxy_config = var.behind_cloudfront ? [
+    "// Trust proxy headers for HTTPS detection when behind CloudFront/ALB",
+    "if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {",
+    "    $_SERVER['HTTPS'] = 'on';",
+    "}",
+    "if (isset($_SERVER['HTTP_CLOUDFRONT_FORWARDED_PROTO']) && $_SERVER['HTTP_CLOUDFRONT_FORWARDED_PROTO'] === 'https') {",
+    "    $_SERVER['HTTPS'] = 'on';",
+    "}",
+    "define('FORCE_SSL_ADMIN', true);"
+  ] : []
+
+  cloudfront_proxy_config_content = length(local.cloudfront_proxy_config) > 0 ? join("\n", local.cloudfront_proxy_config) : ""
+}
+
 #############################################
 # ESO ExternalSecret: build 'wp-db' with DB creds
 # - PASSWORD pulled from SM via ClusterSecretStore 'aws-sm'
@@ -341,68 +360,9 @@ resource "kubernetes_job_v1" "wp_db_grant_job" {
 }
 
 #############################################
-# Ingress annotations (ALB / TLS / WAFv2 / tags)
+# Extra environment variables
 #############################################
 locals {
-  alb_tags_csv = length(var.alb_tags) > 0 ? join(",", [for k, v in var.alb_tags : "${k}=${v}"]) : ""
-
-  ingress_annotations = merge(
-    {
-      "kubernetes.io/ingress.class"                = "alb"
-      "alb.ingress.kubernetes.io/scheme"           = "internet-facing"
-      "alb.ingress.kubernetes.io/target-type"      = "ip"
-      "alb.ingress.kubernetes.io/healthcheck-path" = "/"
-      "alb.ingress.kubernetes.io/listen-ports"     = "[{\"HTTP\":80},{\"HTTPS\":443}]"
-      "alb.ingress.kubernetes.io/backend-protocol" = "HTTP"
-      "alb.ingress.kubernetes.io/ssl-redirect"     = "443"
-      "alb.ingress.kubernetes.io/ssl-policy"       = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-    },
-    var.alb_certificate_arn != "" ? {
-      "alb.ingress.kubernetes.io/certificate-arn" = var.alb_certificate_arn
-    } : {},
-    var.waf_acl_arn != "" ? {
-      "alb.ingress.kubernetes.io/wafv2-acl-arn" = var.waf_acl_arn
-    } : {},
-    local.alb_tags_csv != "" ? {
-      "alb.ingress.kubernetes.io/tags" = local.alb_tags_csv
-    } : {},
-    var.ingress_forward_default ? {
-      "alb.ingress.kubernetes.io/actions.forward-default" = jsonencode({
-        Type = "forward"
-        ForwardConfig = {
-          TargetGroups = [
-            {
-              ServiceName = local.wordpress_service_name
-              ServicePort = "http"
-            }
-          ]
-        }
-      })
-    } : {}
-  )
-
-  ingress_extra_rules = var.ingress_forward_default ? [
-    {
-      host = ""
-      http = {
-        paths = [
-          {
-            path     = "/*"
-            pathType = "ImplementationSpecific"
-            backend = {
-              service = {
-                name = "forward-default"
-                port = {
-                  name = "use-annotation"
-                }
-              }
-            }
-          }
-        ]
-      }
-    }
-  ] : []
-
   extra_env_vars = concat(
     [
       for k, v in var.env_extra : {
@@ -558,18 +518,14 @@ resource "helm_release" "wordpress" {
   }
 
   ###########################################
-  # Use VALUES (not --set) for ingress + HPA
+  # Use VALUES (not --set) for HPA and config
   ###########################################
   values = concat(
     [
-      # Ingress (annotations include listen-ports JSON as a string)
+      # Disable Ingress (using TargetGroupBinding instead)
       yamlencode({
         ingress = {
-          enabled     = true
-          hostname    = var.domain_name
-          annotations = local.ingress_annotations
-          tls         = true
-          extraRules  = local.ingress_extra_rules
+          enabled = false
         }
       }),
 
@@ -584,10 +540,99 @@ resource "helm_release" "wordpress" {
         extraEnvVars = local.extra_env_vars
       })
     ],
-    local.redis_cache_enabled ? [
+    # Combine Redis and CloudFront proxy configs into wordpressExtraConfigContent
+    (local.redis_cache_enabled || var.behind_cloudfront) ? [
       yamlencode({
-        wordpressConfigureCache     = true
-        wordpressExtraConfigContent = "${local.redis_extra_config_content}\n"
+        wordpressConfigureCache = local.redis_cache_enabled
+        wordpressExtraConfigContent = join("\n", compact([
+          local.redis_extra_config_content,
+          local.cloudfront_proxy_config_content
+        ]))
+      })
+    ] : [],
+    # WordPress metrics exporter sidecar configuration
+    var.enable_metrics_exporter ? [
+      yamlencode({
+        sidecars = [
+          {
+            name    = "metrics-exporter"
+            image   = var.metrics_exporter_image
+            command = ["/bin/sh"]
+            args    = ["/usr/local/bin/metrics-files/simple-entrypoint.sh"]
+            ports = [
+              {
+                name          = "metrics"
+                containerPort = 9090
+                protocol      = "TCP"
+              }
+            ]
+            env = [
+              {
+                name  = "WORDPRESS_PATH"
+                value = "/var/www/html"
+              }
+            ]
+            volumeMounts = [
+              {
+                name      = "wordpress-data"
+                mountPath = "/var/www/html"
+                readOnly  = true
+              },
+              {
+                name      = "metrics-config"
+                mountPath = "/usr/local/bin/metrics-files"
+                readOnly  = true
+              }
+            ]
+            resources = {
+              requests = {
+                cpu    = var.metrics_exporter_resources_requests_cpu
+                memory = var.metrics_exporter_resources_requests_memory
+              }
+              limits = {
+                cpu    = var.metrics_exporter_resources_limits_cpu
+                memory = var.metrics_exporter_resources_limits_memory
+              }
+            }
+            livenessProbe = {
+              httpGet = {
+                path = "/metrics"
+                port = 9090
+              }
+              initialDelaySeconds = 30
+              periodSeconds       = 30
+              timeoutSeconds      = 10
+              failureThreshold    = 3
+            }
+            readinessProbe = {
+              httpGet = {
+                path = "/metrics"
+                port = 9090
+              }
+              initialDelaySeconds = 5
+              periodSeconds       = 10
+              timeoutSeconds      = 5
+              failureThreshold    = 3
+            }
+            securityContext = {
+              runAsNonRoot             = false
+              allowPrivilegeEscalation = false
+              readOnlyRootFilesystem   = false
+              capabilities = {
+                drop = ["ALL"]
+              }
+            }
+          }
+        ]
+        extraVolumes = [
+          {
+            name = "metrics-config"
+            configMap = {
+              name        = "${local.effective_fullname}-metrics-config"
+              defaultMode = 0755
+            }
+          }
+        ]
       })
     ] : []
   )
@@ -599,4 +644,97 @@ resource "helm_release" "wordpress" {
     kubectl_manifest.wp_admin_es,
     kubernetes_job_v1.wp_db_grant_job
   ]
+}
+
+#############################################
+# TargetGroupBinding: Register WordPress pods with ALB target group
+#############################################
+resource "kubectl_manifest" "wordpress_tgb" {
+  yaml_body = yamlencode({
+    apiVersion = "elbv2.k8s.aws/v1beta1"
+    kind       = "TargetGroupBinding"
+    metadata = {
+      name      = "${local.effective_fullname}-tgb"
+      namespace = var.namespace
+    }
+    spec = {
+      serviceRef = {
+        name = local.wordpress_service_name
+        port = 80
+      }
+      targetGroupARN = var.target_group_arn
+      targetType     = "ip"
+    }
+  })
+
+  depends_on = [helm_release.wordpress]
+}
+
+#############################################
+# WordPress Metrics ConfigMap (contains exporter and plugin files)
+#############################################
+resource "kubernetes_config_map" "wordpress_metrics_config" {
+  count = var.enable_metrics_exporter ? 1 : 0
+
+  metadata {
+    name      = "${local.effective_fullname}-metrics-config"
+    namespace = var.namespace
+    labels = {
+      app                          = "wordpress"
+      component                    = "metrics"
+      "app.kubernetes.io/name"     = "wordpress"
+      "app.kubernetes.io/instance" = local.effective_fullname
+    }
+  }
+
+  data = {
+    "wordpress-exporter.php"         = file("${path.module}/files/wordpress-exporter.php")
+    "wordpress-metrics-plugin.php"   = file("${path.module}/files/wordpress-metrics-plugin.php")
+    "simple-metrics-exporter.php"    = file("${path.module}/files/simple-metrics-exporter.php")
+    "metrics-exporter-entrypoint.sh" = file("${path.module}/files/metrics-exporter-entrypoint.sh")
+    "simple-entrypoint.sh"           = file("${path.module}/files/simple-entrypoint.sh")
+  }
+
+  depends_on = [kubernetes_namespace.ns]
+}
+
+#############################################
+# WordPress Metrics Service (for Prometheus scraping)
+#############################################
+resource "kubernetes_service" "wordpress_metrics" {
+  count = var.enable_metrics_exporter ? 1 : 0
+
+  metadata {
+    name      = "${local.effective_fullname}-metrics"
+    namespace = var.namespace
+    labels = {
+      app                          = "wordpress"
+      component                    = "metrics"
+      "app.kubernetes.io/name"     = "wordpress"
+      "app.kubernetes.io/instance" = local.effective_fullname
+    }
+    annotations = {
+      "prometheus.io/scrape" = "true"
+      "prometheus.io/port"   = "9090"
+      "prometheus.io/path"   = "/metrics"
+    }
+  }
+
+  spec {
+    selector = {
+      "app.kubernetes.io/name"     = "wordpress"
+      "app.kubernetes.io/instance" = local.effective_fullname
+    }
+
+    port {
+      name        = "metrics"
+      port        = 9090
+      target_port = 9090
+      protocol    = "TCP"
+    }
+
+    type = "ClusterIP"
+  }
+
+  depends_on = [helm_release.wordpress]
 }

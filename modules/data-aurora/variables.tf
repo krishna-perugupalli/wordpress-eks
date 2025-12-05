@@ -57,9 +57,23 @@ variable "storage_kms_key_arn" {
 }
 
 variable "backup_retention_days" {
-  description = "Automated backup retention days"
+  description = <<-EOT
+    Automated backup retention days (1-35). Determines how far back you can restore using point-in-time recovery.
+    
+    Recommended values by environment:
+    - Production: 7 days (meets typical compliance requirements)
+    - Staging: 1 day (minimal retention for cost savings)
+    - Development: 1 day (minimal retention for cost savings)
+    
+    Longer retention increases storage costs but provides more recovery options.
+  EOT
   type        = number
   default     = 7
+
+  validation {
+    condition     = var.backup_retention_days >= 1 && var.backup_retention_days <= 35
+    error_message = "backup_retention_days must be between 1 and 35 days."
+  }
 }
 
 variable "preferred_backup_window" {
@@ -117,15 +131,43 @@ variable "serverless_v2" {
 }
 
 variable "serverless_min_acu" {
-  description = "Serverless v2 minimum ACU"
+  description = <<-EOT
+    Serverless v2 minimum ACU (0.5-128). Aurora Serverless v2 supports fractional ACU values starting from 0.5.
+    
+    Recommended values by environment:
+    - Production: 2 ACU (sufficient baseline capacity)
+    - Staging: 1 ACU (50% cost reduction)
+    - Development: 0.5 ACU (75% cost reduction, ~$43.50/month baseline)
+    
+    Lower values reduce costs in non-production environments while maintaining full functionality.
+  EOT
   type        = number
   default     = 2
+
+  validation {
+    condition     = var.serverless_min_acu >= 0.5 && var.serverless_min_acu <= 128
+    error_message = "serverless_min_acu must be between 0.5 and 128 ACU (Aurora Serverless v2 supported range)."
+  }
 }
 
 variable "serverless_max_acu" {
-  description = "Serverless v2 maximum ACU"
+  description = <<-EOT
+    Serverless v2 maximum ACU (0.5-128). Should be >= serverless_min_acu.
+    
+    Recommended values by environment:
+    - Production: 16 ACU (handles traffic spikes, ~$1,392/month at max)
+    - Staging: 8 ACU (moderate headroom, ~$696/month at max)
+    - Development: 2 ACU (minimal headroom, ~$174/month at max)
+    
+    Aurora automatically scales between min and max based on workload demand.
+  EOT
   type        = number
   default     = 16
+
+  validation {
+    condition     = var.serverless_max_acu >= 0.5 && var.serverless_max_acu <= 128
+    error_message = "serverless_max_acu must be between 0.5 and 128 ACU (Aurora Serverless v2 supported range)."
+  }
 }
 
 variable "instance_class" {

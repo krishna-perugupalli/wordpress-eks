@@ -14,29 +14,16 @@ variable "domain_name" {
   type        = string
 }
 
-# ----- Ingress / ALB / WAF -----
-variable "alb_certificate_arn" {
-  description = "ACM cert ARN for ALB listener; empty = no TLS annotation"
+# ----- TargetGroupBinding -----
+variable "target_group_arn" {
+  description = "ARN of the ALB target group to bind the WordPress service to"
   type        = string
-  default     = ""
 }
 
-variable "waf_acl_arn" {
-  description = "WAFv2 WebACL ARN to attach to ALB; empty = none"
-  type        = string
-  default     = ""
-}
-
-variable "alb_tags" {
-  description = "Tags to attach to the ALB via ingress annotation"
-  type        = map(string)
-  default     = {}
-}
-
-variable "ingress_forward_default" {
-  description = "When true, add a catch-all ALB rule that forwards unmatched HTTPS requests to the WordPress service"
+variable "behind_cloudfront" {
+  description = "When true, configure WordPress to trust CloudFront/ALB proxy headers for HTTPS detection"
   type        = bool
-  default     = true
+  default     = false
 }
 
 # Optional Helm name overrides (used by locals in main.tf)
@@ -320,4 +307,41 @@ variable "redis_auth_env_var_name" {
   description = "Environment variable name exposed to the pod that carries the Redis auth token"
   type        = string
   default     = "REDIS_AUTH_TOKEN"
+}
+
+# ----- WordPress Metrics Exporter -----
+variable "enable_metrics_exporter" {
+  description = "Enable WordPress metrics exporter sidecar container for Prometheus monitoring"
+  type        = bool
+  default     = false
+}
+
+variable "metrics_exporter_image" {
+  description = "Container image for WordPress metrics exporter sidecar"
+  type        = string
+  default     = "php:8.2-cli-alpine"
+}
+
+variable "metrics_exporter_resources_requests_cpu" {
+  description = "CPU requests for metrics exporter sidecar"
+  type        = string
+  default     = "50m"
+}
+
+variable "metrics_exporter_resources_requests_memory" {
+  description = "Memory requests for metrics exporter sidecar"
+  type        = string
+  default     = "64Mi"
+}
+
+variable "metrics_exporter_resources_limits_cpu" {
+  description = "CPU limits for metrics exporter sidecar"
+  type        = string
+  default     = "200m"
+}
+
+variable "metrics_exporter_resources_limits_memory" {
+  description = "Memory limits for metrics exporter sidecar"
+  type        = string
+  default     = "256Mi"
 }

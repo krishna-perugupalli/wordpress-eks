@@ -27,7 +27,7 @@ module "secrets_operator" {
 }
 
 # ---------------------------
-# Edge / Ingress (ALB + ACM + WAF)
+# Edge / Ingress (AWS Load Balancer Controller for TargetGroupBinding)
 # ---------------------------
 module "edge_ingress" {
   source = "../../modules/edge-ingress"
@@ -45,39 +45,38 @@ module "edge_ingress" {
 
   create_cf_certificate = var.create_cf_certificate
 
-  create_waf_regional   = var.create_waf_regional
-  waf_ruleset_level     = var.waf_ruleset_level
-  enable_common_ruleset = var.enable_common_ruleset
-
   tags = local.tags
 }
 
 # ---------------------------
-# Edge CDN (Cloudfront + ACM)
+# cert-manager (TLS Certificate Management)
 # ---------------------------
-module "edge_cdn" {
-  # Create CloudFront only when enabled and ALB has been discovered
-  count  = var.enable_cloudfront && local.alb_found ? 1 : 0
-  source = "../../modules/edge-cdn"
-  name   = local.name
+module "cert_manager" {
+  source = "../../modules/cert-manager"
+  count  = var.enable_cert_manager ? 1 : 0
 
-  domain_name = var.alb_domain_name
-  aliases     = var.cf_aliases
-  # Use the actual ALB DNS name as CloudFront origin
-  alb_dns_name        = data.aws_lb.wp_alb[0].dns_name
-  acm_certificate_arn = var.cf_acm_certificate_arn
-  waf_web_acl_arn     = ""
-  log_bucket_name     = local.cf_log_bucket_name
-  origin_secret_value = ""
+  name      = local.name
+  namespace = var.cert_manager_namespace
+
+  cert_manager_version      = var.cert_manager_version
+  enable_prometheus_metrics = var.enable_prometheus_stack
+
+  # ClusterIssuer configuration
+  create_letsencrypt_issuer = var.create_letsencrypt_issuer
+  letsencrypt_email         = var.letsencrypt_email
+  create_selfsigned_issuer  = var.create_selfsigned_issuer
+
+  # Resource configuration
+  resource_requests = var.cert_manager_resource_requests
+  resource_limits   = var.cert_manager_resource_limits
 
   tags = local.tags
 
-  # Ensure the ALB/Ingress exists before CF (origin dependency)
-  depends_on = [module.app_wordpress]
+  depends_on = [module.edge_ingress]
 }
 
 # ---------------------------
-# Observability (CW Agent + Fluent Bit + ALB alarms)
+# Basic Observability (CloudWatch + Fluent Bit)
 # ---------------------------
 module "observability" {
   source                  = "../../modules/observability"
@@ -93,13 +92,6 @@ module "observability" {
 
   install_cloudwatch_agent = var.install_cloudwatch_agent
   install_fluent_bit       = var.install_fluent_bit
-
-  create_alb_alarms = var.create_alb_alarms
-
-  ingress_name      = module.app_wordpress.ingress_name
-  ingress_namespace = module.app_wordpress.namespace
-  service_name      = module.app_wordpress.service_name
-  service_namespace = module.app_wordpress.namespace
 
   tags = local.tags
 
@@ -140,10 +132,8 @@ module "app_wordpress" {
   namespace   = var.wp_namespace
   domain_name = var.wp_domain_name
 
-  alb_certificate_arn = var.acm_certificate_arn
-  waf_acl_arn         = module.edge_ingress.waf_regional_arn
-  # Tag ALB via Ingress annotation so we can discover it for DNS/CF
-  alb_tags = { project = local.name, env = var.env, dns = var.wp_domain_name }
+  # NEW: Pass target group ARN from infra stack
+  target_group_arn = local.target_group_arn
 
   storage_class_name = var.wp_storage_class
   pvc_size           = var.wp_pvc_size
@@ -161,7 +151,7 @@ module "app_wordpress" {
   db_secret_arn       = local.wpapp_db_secret_arn
   db_admin_secret_arn = try(local.aurora_master_secret_arn, null)
 
-  ingress_forward_default = !var.enable_cloudfront
+  behind_cloudfront = var.enable_cloudfront
 
   admin_secret_arn        = local.wp_admin_secret_arn
   admin_user              = var.wp_admin_user
@@ -174,64 +164,4 @@ module "app_wordpress" {
   target_cpu_percent    = var.wp_target_cpu_percent
   target_memory_percent = var.wp_target_memory_value
   depends_on            = [module.secrets_operator]
-}
-
-#############################################
-# DNS resolution + conditional records
-#############################################
-
-# Discover the ALB created by AWS Load Balancer Controller using our tags
-data "aws_resourcegroupstaggingapi_resources" "wp_alb" {
-  resource_type_filters = ["elasticloadbalancing:loadbalancer"]
-  tag_filter {
-    key    = "project"
-    values = [local.name]
-  }
-  tag_filter {
-    key    = "env"
-    values = [var.env]
-  }
-  tag_filter {
-    key    = "dns"
-    values = [var.wp_domain_name]
-  }
-
-  # Do not depend on module.app_wordpress here; allow plan-time discovery.
-}
-
-# Materialize ALB details when found
-data "aws_lb" "wp_alb" {
-  count = local.alb_found ? 1 : 0
-  arn   = local.alb_arn
-}
-
-# If CloudFront is enabled, alias the domain to the distribution
-resource "aws_route53_record" "wp_cf_alias" {
-  count = var.enable_cloudfront && local.alb_found ? 1 : 0
-
-  zone_id = var.alb_hosted_zone_id
-  name    = var.alb_domain_name
-  type    = "A"
-
-  alias {
-    name                   = module.edge_cdn[0].distribution_domain_name
-    zone_id                = var.alb_hosted_zone_id
-    evaluate_target_health = false
-  }
-}
-
-# If CloudFront is disabled, alias the domain directly to the ALB
-resource "aws_route53_record" "wp_alb_alias" {
-  count = var.enable_alb_traffic && local.alb_found ? 1 : 0
-
-  zone_id = var.alb_hosted_zone_id
-  name    = var.alb_domain_name
-  type    = "A"
-
-  alias {
-    name                   = data.aws_lb.wp_alb[0].dns_name
-    zone_id                = data.aws_lb.wp_alb[0].zone_id
-    evaluate_target_health = true
-  }
-  depends_on = [module.app_wordpress]
 }

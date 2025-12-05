@@ -29,6 +29,56 @@ variable "tags" {
 }
 
 # ---------------------------
+# Optional Tagging (AWS Best Practices)
+# ---------------------------
+variable "cost_center" {
+  description = "Cost center for billing allocation and chargeback (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "application" {
+  description = "Application name for resource grouping (optional, defaults to 'wordpress-platform')"
+  type        = string
+  default     = "wordpress-platform"
+}
+
+variable "business_unit" {
+  description = "Business unit or department ownership (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "compliance_requirements" {
+  description = "Comma-separated compliance requirements (e.g., 'HIPAA,SOC2,PCI-DSS') (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "data_classification" {
+  description = "Default data classification level: public, internal, confidential, restricted (optional)"
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.data_classification == "" || contains(["public", "internal", "confidential", "restricted"], var.data_classification)
+    error_message = "data_classification must be empty or one of: public, internal, confidential, restricted"
+  }
+}
+
+variable "technical_contact" {
+  description = "Technical contact email (optional, defaults to owner_email)"
+  type        = string
+  default     = ""
+}
+
+variable "product_owner" {
+  description = "Product owner email or name (optional)"
+  type        = string
+  default     = ""
+}
+
+# ---------------------------
 # DB
 # ---------------------------
 variable "db_name" {
@@ -204,6 +254,69 @@ variable "karpenter_taints" {
 }
 
 # ---------------------------
+# cert-manager
+# ---------------------------
+variable "enable_cert_manager" {
+  description = "Enable cert-manager for TLS certificate management"
+  type        = bool
+  default     = false
+}
+
+variable "cert_manager_namespace" {
+  description = "Namespace for cert-manager installation"
+  type        = string
+  default     = "cert-manager"
+}
+
+variable "cert_manager_version" {
+  description = "cert-manager Helm chart version"
+  type        = string
+  default     = "v1.16.2"
+}
+
+variable "create_letsencrypt_issuer" {
+  description = "Create Let's Encrypt ClusterIssuers (prod and staging)"
+  type        = bool
+  default     = true
+}
+
+variable "letsencrypt_email" {
+  description = "Email address for Let's Encrypt account registration"
+  type        = string
+  default     = ""
+}
+
+variable "create_selfsigned_issuer" {
+  description = "Create self-signed ClusterIssuer for internal certificates"
+  type        = bool
+  default     = true
+}
+
+variable "cert_manager_resource_requests" {
+  description = "Resource requests for cert-manager controller"
+  type = object({
+    cpu    = string
+    memory = string
+  })
+  default = {
+    cpu    = "10m"
+    memory = "32Mi"
+  }
+}
+
+variable "cert_manager_resource_limits" {
+  description = "Resource limits for cert-manager controller"
+  type = object({
+    cpu    = string
+    memory = string
+  })
+  default = {
+    cpu    = "100m"
+    memory = "128Mi"
+  }
+}
+
+# ---------------------------
 # Observability
 # ---------------------------
 variable "observability_namespace" {
@@ -230,10 +343,21 @@ variable "install_fluent_bit" {
   default     = true
 }
 
-variable "create_alb_alarms" {
-  description = "Create ALB/TG CloudWatch alarms"
+# ---------------------------
+# Enhanced Observability Configuration
+# ---------------------------
+
+# Stack selection
+variable "enable_cloudwatch" {
+  description = "Enable CloudWatch monitoring components"
   type        = bool
   default     = true
+}
+
+variable "enable_prometheus_stack" {
+  description = "Enable Prometheus monitoring stack"
+  type        = bool
+  default     = false
 }
 
 # ---------------------------

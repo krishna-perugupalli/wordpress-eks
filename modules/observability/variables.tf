@@ -105,4 +105,3 @@ variable "service_namespace" {
   type        = string
   default     = "wordpress"
 }
-

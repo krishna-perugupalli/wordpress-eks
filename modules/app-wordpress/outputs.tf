@@ -8,17 +8,9 @@ output "namespace" {
   value       = var.namespace
 }
 
-output "ingress_hostname" {
-  description = "Ingress hostname configured for WordPress."
+output "domain_name" {
+  description = "Domain name configured for WordPress."
   value       = var.domain_name
-}
-
-output "ingress_name" {
-  description = "Deterministic Ingress name used by the chart (matches fullnameOverride/nameOverride logic)"
-  value = (
-    var.fullname_override != "" ? var.fullname_override :
-    (var.name_override != "" ? var.name_override : "${var.name}-wdp")
-  )
 }
 
 output "service_name" {
@@ -27,4 +19,19 @@ output "service_name" {
     var.fullname_override != "" ? var.fullname_override :
     (var.name_override != "" ? var.name_override : "${var.name}-wdp")
   )
+}
+
+output "target_group_binding_name" {
+  description = "Name of the TargetGroupBinding resource"
+  value       = "${local.effective_fullname}-tgb"
+}
+
+output "metrics_service_name" {
+  description = "Name of the WordPress metrics service (if enabled)"
+  value       = var.enable_metrics_exporter ? "${local.effective_fullname}-metrics" : null
+}
+
+output "metrics_enabled" {
+  description = "Whether WordPress metrics exporter is enabled"
+  value       = var.enable_metrics_exporter
 }

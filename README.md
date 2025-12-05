@@ -10,7 +10,8 @@
 - A production-grade AWS foundation (networking, KMS, shared buckets) sized for an EKS-hosted WordPress deployment.
 - Managed data services: Aurora MySQL Serverless v2 for the application database, ElastiCache Redis for object caching, and EFS for persistent media.
 - An EKS control plane with managed node groups, core add-ons (CNI, CoreDNS, kube-proxy, EFS CSI), and supporting IAM roles.
-- A Kubernetes application layer that installs the External Secrets Operator (ESO), AWS Load Balancer Controller, Karpenter, observability agents, and WordPress via Helm.
+- A standalone Application Load Balancer (ALB) managed directly by Terraform with TargetGroupBinding for pod registration.
+- A Kubernetes application layer that installs the External Secrets Operator (ESO), AWS Load Balancer Controller (for TargetGroupBinding), Karpenter, observability agents, and WordPress via Helm.
 - Guardrails such as GuardDuty, AWS Config, CloudTrail, and monthly cost budgets.
 
 ## Repository Layout
@@ -26,23 +27,24 @@ wordpress-eks.tfvars # Example variable overrides for Terraform runs
 ### Stack Boundaries
 | Stack | Key Responsibilities | Terraform Cloud Workspace |
 |-------|----------------------|---------------------------|
-| `stacks/infra` | Foundation (VPC, NAT, subnets), EKS cluster/IAM, Aurora, EFS, Redis, security baseline, shared secrets | `wp-infra` |
-| `stacks/app`   | ESO, AWS Load Balancer Controller, Karpenter, observability add-ons, WordPress Helm release | `wp-app` |
+| `stacks/infra` | Foundation (VPC, NAT, subnets), EKS cluster/IAM, Aurora, EFS, Redis, standalone ALB, WAF, Route53, security baseline, shared secrets | `wp-infra` |
+| `stacks/app`   | ESO, AWS Load Balancer Controller (for TargetGroupBinding), Karpenter, observability add-ons, WordPress Helm release with TargetGroupBinding | `wp-app` |
 
 The `stacks/app` configuration consumes outputs published by `stacks/infra` through Terraform Cloud remote state.
 
 ## Deployment Flow (High Level)
-1. **Terraform Cloud workspaces**: create/run `wp-infra`, then `wp-app`. The app stack refuses to plan until infra has produced required outputs (cluster name, OIDC, secrets policy ARN, etc.).
+1. **Terraform Cloud workspaces**: create/run `wp-infra`, then `wp-app`. The app stack refuses to plan until infra has produced required outputs (cluster name, OIDC, secrets policy ARN, ALB target group ARN, etc.).
 2. **Infrastructure apply**:
    - Builds networking/KMS, then EKS IAM, then the cluster and node group.
    - Provisions Aurora, EFS (with access point and optional backups), Redis (auth token in Secrets Manager), and security services.
-   - Publishes outputs (cluster metadata, secret ARNs, policy ARNs) for downstream stacks.
+   - Creates standalone ALB with target group, listeners, security groups, WAF association, and Route53 records.
+   - Publishes outputs (cluster metadata, secret ARNs, policy ARNs, ALB details, target group ARN) for downstream stacks.
 3. **Application apply**:
    - Installs ESO using the pre-created read policy so it can sync secrets from Secrets Manager.
-   - Deploys AWS Load Balancer Controller and issues ACM/WAF resources if enabled.
-   - Configures Karpenter for flexible compute, observability agents, and finally installs WordPress via Bitnami Helm chart pointing to Aurora/EFS/Redis.
+   - Deploys AWS Load Balancer Controller (for TargetGroupBinding functionality only).
+   - Configures Karpenter for flexible compute, observability agents, and finally installs WordPress via Bitnami Helm chart with TargetGroupBinding pointing to the pre-created target group.
 
-Refer to `docs/getting-started.md` for the exact Terraform Cloud configuration steps.
+Refer to the [Getting Started Guide](./docs/getting-started.md) for the exact Terraform Cloud configuration steps.
 
 ## Key AWS/Kubernetes Components
 - **Networking**: VPC with three public + three private subnets, NAT gateways (single or per-AZ), internet gateway, and routing tables tagged for Kubernetes discovery.
@@ -52,12 +54,81 @@ Refer to `docs/getting-started.md` for the exact Terraform Cloud configuration s
   - EFS shared filesystem with access point and AWS Backup support for `wp-content`.
   - Redis replication group with TLS/auth, fed from Secrets Manager.
 - **EKS Add-ons**: IRSA-enabled AWS controllers (LBC, ESO, CloudWatch Agent, Fluent Bit, EFS CSI), Karpenter node provisioning, namespace-specific service accounts.
-- **App Layer**: Bitnami WordPress chart configured for external database, ESO-managed secrets, ALB ingress with optional WAF and ACM certificates, horizontal autoscaling, and EFS-backed storage.
+- **App Layer**: Bitnami WordPress chart configured for external database, ESO-managed secrets, TargetGroupBinding for ALB integration, horizontal autoscaling, and EFS-backed storage.
+
+## Environment Profiles for Cost Optimization
+
+This platform supports three environment profiles that automatically optimize resource sizing and costs based on your use case:
+
+| Profile | NAT Strategy | Aurora ACU | CloudFront | Backup Retention | Monthly Cost | Use Case |
+|---------|-------------|------------|------------|------------------|--------------|----------|
+| **production** | HA (3 NATs) | 2-16 ACU | Enabled | 7 days | $500-900 | Production workloads requiring high availability |
+| **staging** | Single NAT | 1-8 ACU | Disabled | 1 day | $250-450 | Pre-production testing and validation |
+| **development** | Single NAT | 0.5-2 ACU | Disabled | 1 day | $200-350 | Development and experimentation |
+
+### Cost Savings
+- **Staging**: ~50% reduction vs production ($3,000-5,400 annual savings)
+- **Development**: ~60% reduction vs production ($3,600-6,600 annual savings)
+
+### How to Use
+Set the `environment_profile` variable in your Terraform configuration:
+
+```hcl
+# For production
+environment_profile = "production"
+
+# For staging
+environment_profile = "staging"
+
+# For development
+environment_profile = "development"
+```
+
+See example configurations in `examples/production.tfvars`, `examples/staging.tfvars`, and `examples/development.tfvars`.
+
+### Trade-offs by Profile
+
+**Production**
+- High availability with multi-AZ NAT Gateways
+- Maximum Aurora scaling headroom (2-16 ACU)
+- CloudFront CDN for global performance
+- 7-day backup retention for compliance
+- Highest cost (~$500-900/month) **
+
+**Staging**
+- Full functional parity with production
+- Sufficient Aurora capacity for testing (1-8 ACU)
+- Single NAT Gateway (AZ failure impacts connectivity)
+- No CloudFront (direct ALB access only) **
+- 1-day backup retention **
+- 50% cost savings (~$250-450/month)
+
+**Development**
+- Full functional parity with production
+- Minimal Aurora capacity for development (0.5-2 ACU)
+- Single NAT Gateway (AZ failure impacts connectivity) **
+- No CloudFront (direct ALB access only) **
+- 1-day backup retention **
+- Single-AZ deployments where possible **
+- 60% cost savings (~$200-350/month)
+
+### Future Enhancement: VPC Endpoints
+
+While the current implementation uses NAT Gateway for internet connectivity (required for WordPress plugins, OS updates, and external integrations), VPC Endpoints can be added as a future enhancement for:
+
+- **Enhanced Security**: Private AWS service communication without internet routing
+- **Compliance**: Meet requirements for workloads that must not traverse public internet
+- **Hybrid Approach**: Combine NAT Gateway (for general internet) with VPC Endpoints (for AWS services)
+- **Cost Optimization**: Reduce NAT data transfer charges for AWS service traffic
+
+The foundation module already supports VPC Endpoints through the `enable_vpc_endpoints` variable. See the [Cost Optimization Guide](./docs/operations/cost-optimization.md) for implementation details.
+
+**Note**: VPC Endpoints alone cannot replace NAT Gateway for WordPress deployments that require external internet access for plugins, themes, and third-party integrations.
 
 ## Tooling & Automation
 - **Terraform Cloud** for remote state, execution, and cross-workspace dependencies.
 - **Make targets** for local validation (`make fmt`, `make lint`, `make validate-infra`, `make validate-app`) and full plan/apply (`make plan-all`, `make apply-all`).
-- **Observability** via CloudWatch Agent and Fluent Bit shipping logs/metrics for both cluster and application workloads.
+- **Observability** via CloudWatch Agent and Fluent Bit shipping logs/metrics for both cluster and application workloads. Enhanced monitoring with Prometheus, Grafana, and AlertManager is available for comprehensive metrics collection, visualization, and alerting (see [Monitoring Guide](./docs/features/monitoring/README.md)).
 
 ## Secrets & IAM Relationships
 1. `modules/secrets-iam` provisions Secrets Manager entries for WordPress DB credentials, admin bootstrap password, and Redis auth tokens.
@@ -65,32 +136,89 @@ Refer to `docs/getting-started.md` for the exact Terraform Cloud configuration s
 3. The app stack feeds that ARN into the ESO module, which creates an IRSA role scoped to the ESO controller service account.
 4. ESO fetches secrets from Secrets Manager and materialises Kubernetes secrets consumed by the WordPress Helm release.
 
-## Suggested Reading Order for New Contributors
-1. **This document** for context.
-2. [`docs/getting-started.md`](./getting-started.md) for workspace setup and deployment steps.
-3. [`docs/runbook.md`](./runbook.md) for day-two operations and incident handling.
-4. Module-level Terraform files to inspect implementation details as needed.
+## Documentation
 
-## Suggested Additional Documentation
-- **Architecture Diagram**: A visual (e.g., PlantUML or draw.io) depicting module relationships, network layout, and data flow would help onboarding.
-- **Security & Compliance Notes**: Document guardrails, IAM least-privilege assumptions, and patching responsibilities for WordPress.
-- **Disaster Recovery Plan**: Formal RTO/RPO targets, backup/restore testing procedures, and cross-region strategy once enabled.
-- **CI/CD Integration Guide**: When introducing automated pipelines, capture how plans/applies are triggered and gated.
+Complete documentation is organized by category for easy navigation:
 
-## Documentation Index
-| Topic | Location | Notes |
-|-------|----------|-------|
-| End-to-end deployment steps | `docs/getting-started.md` | Terraform Cloud workspace setup, variable conventions, run order. |
-| Architecture deep dive | `docs/architecture.md` | Network layout, module boundaries, data flows, and security controls. |
-| Operations runbook | `docs/runbook.md` | Common Day-2 tasks, backup/restore hints, and troubleshooting entry points. |
+### Quick Links
+- **[Getting Started](./docs/getting-started.md)** - Deploy the platform from scratch
+- **[Architecture Overview](./docs/architecture.md)** - System design and component relationships
+- **[Operations Runbook](./docs/runbook.md)** - Day-2 operations and troubleshooting
+- **[Tagging Strategy](./docs/tagging-strategy.md)** - AWS tagging best practices and cost allocation
+- **[Monitoring Setup](./docs/features/monitoring/README.md)** - Prometheus, Grafana, and AlertManager
+
+### Documentation Categories
+
+#### [Modules](./docs/modules/README.md)
+Detailed guides for each Terraform module:
+- [Observability](./docs/modules/observability.md) - Monitoring and logging infrastructure
+- [WordPress](./docs/modules/wordpress.md) - WordPress application deployment
+- [Data Services](./docs/modules/data-services.md) - Aurora, Redis, and EFS configuration
+- [Edge Ingress](./docs/modules/edge-ingress.md) - ALB and ingress controllers
+- [Security](./docs/modules/security.md) - Security baseline and compliance
+- [Networking](./docs/modules/networking.md) - VPC and network foundation
+
+#### [Features](./docs/features/README.md)
+User-facing feature documentation:
+- [Monitoring](./docs/features/monitoring/README.md) - Complete monitoring stack guide
+  - [Prometheus](./docs/features/monitoring/prometheus.md) - Metrics collection
+  - [Grafana](./docs/features/monitoring/grafana.md) - Dashboards and visualization
+  - [Alerting](./docs/features/monitoring/alerting.md) - AlertManager configuration
+  - [CloudFront Monitoring](./docs/features/monitoring/cloudfront.md) - CDN metrics
+  - [Migration Guide](./docs/features/monitoring/migration-guide.md) - CloudWatch to Prometheus
+- [CloudFront Integration](./docs/cloudfront.md) - Optional CDN configuration
+- [Karpenter Autoscaling](./docs/karpenter.md) - Node autoscaling with Karpenter
+- [TargetGroupBinding](./docs/targetgroupbinding.md) - ALB pod registration
+
+#### [Operations](./docs/operations/README.md)
+Day-2 operations and maintenance:
+- [High Availability & DR](./docs/operations/ha-dr.md) - Resilience and disaster recovery
+- [Security & Compliance](./docs/operations/security-compliance.md) - Security validation
+- [Network Resilience](./docs/operations/network-resilience.md) - Network partition handling
+- [Backup & Restore](./docs/operations/backup-restore.md) - Data protection procedures
+- [Cost Optimization](./docs/operations/cost-optimization.md) - Cost monitoring and budgets
+- [Troubleshooting](./docs/operations/troubleshooting.md) - Common issues and solutions
+
+#### [Reference](./docs/reference/README.md)
+Technical reference documentation:
+- [Variables](./docs/reference/variables.md) - All Terraform input variables
+- [Outputs](./docs/reference/outputs.md) - All Terraform outputs
+- [Alert Rules](./docs/reference/alert-rules.md) - Prometheus alert definitions
+- [Dashboards](./docs/reference/dashboards.md) - Grafana dashboard catalog
+
+### Suggested Reading Order
+
+**For New Users:**
+1. [Getting Started](./docs/getting-started.md) - Initial deployment walkthrough
+2. [Architecture](./docs/architecture.md) - Understand the system design
+3. [Modules Overview](./docs/modules/README.md) - Learn about available modules
+
+**For Operators:**
+1. [Operations Runbook](./docs/runbook.md) - Day-2 operations guide
+2. [Monitoring Setup](./docs/features/monitoring/README.md) - Set up observability
+3. [Troubleshooting](./docs/operations/troubleshooting.md) - Common issues
+4. [HA & DR](./docs/operations/ha-dr.md) - Resilience procedures
+
+**For Developers:**
+1. [Architecture](./docs/architecture.md) - System design deep dive
+2. [Module Documentation](./docs/modules/README.md) - Module implementation details
+3. [Reference Documentation](./docs/reference/README.md) - Variables and outputs
 
 ## In Progress
 - You can find the progress in the "issues"
 
+## CloudFront Integration (Optional)
+The standalone ALB architecture supports optional CloudFront integration:
+- **ALB Security Group Restriction**: Restrict ALB ingress to CloudFront IP ranges only
+- **Conditional Route53 Records**: Route53 can point to either ALB directly or CloudFront distribution  
+- **WordPress Proxy Header Trust**: WordPress trusts X-Forwarded-Proto headers from CloudFront/ALB
+
+See [CloudFront Integration](./docs/cloudfront.md) and `examples/cloudfront-integration.tfvars` for configuration details.
+
 ## Known Issues
-- Route53 record will not be created in the first run as the app stack creates the ingress and then in the next run the record is created. This can be resolved by running `terraform apply` twice in the app stack.
 - DNS management outside Route53 (e.g., external providers).
 - Domain validation for ACM certificates should be created manually beforehand; automated DNS validation is not yet implemented.
+- TargetGroupBinding requires AWS Load Balancer Controller to be running for pod IP registration.
 
 ## Not Supported At This Time
 - Multi-region deployments.
