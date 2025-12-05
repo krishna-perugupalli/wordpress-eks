@@ -128,7 +128,7 @@ The foundation module already supports VPC Endpoints through the `enable_vpc_end
 ## Tooling & Automation
 - **Terraform Cloud** for remote state, execution, and cross-workspace dependencies.
 - **Make targets** for local validation (`make fmt`, `make lint`, `make validate-infra`, `make validate-app`) and full plan/apply (`make plan-all`, `make apply-all`).
-- **Observability** via CloudWatch Agent and Fluent Bit shipping logs/metrics for both cluster and application workloads. Enhanced monitoring with Prometheus, Grafana, and AlertManager is available for comprehensive metrics collection, visualization, and alerting (see [Monitoring Guide](./docs/features/monitoring/README.md)).
+<!-- - **Observability** via CloudWatch Agent and Fluent Bit shipping logs/metrics for both cluster and application workloads. Enhanced monitoring with Prometheus, Grafana, and AlertManager is available for comprehensive metrics collection, visualization, and alerting (see [Monitoring Guide](./docs/features/monitoring/README.md)). -->
 
 ## Secrets & IAM Relationships
 1. `modules/secrets-iam` provisions Secrets Manager entries for WordPress DB credentials, admin bootstrap password, and Redis auth tokens.
@@ -145,13 +145,13 @@ Complete documentation is organized by category for easy navigation:
 - **[Architecture Overview](./docs/architecture.md)** - System design and component relationships
 - **[Operations Runbook](./docs/runbook.md)** - Day-2 operations and troubleshooting
 - **[Tagging Strategy](./docs/tagging-strategy.md)** - AWS tagging best practices and cost allocation
-- **[Monitoring Setup](./docs/features/monitoring/README.md)** - Prometheus, Grafana, and AlertManager
+<!-- - **[Monitoring Setup](./docs/features/monitoring/README.md)** - Prometheus, Grafana, and AlertManager -->
 
 ### Documentation Categories
 
 #### [Modules](./docs/modules/README.md)
 Detailed guides for each Terraform module:
-- [Observability](./docs/modules/observability.md) - Monitoring and logging infrastructure
+<!-- - [Observability](./docs/modules/observability.md) - Monitoring and logging infrastructure -->
 - [WordPress](./docs/modules/wordpress.md) - WordPress application deployment
 - [Data Services](./docs/modules/data-services.md) - Aurora, Redis, and EFS configuration
 - [Edge Ingress](./docs/modules/edge-ingress.md) - ALB and ingress controllers
@@ -160,12 +160,12 @@ Detailed guides for each Terraform module:
 
 #### [Features](./docs/features/README.md)
 User-facing feature documentation:
-- [Monitoring](./docs/features/monitoring/README.md) - Complete monitoring stack guide
+<!-- - [Monitoring](./docs/features/monitoring/README.md) - Complete monitoring stack guide
   - [Prometheus](./docs/features/monitoring/prometheus.md) - Metrics collection
   - [Grafana](./docs/features/monitoring/grafana.md) - Dashboards and visualization
   - [Alerting](./docs/features/monitoring/alerting.md) - AlertManager configuration
   - [CloudFront Monitoring](./docs/features/monitoring/cloudfront.md) - CDN metrics
-  - [Migration Guide](./docs/features/monitoring/migration-guide.md) - CloudWatch to Prometheus
+  - [Migration Guide](./docs/features/monitoring/migration-guide.md) - CloudWatch to Prometheus -->
 - [CloudFront Integration](./docs/cloudfront.md) - Optional CDN configuration
 - [Karpenter Autoscaling](./docs/karpenter.md) - Node autoscaling with Karpenter
 - [TargetGroupBinding](./docs/targetgroupbinding.md) - ALB pod registration
@@ -195,7 +195,7 @@ Technical reference documentation:
 
 **For Operators:**
 1. [Operations Runbook](./docs/runbook.md) - Day-2 operations guide
-2. [Monitoring Setup](./docs/features/monitoring/README.md) - Set up observability
+<!-- 2. [Monitoring Setup](./docs/features/monitoring/README.md) - Set up observability -->
 3. [Troubleshooting](./docs/operations/troubleshooting.md) - Common issues
 4. [HA & DR](./docs/operations/ha-dr.md) - Resilience procedures
 
