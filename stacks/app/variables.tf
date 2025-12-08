@@ -317,47 +317,64 @@ variable "cert_manager_resource_limits" {
 }
 
 # ---------------------------
-# Observability
 # ---------------------------
-variable "observability_namespace" {
-  description = "Namespace to install CW Agent/Fluent Bit"
-  type        = string
-  default     = "observability"
-}
+# Observability Configuration
+# ---------------------------
 
-variable "cw_retention_days" {
-  description = "CloudWatch log retention"
-  type        = number
-  default     = 30
-}
-
-variable "install_cloudwatch_agent" {
-  description = "Install CW Agent via Helm"
+# Component toggles
+variable "enable_prometheus" {
+  description = "Enable Prometheus (kube-prometheus-stack)"
   type        = bool
   default     = true
 }
 
-variable "install_fluent_bit" {
-  description = "Install Fluent Bit via Helm"
+variable "enable_grafana" {
+  description = "Enable Grafana"
   type        = bool
   default     = true
 }
 
-# ---------------------------
-# Enhanced Observability Configuration
-# ---------------------------
+variable "enable_alertmanager" {
+  description = "Enable Alertmanager"
+  type        = bool
+  default     = true
+}
 
-# Stack selection
-variable "enable_cloudwatch" {
-  description = "Enable CloudWatch monitoring components"
+variable "enable_fluentbit" {
+  description = "Enable Fluent Bit for log forwarding"
+  type        = bool
+  default     = true
+}
+
+variable "enable_yace" {
+  description = "Enable YACE CloudWatch exporter (placeholder)"
+  type        = bool
+  default     = true
+}
+
+# Dashboard toggles
+variable "enable_wp_dashboards" {
+  description = "Enable WordPress-specific dashboards"
+  type        = bool
+  default     = true
+}
+
+variable "enable_aws_dashboards" {
+  description = "Enable AWS service dashboards (RDS, ElastiCache, etc.)"
+  type        = bool
+  default     = true
+}
+
+variable "enable_cost_dashboards" {
+  description = "Enable cost allocation dashboards"
   type        = bool
   default     = true
 }
 
 variable "enable_prometheus_stack" {
-  description = "Enable Prometheus monitoring stack"
+  description = "Enable Prometheus monitoring stack (legacy, maps to enable_prometheus)"
   type        = bool
-  default     = false
+  default     = true
 }
 
 # ---------------------------

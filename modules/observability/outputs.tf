@@ -1,23 +1,33 @@
-output "namespace" {
-  value       = var.namespace
-  description = "Namespace used for observability agents"
+#############################################
+# Module Outputs
+#############################################
+# These outputs expose key information about deployed observability
+# components for consumption by other modules or stacks.
+#
+# All outputs use try() to gracefully handle cases where the
+# EKS Blueprints Addons module doesn't expose expected values.
+
+output "grafana_url" {
+  description = "Grafana service URL (placeholder for Phase 2)"
+  value       = try(module.eks_blueprints_addons.grafana_url, "")
 }
 
-output "log_groups" {
-  description = "CloudWatch log group names for app/dataplane/host"
-  value = {
-    application = try(aws_cloudwatch_log_group.app[0].name, null)
-    dataplane   = try(aws_cloudwatch_log_group.dataplane[0].name, null)
-    host        = try(aws_cloudwatch_log_group.host[0].name, null)
-  }
+output "grafana_admin_secret_name" {
+  description = "Kubernetes secret containing Grafana admin credentials"
+  value       = try(module.eks_blueprints_addons.grafana_admin_secret, "")
 }
 
-output "cwagent_role_arn" {
-  description = "IAM role ARN for CloudWatch Agent"
-  value       = try(aws_iam_role.cwagent[0].arn, null)
+output "prometheus_namespace" {
+  description = "Namespace where Prometheus is deployed"
+  value       = try(module.eks_blueprints_addons.prometheus_namespace, local.prometheus_namespace)
 }
 
-output "fluentbit_role_arn" {
-  description = "IAM role ARN for Fluent Bit"
-  value       = try(aws_iam_role.fluentbit[0].arn, null)
+output "alertmanager_namespace" {
+  description = "Namespace where Alertmanager is deployed"
+  value       = try(module.eks_blueprints_addons.alertmanager_namespace, local.prometheus_namespace)
+}
+
+output "fluentbit_namespace" {
+  description = "Namespace where Fluent Bit is deployed"
+  value       = try(module.eks_blueprints_addons.fluentbit_namespace, "logging")
 }
