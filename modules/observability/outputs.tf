@@ -19,17 +19,17 @@ output "grafana_admin_secret_name" {
 
 output "prometheus_namespace" {
   description = "Namespace where Prometheus is deployed"
-  value       = try(module.eks_blueprints_addons.prometheus_namespace, local.prometheus_namespace)
+  value       = try(module.eks_blueprints_addons.kube_prometheus_stack.namespace, "kube-prometheus-stack")
 }
 
 output "alertmanager_namespace" {
   description = "Namespace where Alertmanager is deployed"
-  value       = try(module.eks_blueprints_addons.alertmanager_namespace, local.prometheus_namespace)
+  value       = try(module.eks_blueprints_addons.kube_prometheus_stack.namespace, "kube-prometheus-stack")
 }
 
 output "fluentbit_namespace" {
   description = "Namespace where Fluent Bit is deployed"
-  value       = try(module.eks_blueprints_addons.fluentbit_namespace, "logging")
+  value       = try(module.eks_blueprints_addons.aws_for_fluentbit.namespace, "kube-system")
 }
 
 # YACE Exporter Outputs

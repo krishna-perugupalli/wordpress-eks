@@ -42,24 +42,29 @@ output "selfsigned_issuer" {
 }
 
 #############################################
-# Basic Observability Outputs
+# Observability Outputs
 #############################################
-output "monitoring_namespace" {
-  description = "Namespace used for observability agents"
-  value       = module.observability.namespace
+output "prometheus_namespace" {
+  description = "Namespace where Prometheus is deployed"
+  value       = module.observability.prometheus_namespace
 }
 
-output "cloudwatch_log_groups" {
-  description = "CloudWatch log group names for app/dataplane/host"
-  value       = module.observability.log_groups
+output "alertmanager_namespace" {
+  description = "Namespace where Alertmanager is deployed"
+  value       = module.observability.alertmanager_namespace
 }
 
-output "cwagent_role_arn" {
-  description = "IAM role ARN for CloudWatch Agent"
-  value       = module.observability.cwagent_role_arn
+output "fluentbit_namespace" {
+  description = "Namespace where Fluent Bit is deployed"
+  value       = module.observability.fluentbit_namespace
 }
 
-output "fluentbit_role_arn" {
-  description = "IAM role ARN for Fluent Bit"
-  value       = module.observability.fluentbit_role_arn
+output "grafana_url" {
+  description = "Grafana service URL"
+  value       = module.observability.grafana_url
+}
+
+output "alerting_enabled" {
+  description = "Whether alerting is enabled"
+  value       = module.observability.alerting_enabled
 }
