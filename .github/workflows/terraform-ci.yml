@@ -5,8 +5,6 @@ on:
     branches:
       - main
       - master
-      - tflint-fix
-      - feature/s3-offload
     paths:
       - '**/*.tf'
       - '**/*.tfvars'
@@ -16,37 +14,44 @@ on:
       - '**/*.tf'
       - '**/*.tfvars'
       - '.github/workflows/terraform-ci.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
 jobs:
-  validate:
-    name: Terraform Validate & Scan
+  discover-directories:
+    name: Discover Terraform Directories
     runs-on: ubuntu-latest
-    env:
-      TF_IN_AUTOMATION: true
-      TF_INPUT: false
+    outputs:
+      directories: ${{ steps.find-dirs.outputs.directories }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Prepare Terraform CLI configuration
+      - name: Find Terraform directories
+        id: find-dirs
         run: |
-          TF_CLI_CONFIG_FILE="$RUNNER_TEMP/terraform.rc"
-          TF_PLUGIN_CACHE_DIR="$RUNNER_TEMP/terraform-plugin-cache"
-          echo "TF_CLI_CONFIG_FILE=$TF_CLI_CONFIG_FILE" >> "$GITHUB_ENV"
-          echo "TF_PLUGIN_CACHE_DIR=$TF_PLUGIN_CACHE_DIR" >> "$GITHUB_ENV"
-          mkdir -p "$(dirname "$TF_CLI_CONFIG_FILE")"
-          mkdir -p "$TF_PLUGIN_CACHE_DIR"
-          cat <<'EOF' > "$TF_CLI_CONFIG_FILE"
-          plugin_cache_dir   = "$TF_PLUGIN_CACHE_DIR"
-          disable_checkpoint = true
-          EOF
+          # Find all directories containing .tf files, excluding .terraform directories
+          terraform_dirs=$(find . -type f -name '*.tf' -not -path '*/.terraform/*' -exec dirname {} \; | sort -u | jq -R -s -c 'split("\n")[:-1]')
+          echo "directories=${terraform_dirs}" >> $GITHUB_OUTPUT
+          echo "Found directories: ${terraform_dirs}"
+
+  terraform-format:
+    name: Terraform Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -55,49 +60,221 @@ jobs:
           terraform_wrapper: false
 
       - name: Terraform format check
-        run: terraform fmt -check -recursive
-
-      - name: Terraform init & validate (all directories)
-        shell: bash
+        id: fmt
         run: |
-          set -euo pipefail
-          mapfile -t terraform_dirs < <(
-            find . -type f -name '*.tf' -not -path '*/.terraform/*' -exec dirname {} \; | sort -u
-          )
+          # Run format check and capture output
+          if ! terraform fmt -check -recursive -diff > fmt_output.txt 2>&1; then
+            echo "format_failed=true" >> $GITHUB_OUTPUT
+            cat fmt_output.txt
+            echo "::error::Terraform files are not properly formatted. Run 'terraform fmt -recursive' to fix."
+            exit 1
+          else
+            echo "format_failed=false" >> $GITHUB_OUTPUT
+            echo "All Terraform files are properly formatted."
+          fi
 
-          for dir in "${terraform_dirs[@]}"; do
-            echo "::group::${dir}"
-            terraform -chdir="$dir" init -backend=false -input=false >/dev/null
-            terraform -chdir="$dir" validate
-            echo "::endgroup::"
-          done
+      - name: Comment on PR with format errors
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('fmt_output.txt', 'utf8');
+            const body = `## ❌ Terraform Format Check Failed
+            
+            The following files need formatting:
+            
+            \`\`\`diff
+            ${output}
+            \`\`\`
+            
+            **Fix:** Run \`terraform fmt -recursive\` or \`make fmt\` to format all files.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  terraform-validate:
+    name: Validate (${{ matrix.directory }})
+    runs-on: ubuntu-latest
+    needs: discover-directories
+    if: needs.discover-directories.outputs.directories != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: ${{ fromJson(needs.discover-directories.outputs.directories) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+          terraform_wrapper: false
+
+      - name: Cache Terraform plugins
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.terraform.d/plugin-cache
+          key: ${{ runner.os }}-terraform-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      - name: Configure Terraform plugin cache
+        run: |
+          mkdir -p ~/.terraform.d/plugin-cache
+          cat > ~/.terraformrc <<EOF
+          plugin_cache_dir = "$HOME/.terraform.d/plugin-cache"
+          disable_checkpoint = true
+          EOF
+
+      - name: Terraform init
+        id: init
+        working-directory: ${{ matrix.directory }}
+        run: |
+          terraform init -backend=false -input=false
+
+      - name: Terraform validate
+        id: validate
+        working-directory: ${{ matrix.directory }}
+        run: |
+          terraform validate -json > validate_output.json || true
+          cat validate_output.json
+          
+          # Check if validation passed
+          if jq -e '.valid == false' validate_output.json > /dev/null; then
+            echo "validation_failed=true" >> $GITHUB_OUTPUT
+            jq -r '.diagnostics[] | "::error file=\(.range.filename),line=\(.range.start.line)::\(.severity | ascii_upcase): \(.summary) - \(.detail)"' validate_output.json
+            exit 1
+          else
+            echo "validation_failed=false" >> $GITHUB_OUTPUT
+            echo "✅ Validation passed for ${{ matrix.directory }}"
+          fi
+
+      - name: Upload validation results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-${{ hashFiles(format('{0}/**', matrix.directory)) }}
+          path: ${{ matrix.directory }}/validate_output.json
+          retention-days: 7
+
+  tflint:
+    name: TFLint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache TFLint plugins
+        uses: actions/cache@v4
+        with:
+          path: ~/.tflint.d/plugins
+          key: ${{ runner.os }}-tflint-${{ hashFiles('.tflint.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-tflint-
 
       - name: Setup TFLint
-        uses: terraform-linters/setup-tflint@v3
+        uses: terraform-linters/setup-tflint@v4
         with:
           tflint_version: v0.51.2
 
       - name: TFLint init
         run: tflint --init
 
-      - name: TFLint (recursive)
-        run: tflint --recursive
+      - name: TFLint recursive scan
+        id: tflint
+        run: |
+          # Run tflint and capture output
+          if ! tflint --recursive --format compact > tflint_output.txt 2>&1; then
+            echo "tflint_failed=true" >> $GITHUB_OUTPUT
+            cat tflint_output.txt
+            
+            # Create annotations for errors
+            while IFS= read -r line; do
+              if [[ $line =~ ^([^:]+):([0-9]+):([0-9]+):\ (Error|Warning):\ (.+)$ ]]; then
+                file="${BASH_REMATCH[1]}"
+                line_num="${BASH_REMATCH[2]}"
+                severity="${BASH_REMATCH[4]}"
+                message="${BASH_REMATCH[5]}"
+                echo "::${severity,,} file=${file},line=${line_num}::${message}"
+              fi
+            done < tflint_output.txt
+            
+            exit 1
+          else
+            echo "tflint_failed=false" >> $GITHUB_OUTPUT
+            echo "✅ TFLint scan passed"
+          fi
 
-      # - name: Ensure reports directory
-      #   run: mkdir -p reports
+      - name: Comment on PR with TFLint results
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('tflint_output.txt', 'utf8');
+            const body = `## ❌ TFLint Scan Failed
+            
+            \`\`\`
+            ${output}
+            \`\`\`
+            
+            Please fix the issues identified by TFLint before merging.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
 
-      # - name: Checkov scan
-      #   id: checkov
-      #   uses: bridgecrewio/checkov-action@v12
-      #   with:
-      #     directory: .
-      #     framework: terraform
-      #     output_format: json
-      #     output_file_path: reports/checkov-report.json
-      #
-      # - name: Upload Checkov report
-      #   if: always()
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: checkov-report
-      #     path: reports/checkov-report.json
+  validation-summary:
+    name: Validation Summary
+    runs-on: ubuntu-latest
+    needs: [terraform-format, terraform-validate, tflint]
+    if: always()
+    steps:
+      - name: Check validation results
+        run: |
+          format_result="${{ needs.terraform-format.result }}"
+          validate_result="${{ needs.terraform-validate.result }}"
+          tflint_result="${{ needs.tflint.result }}"
+          
+          echo "## Validation Results"
+          echo "- Format Check: ${format_result}"
+          echo "- Terraform Validate: ${validate_result}"
+          echo "- TFLint: ${tflint_result}"
+          
+          if [[ "$format_result" != "success" ]] || [[ "$validate_result" != "success" ]] || [[ "$tflint_result" != "success" ]]; then
+            echo "::error::One or more validation checks failed"
+            exit 1
+          fi
+          
+          echo "✅ All validation checks passed!"
+
+      - name: Post success comment on PR
+        if: success() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `## ✅ Terraform CI Validation Passed
+            
+            All validation checks completed successfully:
+            - ✅ Terraform format check
+            - ✅ Terraform validate
+            - ✅ TFLint scan
+            
+            Your code is ready for review!`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
