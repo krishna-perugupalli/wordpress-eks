@@ -107,7 +107,7 @@ module "observability" {
   redis_endpoint = local.redis_endpoint
   mysql_endpoint = local.writer_endpoint
   project_name   = local.tags.Project
-  environment    = local.tags.Environment
+  environment    = local.tags.Env
 
   # Common tags
   tags = local.tags
