@@ -1,0 +1,647 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "WordPress Application Overview",
+    "description": "Comprehensive WordPress application monitoring dashboard showing site health, performance metrics, error rates, and user activity patterns. Focuses on operational decision-making metrics for platform engineers and on-call teams.",
+    "tags": ["wordpress", "application", "production", "monitoring", "overview"],
+    "timezone": "UTC",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Overview",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+        "collapsed": false,
+        "panels": []
+      },
+      {
+        "id": 2,
+        "title": "WordPress Site Response Time",
+        "description": "Average response time for WordPress requests. CRITICAL: Values above 2 seconds severely impact user experience and SEO rankings. NORMAL: 200-800ms. ACTION REQUIRED: Investigate database queries, plugin performance, or server resources if consistently above 1s.",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 1},
+        "targets": [
+          {
+            "expr": "wordpress_response_time_seconds",
+            "legendFormat": "Response Time",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "min": 0,
+            "max": 5,
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.8},
+                {"color": "orange", "value": 1.5},
+                {"color": "red", "value": 2}
+              ]
+            },
+            "custom": {
+              "fillOpacity": 20,
+              "gradientMode": "opacity"
+            }
+          }
+        },
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [2], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ]
+        }
+      },
+      {
+        "id": 3,
+        "title": "Site Health Status",
+        "description": "WordPress site health indicator. 1 = healthy, 0 = unhealthy. Immediate attention required if unhealthy.",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 6, "y": 1},
+        "targets": [
+          {
+            "expr": "wordpress_site_health",
+            "legendFormat": "Health Status",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"options": {"0": {"text": "Unhealthy", "color": "red"}}, "type": "value"},
+              {"options": {"1": {"text": "Healthy", "color": "green"}}, "type": "value"}
+            ],
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "green", "value": 1}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Active User Sessions",
+        "description": "Current active user sessions indicating real-time site engagement. NORMAL: 10-100 sessions during business hours. ALERT: Sudden drops >50% may indicate site outage or performance issues. CAPACITY: >500 sessions may require scaling.",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 1},
+        "targets": [
+          {
+            "expr": "wordpress_active_sessions",
+            "legendFormat": "Active Sessions",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "steps": [
+                {"color": "blue", "value": null},
+                {"color": "green", "value": 10},
+                {"color": "yellow", "value": 100},
+                {"color": "orange", "value": 300},
+                {"color": "red", "value": 500}
+              ]
+            },
+            "mappings": [
+              {
+                "options": {
+                  "from": 0,
+                  "to": 5,
+                  "result": {"text": "LOW TRAFFIC", "color": "blue"}
+                },
+                "type": "range"
+              },
+              {
+                "options": {
+                  "from": 500,
+                  "to": null,
+                  "result": {"text": "HIGH LOAD", "color": "red"}
+                },
+                "type": "range"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "WordPress Uptime",
+        "description": "WordPress application uptime percentage over the selected time range. Values below 99% require investigation.",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 1},
+        "targets": [
+          {
+            "expr": "wordpress_uptime_percentage",
+            "legendFormat": "Uptime %",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 95},
+                {"color": "green", "value": 99}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Performance",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 9},
+        "collapsed": false,
+        "panels": []
+      },
+      {
+        "id": 7,
+        "title": "Database Query Performance",
+        "description": "WordPress database query execution time - CRITICAL USER IMPACT METRIC. OPTIMAL: <50ms average. WARNING: 100ms+ causes noticeable page load delays. CRITICAL: >500ms severely impacts user experience. ACTION: Optimize slow queries, add indexes, or scale database.",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 10},
+        "targets": [
+          {
+            "expr": "wordpress_db_query_time_seconds",
+            "legendFormat": "Avg Query Time",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, wordpress_db_query_time_seconds_bucket)",
+            "legendFormat": "95th Percentile Query Time",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(wordpress_db_queries_total[5m])",
+            "legendFormat": "Queries/sec",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "min": 0,
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.05},
+                {"color": "orange", "value": 0.1},
+                {"color": "red", "value": 0.5}
+              ]
+            },
+            "custom": {
+              "fillOpacity": 15,
+              "gradientMode": "hue"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Queries/sec"},
+              "properties": [
+                {"id": "unit", "value": "reqps"},
+                {"id": "custom.axisPlacement", "value": "right"}
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 8,
+        "title": "Redis Cache Hit Ratio",
+        "description": "Cache efficiency - DIRECTLY IMPACTS PAGE LOAD TIMES. EXCELLENT: >90% hit ratio. GOOD: 80-90%. POOR: <80% causes increased database load and slower response times. ACTION: Review cache configuration, TTL settings, or cache warming strategies.",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 10},
+        "targets": [
+          {
+            "expr": "redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_total) * 100",
+            "legendFormat": "Cache Hit Ratio",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(redis_keyspace_hits_total[5m])",
+            "legendFormat": "Cache Hits/sec",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(redis_keyspace_misses_total[5m])",
+            "legendFormat": "Cache Misses/sec",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "orange", "value": 60},
+                {"color": "yellow", "value": 80},
+                {"color": "light-green", "value": 90},
+                {"color": "green", "value": 95}
+              ]
+            },
+            "custom": {
+              "fillOpacity": 25
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byRegexp", "options": "/.*\\/sec/"},
+              "properties": [
+                {"id": "unit", "value": "reqps"},
+                {"id": "custom.axisPlacement", "value": "right"}
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 9,
+        "title": "Redis Memory Usage",
+        "description": "Redis cache memory utilization. High usage (above 80%) may lead to cache evictions and performance degradation.",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 18},
+        "targets": [
+          {
+            "expr": "redis_memory_used_bytes / redis_memory_max_bytes * 100",
+            "legendFormat": "Memory Usage %",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 70},
+                {"color": "red", "value": 85}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "WordPress Plugin Performance",
+        "description": "Performance impact of WordPress plugins. High execution times may indicate problematic plugins requiring optimization or removal.",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 18},
+        "targets": [
+          {
+            "expr": "wordpress_plugin_execution_time_seconds",
+            "legendFormat": "{{plugin_name}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.1},
+                {"color": "red", "value": 0.5}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Errors",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 26},
+        "collapsed": false,
+        "panels": []
+      },
+      {
+        "id": 12,
+        "title": "HTTP Error Rates - USER IMPACT",
+        "description": "HTTP errors directly affecting users. 4xx: Client errors (broken links, auth issues). 5xx: Server errors (application crashes, timeouts). ACCEPTABLE: <0.1% error rate. CRITICAL: >1% indicates widespread user impact requiring immediate investigation.",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 27},
+        "targets": [
+          {
+            "expr": "rate(aws_applicationelb_httpcode_target_4xx_count_sum[5m])",
+            "legendFormat": "4xx Client Errors/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(aws_applicationelb_httpcode_target_5xx_count_sum[5m])",
+            "legendFormat": "5xx Server Errors/sec",
+            "refId": "B"
+          },
+          {
+            "expr": "(rate(aws_applicationelb_httpcode_target_4xx_count_sum[5m]) + rate(aws_applicationelb_httpcode_target_5xx_count_sum[5m])) / rate(aws_applicationelb_request_count_sum[5m]) * 100",
+            "legendFormat": "Total Error Rate %",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "min": 0,
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.1},
+                {"color": "orange", "value": 1},
+                {"color": "red", "value": 5}
+              ]
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Total Error Rate %"},
+              "properties": [
+                {"id": "unit", "value": "percent"},
+                {"id": "custom.axisPlacement", "value": "right"},
+                {"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}
+              ]
+            },
+            {
+              "matcher": {"id": "byName", "options": "5xx Server Errors/sec"},
+              "properties": [
+                {"id": "color", "value": {"mode": "fixed", "fixedColor": "dark-red"}}
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 13,
+        "title": "HTTP Status Code Distribution",
+        "description": "Distribution of HTTP status codes from ALB. Helps identify patterns in user requests and application responses.",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 27},
+        "targets": [
+          {
+            "expr": "aws_applicationelb_httpcode_target_2xx_count_sum",
+            "legendFormat": "2xx Success",
+            "refId": "A"
+          },
+          {
+            "expr": "aws_applicationelb_httpcode_target_3xx_count_sum",
+            "legendFormat": "3xx Redirect",
+            "refId": "B"
+          },
+          {
+            "expr": "aws_applicationelb_httpcode_target_4xx_count_sum",
+            "legendFormat": "4xx Client Error",
+            "refId": "C"
+          },
+          {
+            "expr": "aws_applicationelb_httpcode_target_5xx_count_sum",
+            "legendFormat": "5xx Server Error",
+            "refId": "D"
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "title": "WordPress Error Log Rate",
+        "description": "Rate of WordPress application errors logged. Increasing error rates indicate application issues requiring investigation.",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 35},
+        "targets": [
+          {
+            "expr": "rate(wordpress_errors_total[5m])",
+            "legendFormat": "{{error_type}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.1},
+                {"color": "red", "value": 1}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 15,
+        "title": "ALB Target Response Time",
+        "description": "Response time from ALB to WordPress targets. High values indicate backend performance issues. Normal range: 100-500ms.",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 35},
+        "targets": [
+          {
+            "expr": "aws_applicationelb_target_response_time_average",
+            "legendFormat": "Target Response Time",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.5},
+                {"color": "red", "value": 1}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 16,
+        "title": "Traffic",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 43},
+        "collapsed": false,
+        "panels": []
+      },
+      {
+        "id": 17,
+        "title": "Page Views",
+        "description": "WordPress page views over time. Tracks user engagement and site traffic patterns. Sudden drops may indicate issues or outages.",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 44},
+        "targets": [
+          {
+            "expr": "rate(wordpress_page_views_total[5m])",
+            "legendFormat": "Page Views/sec",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 10},
+                {"color": "red", "value": 50}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 18,
+        "title": "User Activity Patterns",
+        "description": "User login and registration activity. Helps understand user engagement and identify unusual activity patterns.",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 44},
+        "targets": [
+          {
+            "expr": "rate(wordpress_user_logins_total[5m])",
+            "legendFormat": "Logins/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(wordpress_user_registrations_total[5m])",
+            "legendFormat": "Registrations/sec",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1},
+                {"color": "red", "value": 5}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 19,
+        "title": "ALB Request Count",
+        "description": "Total requests processed by the Application Load Balancer. Indicates overall traffic volume and helps with capacity planning.",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 52},
+        "targets": [
+          {
+            "expr": "rate(aws_applicationelb_request_count_sum[5m])",
+            "legendFormat": "Requests/sec",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 100},
+                {"color": "red", "value": 500}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 20,
+        "title": "Top WordPress Pages",
+        "description": "Most frequently accessed WordPress pages. Helps identify popular content and potential performance bottlenecks.",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 52},
+        "targets": [
+          {
+            "expr": "topk(10, rate(wordpress_page_views_total[5m]))",
+            "legendFormat": "{{page_url}}",
+            "refId": "A",
+            "format": "table"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps"
+          }
+        },
+        "transformations": [
+          {
+            "id": "sortBy",
+            "options": {
+              "sort": [{"field": "Value", "desc": true}]
+            }
+          }
+        ]
+      },
+      {
+        "id": 21,
+        "title": "Operational Health Summary",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 60},
+        "collapsed": false,
+        "panels": []
+      },
+      {
+        "id": 22,
+        "title": "Critical Metrics Status",
+        "description": "Real-time status of critical user-impacting metrics. RED = immediate action required. All metrics should be GREEN for optimal user experience.",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 61},
+        "targets": [
+          {
+            "expr": "wordpress_response_time_seconds < 1",
+            "legendFormat": "Response Time OK",
+            "refId": "A"
+          },
+          {
+            "expr": "redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_total) > 0.8",
+            "legendFormat": "Cache Hit Rate OK",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(aws_applicationelb_httpcode_target_5xx_count_sum[5m]) < 0.01",
+            "legendFormat": "Error Rate OK",
+            "refId": "C"
+          },
+          {
+            "expr": "wordpress_site_health == 1",
+            "legendFormat": "Site Health OK",
+            "refId": "D"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"options": {"0": {"text": "CRITICAL", "color": "red"}}, "type": "value"},
+              {"options": {"1": {"text": "HEALTHY", "color": "green"}}, "type": "value"}
+            ],
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "green", "value": 1}
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,170 @@
+groups:
+  - name: aws.services
+    rules:
+      # RDS CPU Utilization Alert (Warning)
+      - alert: RDSCPUUtilizationHigh
+        expr: |
+          aws_rds_cpuutilization_average > 80
+        for: 15m
+        labels:
+          severity: warning
+          component: aws
+          service: rds
+        annotations:
+          summary: "RDS CPU utilization is above 80%"
+          description: "RDS instance {{ $labels.dbinstance_identifier }} has CPU utilization of {{ $value | humanizePercentage }} for more than 15 minutes, exceeding the 80% threshold."
+          remediation: "Check database performance metrics, review slow queries, consider scaling RDS instance class, or optimize database queries. Monitor for long-running transactions."
+          runbook_url: "https://runbooks.example.com/rds-cpu-high"
+          dashboard_url: "https://grafana.example.com/d/aws-services"
+
+      # RDS Connection Count Alert (Critical)
+      # Note: Using DatabaseConnections metric from YACE configuration
+      # Using a threshold based on typical Aurora MySQL connection limits
+      - alert: RDSConnectionCountHigh
+        expr: |
+          aws_rds_database_connections_average > 400
+        for: 10m
+        labels:
+          severity: critical
+          component: aws
+          service: rds
+        annotations:
+          summary: "RDS connection count is high"
+          description: "RDS instance {{ $labels.dbinstance_identifier }} has {{ $value }} active connections, which may indicate connection pool exhaustion or connection leaks."
+          remediation: "Immediately check for connection leaks, review application connection pooling, kill long-running connections if necessary, and consider scaling RDS instance for higher connection limits."
+          runbook_url: "https://runbooks.example.com/rds-connections-critical"
+          dashboard_url: "https://grafana.example.com/d/aws-services"
+
+      # ElastiCache Memory Usage Alert (Warning)
+      # Note: Using DatabaseMemoryUsagePercentage metric from YACE configuration
+      - alert: ElastiCacheMemoryUsageHigh
+        expr: |
+          aws_elasticache_database_memory_usage_percentage_average > 85
+        for: 15m
+        labels:
+          severity: warning
+          component: aws
+          service: elasticache
+        annotations:
+          summary: "ElastiCache memory usage is above 85%"
+          description: "ElastiCache cluster {{ $labels.cache_cluster_id }} has memory usage of {{ $value | humanizePercentage }} for more than 15 minutes, exceeding the 85% threshold."
+          remediation: "Check cache hit ratio, review cache eviction policies, consider scaling ElastiCache node type, or optimize cache usage patterns. Monitor for memory pressure."
+          runbook_url: "https://runbooks.example.com/elasticache-memory-high"
+          dashboard_url: "https://grafana.example.com/d/aws-services"
+
+      # ElastiCache Eviction Rate Alert (Warning)
+      - alert: ElastiCacheEvictionRateHigh
+        expr: |
+          rate(aws_elasticache_evictions_sum[5m]) * 60 > 100
+        for: 10m
+        labels:
+          severity: warning
+          component: aws
+          service: elasticache
+        annotations:
+          summary: "ElastiCache eviction rate is above 100 evictions per minute"
+          description: "ElastiCache cluster {{ $labels.cache_cluster_id }} has an eviction rate of {{ $value | humanize }} evictions per minute for more than 10 minutes, exceeding the 100/min threshold."
+          remediation: "Check memory usage, review cache TTL settings, consider increasing ElastiCache memory capacity, or optimize cache key patterns to reduce memory pressure."
+          runbook_url: "https://runbooks.example.com/elasticache-evictions-high"
+          dashboard_url: "https://grafana.example.com/d/aws-services"
+
+      # ALB Target Error Rate Alert (Critical)
+      - alert: ALBTargetErrorRateHigh
+        expr: |
+          (
+            rate(aws_alb_httpcode_target_5xx_count_sum[5m]) /
+            rate(aws_alb_request_count_sum[5m])
+          ) * 100 > 5
+        for: 5m
+        labels:
+          severity: critical
+          component: aws
+          service: alb
+        annotations:
+          summary: "ALB target error rate is above 5%"
+          description: "Application Load Balancer {{ $labels.load_balancer }} has a target 5xx error rate of {{ $value | humanizePercentage }} for more than 5 minutes, exceeding the 5% threshold."
+          remediation: "Immediately check target health, verify WordPress pod status, review application logs, check database connectivity, and investigate recent deployments or configuration changes."
+          runbook_url: "https://runbooks.example.com/alb-target-errors-critical"
+          dashboard_url: "https://grafana.example.com/d/aws-services"
+
+      # Additional AWS service alerts for better coverage
+
+      # RDS Freeable Memory Low
+      - alert: RDSFreeableMemoryLow
+        expr: |
+          aws_rds_freeable_memory_average / (1024 * 1024 * 1024) < 1
+        for: 10m
+        labels:
+          severity: warning
+          component: aws
+          service: rds
+        annotations:
+          summary: "RDS freeable memory is below 1GB"
+          description: "RDS instance {{ $labels.dbinstance_identifier }} has only {{ $value | humanize }}GB of freeable memory remaining for more than 10 minutes."
+          remediation: "Check for memory-intensive queries, review buffer pool usage, consider scaling RDS instance class, or optimize database configuration parameters."
+          runbook_url: "https://runbooks.example.com/rds-memory-low"
+          dashboard_url: "https://grafana.example.com/d/aws-services"
+
+      # ElastiCache CPU Utilization High
+      - alert: ElastiCacheCPUUtilizationHigh
+        expr: |
+          aws_elasticache_cpuutilization_average > 80
+        for: 15m
+        labels:
+          severity: warning
+          component: aws
+          service: elasticache
+        annotations:
+          summary: "ElastiCache CPU utilization is above 80%"
+          description: "ElastiCache cluster {{ $labels.cache_cluster_id }} has CPU utilization of {{ $value | humanizePercentage }} for more than 15 minutes."
+          remediation: "Check cache operations, review client connection patterns, consider scaling ElastiCache node type, or optimize cache access patterns."
+          runbook_url: "https://runbooks.example.com/elasticache-cpu-high"
+          dashboard_url: "https://grafana.example.com/d/aws-services"
+
+      # ALB Response Time High
+      - alert: ALBResponseTimeHigh
+        expr: |
+          aws_alb_target_response_time_average > 2
+        for: 10m
+        labels:
+          severity: warning
+          component: aws
+          service: alb
+        annotations:
+          summary: "ALB target response time is above 2 seconds"
+          description: "Application Load Balancer {{ $labels.load_balancer }} has an average target response time of {{ $value | humanizeDuration }} for more than 10 minutes."
+          remediation: "Check WordPress application performance, review database query performance, verify cache hit rates, and investigate backend target health."
+          runbook_url: "https://runbooks.example.com/alb-response-time-high"
+          dashboard_url: "https://grafana.example.com/d/aws-services"
+
+      # ALB Unhealthy Target Count
+      - alert: ALBUnhealthyTargets
+        expr: |
+          aws_alb_un_healthy_host_count_average > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: aws
+          service: alb
+        annotations:
+          summary: "ALB has unhealthy targets"
+          description: "Application Load Balancer {{ $labels.load_balancer }} has {{ $value }} unhealthy targets for more than 5 minutes."
+          remediation: "Immediately check target group health, verify WordPress pod status, review health check configuration, and investigate pod readiness/liveness probes."
+          runbook_url: "https://runbooks.example.com/alb-unhealthy-targets"
+          dashboard_url: "https://grafana.example.com/d/aws-services"
+
+      # ElastiCache Connection Count High
+      - alert: ElastiCacheConnectionCountHigh
+        expr: |
+          aws_elasticache_curr_connections_average > 1000
+        for: 10m
+        labels:
+          severity: warning
+          component: aws
+          service: elasticache
+        annotations:
+          summary: "ElastiCache connection count is high"
+          description: "ElastiCache cluster {{ $labels.cache_cluster_id }} has {{ $value }} active connections for more than 10 minutes, which may indicate connection leaks."
+          remediation: "Check application connection pooling, review Redis client configurations, investigate for connection leaks, and monitor connection patterns."
+          runbook_url: "https://runbooks.example.com/elasticache-connections-high"
+          dashboard_url: "https://grafana.example.com/d/aws-services"

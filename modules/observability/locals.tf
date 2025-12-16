@@ -24,6 +24,13 @@ locals {
     "monitoring"
   )
 
+  # Monitoring namespace for exporters and ServiceMonitors
+  # Uses Blueprints output if available, otherwise defaults to "monitoring"
+  monitoring_namespace = try(
+    module.eks_blueprints_addons.kube_prometheus_stack.namespace,
+    "monitoring"
+  )
+
   # Dashboard toggles
   deploy_wp_dashboards   = var.enable_grafana && var.enable_wp_dashboards
   deploy_aws_dashboards  = var.enable_grafana && var.enable_aws_dashboards

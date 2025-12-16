@@ -1,0 +1,94 @@
+groups:
+  - name: wordpress.application
+    rules:
+      # HTTP 5xx Error Rate Alert (Critical)
+      - alert: WordPressHighErrorRate
+        expr: |
+          (
+            sum(rate(wordpress_http_requests_total{status=~"5.."}[5m])) by (instance) /
+            sum(rate(wordpress_http_requests_total[5m])) by (instance)
+          ) * 100 > 5
+        for: 5m
+        labels:
+          severity: critical
+          component: wordpress
+          service: wordpress-app
+        annotations:
+          summary: "WordPress HTTP 5xx error rate is above 5%"
+          description: "WordPress instance {{ $labels.instance }} has {{ $value | humanizePercentage }} 5xx error rate over the last 5 minutes, which exceeds the 5% threshold."
+          remediation: "Check WordPress application logs, verify database connectivity, and review recent deployments. Check ALB target health and pod status."
+          runbook_url: "https://runbooks.example.com/wordpress-high-error-rate"
+          dashboard_url: "https://grafana.example.com/d/wordpress-overview"
+
+      # Request Latency Alert (Warning)
+      - alert: WordPressHighLatency
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(wordpress_http_request_duration_seconds_bucket[10m])) by (le, instance)
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+          component: wordpress
+          service: wordpress-app
+        annotations:
+          summary: "WordPress request latency p95 is above 2 seconds"
+          description: "WordPress instance {{ $labels.instance }} has p95 latency of {{ $value | humanizeDuration }} over the last 10 minutes, exceeding the 2-second threshold."
+          remediation: "Check database performance, review slow queries, verify Redis cache hit rates, and check resource utilization. Consider scaling pods or optimizing queries."
+          runbook_url: "https://runbooks.example.com/wordpress-high-latency"
+          dashboard_url: "https://grafana.example.com/d/wordpress-overview"
+
+      # Pod Crash-Loop or Unavailability Alert (Critical)
+      - alert: WordPressPodUnavailable
+        expr: |
+          (
+            kube_deployment_status_replicas{deployment=~".*wordpress.*"} -
+            kube_deployment_status_replicas_available{deployment=~".*wordpress.*"}
+          ) > 0
+        for: 3m
+        labels:
+          severity: critical
+          component: wordpress
+          service: wordpress-app
+        annotations:
+          summary: "WordPress pods are unavailable"
+          description: "WordPress deployment {{ $labels.deployment }} in namespace {{ $labels.namespace }} has {{ $value }} unavailable pods for more than 3 minutes."
+          remediation: "Check pod status with 'kubectl get pods -n {{ $labels.namespace }}', review pod logs, verify resource limits, and check node capacity. Investigate recent deployments or configuration changes."
+          runbook_url: "https://runbooks.example.com/wordpress-pod-unavailable"
+          dashboard_url: "https://grafana.example.com/d/kubernetes-cluster"
+
+      # Pod Restart Rate Alert (Warning)
+      - alert: WordPressPodRestartRate
+        expr: |
+          increase(kube_pod_container_status_restarts_total{pod=~".*wordpress.*"}[1h]) > 3
+        for: 5m
+        labels:
+          severity: warning
+          component: wordpress
+          service: wordpress-app
+        annotations:
+          summary: "WordPress pod restart rate is high"
+          description: "WordPress pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted {{ $value }} times in the last hour, exceeding the threshold of 3 restarts."
+          remediation: "Check pod logs for crash reasons, review resource limits and requests, verify liveness/readiness probes, and check for OOMKilled events."
+          runbook_url: "https://runbooks.example.com/wordpress-pod-restarts"
+          dashboard_url: "https://grafana.example.com/d/kubernetes-cluster"
+
+      # WordPress Exporter Metrics Missing Alert (Warning)
+      - alert: WordPressExporterDown
+        expr: |
+          up{job="wordpress-metrics"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          component: wordpress
+          service: wordpress-exporter
+        annotations:
+          summary: "WordPress metrics exporter is down"
+          description: "WordPress metrics exporter on instance {{ $labels.instance }} has been down for more than 5 minutes. No WordPress application metrics are being collected."
+          remediation: "Check WordPress exporter pod status, verify ServiceMonitor configuration, and ensure the /metrics endpoint is accessible. Check if WordPress pods are running and the metrics sidecar is healthy."
+          runbook_url: "https://runbooks.example.com/wordpress-exporter-down"
+          dashboard_url: "https://grafana.example.com/d/wordpress-overview"
+
+      # Additional WordPress-specific alerts for better coverage
+      # Note: Additional custom metrics would need to be added to wordpress-exporter.php
+      # to enable more granular WordPress application monitoring

@@ -3,315 +3,462 @@
 # ==============================================================================
 # This file contains addon-specific Helm values and custom configurations for
 # observability components deployed via EKS Blueprints Addons.
-#
-# Phase 1: Placeholder structures for future implementation
-# Phase 2: Full Helm values, IRSA roles, and YACE exporter deployment
-# Phase 3: ServiceMonitor and PrometheusRule definitions
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
 # Prometheus (kube-prometheus-stack) Custom Values
 # ------------------------------------------------------------------------------
-# TODO: Phase 2 - Implement custom Helm values for kube-prometheus-stack
-#
-# Planned configurations:
-# - Resource requests/limits for Prometheus server
-# - Retention period and storage configuration
-# - ServiceMonitor definitions for WordPress components:
-#   * WordPress pods (PHP-FPM metrics)
-#   * MySQL exporter
-#   * Redis exporter
-# - PrometheusRule definitions for alerting:
-#   * High pod CPU/memory usage
-#   * Database connection pool exhaustion
-#   * Redis cache hit rate degradation
-#   * WordPress response time SLOs
-# - Persistent volume claims for metrics storage
-# - Node affinity and tolerations for scheduling
-#
-# Example structure (to be implemented):
-# locals {
-#   prometheus_values = {
-#     prometheus = {
-#       prometheusSpec = {
-#         retention = "15d"
-#         resources = {
-#           requests = { memory = "2Gi", cpu = "1000m" }
-#           limits   = { memory = "4Gi", cpu = "2000m" }
-#         }
-#         storageSpec = {
-#           volumeClaimTemplate = {
-#             spec = {
-#               accessModes = ["ReadWriteOnce"]
-#               resources   = { requests = { storage = "50Gi" } }
-#             }
-#           }
-#         }
-#       }
-#     }
-#   }
-# }
+
+locals {
+  kube_prometheus_stack_values = {
+    prometheus = {
+      prometheusSpec = {
+        retention = "15d"
+        resources = {
+          requests = {
+            cpu    = "1"
+            memory = "2Gi"
+          }
+          limits = {
+            cpu    = "2"
+            memory = "4Gi"
+          }
+        }
+        # Enable ServiceMonitor and PodMonitor CRDs
+        serviceMonitorSelectorNilUsesHelmValues = false
+        podMonitorSelectorNilUsesHelmValues     = false
+      }
+    }
+  }
+}
 
 # ------------------------------------------------------------------------------
 # Grafana Custom Values
 # ------------------------------------------------------------------------------
-# TODO: Phase 2 - Implement custom Helm values for Grafana
-#
-# Planned configurations:
-# - Admin credentials management (via Kubernetes secrets)
-# - Dashboard sidecar configuration for automatic loading
-# - Data source definitions:
-#   * Prometheus (primary metrics source)
-#   * CloudWatch (via YACE exporter)
-# - Ingress configuration for external access
-# - Resource requests/limits
-# - Persistence for Grafana database
-#
-# TODO: Phase 3 - Dashboard provisioning
-# - Configure sidecar to watch ConfigMaps with label "grafana_dashboard=1"
-# - Load dashboards from dashboards/ directory structure
-# - Enable dashboard versioning and change tracking
-#
-# Example structure (to be implemented):
-# locals {
-#   grafana_values = {
-#     adminUser     = "admin"
-#     adminPassword = "changeme"  # Should be managed via External Secrets
-#     sidecar = {
-#       dashboards = {
-#         enabled = true
-#         label   = "grafana_dashboard"
-#       }
-#     }
-#     datasources = {
-#       "datasources.yaml" = {
-#         apiVersion = 1
-#         datasources = [
-#           {
-#             name   = "Prometheus"
-#             type   = "prometheus"
-#             url    = "http://prometheus-server:9090"
-#             access = "proxy"
-#           }
-#         ]
-#       }
-#     }
-#   }
-# }
 
-# ------------------------------------------------------------------------------
-# Alertmanager Custom Values
-# ------------------------------------------------------------------------------
-# TODO: Phase 2 - Implement custom Helm values for Alertmanager
-#
-# Planned configurations:
-# - Alert routing rules by severity and component
-# - SNS integration for critical alerts
-# - Grouping and throttling policies
-# - Silence management
-# - Resource requests/limits
-#
-# TODO: Phase 4 - Advanced alerting integrations
-# - PagerDuty integration for on-call rotations
-# - Slack webhook notifications
-# - Email notifications via SES
-# - Runbook URL annotations in alerts
-#
-# Example structure (to be implemented):
-# locals {
-#   alertmanager_values = {
-#     config = {
-#       route = {
-#         group_by        = ["alertname", "cluster", "service"]
-#         group_wait      = "10s"
-#         group_interval  = "10s"
-#         repeat_interval = "12h"
-#         receiver        = "default"
-#       }
-#       receivers = [
-#         {
-#           name = "default"
-#           # SNS configuration to be added
-#         }
-#       ]
-#     }
-#   }
-# }
+locals {
+  grafana_values = {
+    service = {
+      type = "ClusterIP"
+    }
+    "grafana.ini" = {
+      "auth.anonymous" = {
+        enabled = false
+      }
+    }
+
+    # Enables automatic dashboard provisioning from ConfigMaps
+    sidecar = {
+      dashboards = {
+        enabled          = true
+        label            = "grafana_dashboard"
+        labelValue       = "1"
+        folder           = "/tmp/dashboards"
+        searchNamespace  = "monitoring"
+        resource         = "configmap"
+        folderAnnotation = "grafana_folder"
+        provider = {
+          foldersFromFilesStructure = true
+        }
+      }
+      resources = {
+        requests = {
+          cpu    = "50m"
+          memory = "64Mi"
+        }
+        limits = {
+          cpu    = "100m"
+          memory = "128Mi"
+        }
+      }
+    }
+  }
+}
 
 # ------------------------------------------------------------------------------
 # Fluent Bit Custom Values
 # ------------------------------------------------------------------------------
-# TODO: Phase 2 - Implement custom Helm values for Fluent Bit
-#
-# Planned configurations:
-# - CloudWatch Logs integration with log group per namespace
-# - Log parsing rules for WordPress, MySQL, Redis
-# - Resource requests/limits for DaemonSet pods
-# - Buffer configuration for burst handling
-# - KMS encryption for CloudWatch Logs
-# - Log retention policies
-#
-# Example structure (to be implemented):
-# locals {
-#   fluentbit_values = {
-#     cloudWatch = {
-#       enabled       = true
-#       region        = data.aws_region.current.name
-#       logGroupName  = "/aws/eks/${var.cluster_name}/application"
-#       logRetention  = 7
-#     }
-#     resources = {
-#       requests = { memory = "100Mi", cpu = "100m" }
-#       limits   = { memory = "200Mi", cpu = "200m" }
-#     }
-#   }
-# }
+
+locals {
+  fluentbit_values = {
+    cloudWatch = {
+      enabled      = true
+      region       = data.aws_region.current.name
+      logGroupName = "/aws/eks/${var.cluster_name}/application"
+    }
+  }
+}
 
 # ------------------------------------------------------------------------------
 # YACE (Yet Another CloudWatch Exporter) Configuration
 # ------------------------------------------------------------------------------
-# TODO: Phase 2 - Implement YACE exporter deployment
-#
 # YACE exports CloudWatch metrics to Prometheus for unified observability.
 # This enables Grafana dashboards to display AWS service metrics alongside
 # application metrics without switching data sources.
 #
-# Planned configurations:
-# - IRSA role with CloudWatch read permissions
-# - Helm chart deployment with values from exporters/yace-values.yaml
-# - ServiceMonitor for Prometheus scraping
-# - Metrics discovery for:
-#   * RDS (Aurora MySQL): connections, CPU, storage, replication lag
-#   * ElastiCache (Redis): cache hits/misses, CPU, memory, connections
-#   * EFS: throughput, IOPS, client connections
-#   * ALB: request count, target response time, HTTP errors
-#   * EKS: node count, pod count
-#   * NAT Gateway: bytes in/out, connection count
-#
-# Example structure (to be implemented):
-# resource "helm_release" "yace" {
-#   count = var.enable_yace ? 1 : 0
-#
-#   name       = "yace-exporter"
-#   repository = "https://nerdswords.github.io/helm-charts"
-#   chart      = "yet-another-cloudwatch-exporter"
-#   namespace  = local.prometheus_namespace
-#   version    = "0.37.0"
-#
-#   values = [
-#     file("${path.module}/exporters/yace-values.yaml")
-#   ]
-#
-#   depends_on = [module.eks_blueprints_addons]
-# }
-#
-# resource "kubernetes_service_monitor" "yace" {
-#   count = var.enable_yace ? 1 : 0
-#
-#   metadata {
-#     name      = "yace-exporter"
-#     namespace = local.prometheus_namespace
-#   }
-#
-#   spec {
-#     selector {
-#       match_labels = {
-#         app = "yace-exporter"
-#       }
-#     }
-#     endpoints {
-#       port     = "metrics"
-#       interval = "60s"
-#     }
-#   }
-# }
+# Metrics discovery for:
+# - RDS (Aurora MySQL): connections, CPU, storage, replication lag
+# - ElastiCache (Redis): cache hits/misses, CPU, memory, connections
+# - EFS: throughput, IOPS, client connections
+# - ALB: request count, target response time, HTTP errors
+
+resource "helm_release" "yace" {
+  count = var.enable_yace ? 1 : 0
+
+  name       = "yace"
+  repository = "https://prometheus-community.github.io/helm-charts"
+  chart      = "prometheus-yet-another-cloudwatch-exporter"
+  namespace  = local.monitoring_namespace
+
+  values = [
+    templatefile("${path.module}/exporters/yace-values.yaml", {
+      aws_region      = data.aws_region.current.name
+      project_tag     = var.project_name
+      environment_tag = var.environment
+    })
+  ]
+
+  # Configure service account with IRSA annotation
+  set {
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = aws_iam_role.yace[0].arn
+  }
+
+  # Configure AWS region from data source
+  set {
+    name  = "aws.region"
+    value = data.aws_region.current.name
+  }
+
+  depends_on = [
+    module.eks_blueprints_addons,
+    aws_iam_role.yace
+  ]
+}
+
+# ------------------------------------------------------------------------------
+# YACE IRSA Configuration
+# ------------------------------------------------------------------------------
+# IAM Role for Service Accounts (IRSA) configuration for YACE exporter.
+# Grants YACE permissions to read CloudWatch metrics and describe AWS resources.
+
+# Trust policy for YACE service account
+data "aws_iam_policy_document" "yace_trust" {
+  count = var.enable_yace ? 1 : 0
+
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.oidc_provider_arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${replace(var.oidc_provider_arn, "/^(.*provider/)/", "")}:sub"
+      values = [
+        "system:serviceaccount:${local.monitoring_namespace}:yace-yet-another-cloudwatch-exporter"
+      ]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${replace(var.oidc_provider_arn, "/^(.*provider/)/", "")}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+  }
+}
+
+# IAM role for YACE
+resource "aws_iam_role" "yace" {
+  count = var.enable_yace ? 1 : 0
+
+  name               = "${var.cluster_name}-yace"
+  assume_role_policy = data.aws_iam_policy_document.yace_trust[0].json
+  tags               = local.common_tags
+}
+
+# IAM policy document with CloudWatch and resource describe permissions
+data "aws_iam_policy_document" "yace" {
+  count = var.enable_yace ? 1 : 0
+
+  statement {
+    sid    = "CloudWatchReadMetrics"
+    effect = "Allow"
+    actions = [
+      "cloudwatch:ListMetrics",
+      "cloudwatch:GetMetricData",
+      "cloudwatch:GetMetricStatistics"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "DescribeResources"
+    effect = "Allow"
+    actions = [
+      "ec2:DescribeRegions",
+      "ec2:DescribeInstances",
+      "rds:DescribeDBInstances",
+      "rds:DescribeDBClusters",
+      "elasticache:DescribeCacheClusters",
+      "elasticache:DescribeReplicationGroups",
+      "elasticfilesystem:DescribeFileSystems",
+      "elasticloadbalancing:DescribeLoadBalancers",
+      "elasticloadbalancing:DescribeTargetGroups",
+      "tag:GetResources"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "BillingReadAccess"
+    effect = "Allow"
+    actions = [
+      "ce:GetCostAndUsage",
+      "ce:GetUsageRecords",
+      "ce:ListCostCategoryDefinitions",
+      "ce:GetRightsizingRecommendation"
+    ]
+    resources = ["*"]
+  }
+}
+
+# IAM policy resource
+resource "aws_iam_policy" "yace" {
+  count = var.enable_yace ? 1 : 0
+
+  name        = "${var.cluster_name}-yace-cloudwatch"
+  description = "CloudWatch metrics read permissions for YACE exporter"
+  policy      = data.aws_iam_policy_document.yace[0].json
+  tags        = local.common_tags
+}
+
+# Attach policy to role
+resource "aws_iam_role_policy_attachment" "yace" {
+  count = var.enable_yace ? 1 : 0
+
+  role       = aws_iam_role.yace[0].name
+  policy_arn = aws_iam_policy.yace[0].arn
+}
+
+# ------------------------------------------------------------------------------
+# Redis Exporter Deployment
+# ------------------------------------------------------------------------------
+# Redis exporter exposes ElastiCache Redis metrics to Prometheus.
+# Provides cache performance metrics including hit/miss rates, memory usage,
+# connections, and command statistics.
+
+resource "helm_release" "redis_exporter" {
+  count = var.enable_prometheus && var.redis_endpoint != "" ? 1 : 0
+
+  name       = "redis-exporter"
+  repository = "https://prometheus-community.github.io/helm-charts"
+  chart      = "prometheus-redis-exporter"
+  namespace  = local.monitoring_namespace
+  version    = "6.4.0"
+
+  values = [
+    templatefile("${path.module}/exporters/redis-values.yaml", {
+      redis_endpoint = var.redis_endpoint
+    })
+  ]
+
+  # Override the placeholder with actual Redis endpoint
+  set {
+    name  = "redisAddress"
+    value = "rediss://${var.redis_endpoint}:6379"
+  }
+
+  depends_on = [module.eks_blueprints_addons]
+}
+
+# ------------------------------------------------------------------------------
+# MySQL Exporter Deployment
+# ------------------------------------------------------------------------------
+# MySQL exporter exposes Aurora MySQL database metrics to Prometheus.
+# Provides database performance metrics including connections, queries per second,
+# slow queries, replication lag, and resource utilization.
+
+resource "helm_release" "mysql_exporter" {
+  count = var.enable_prometheus && var.mysql_endpoint != "" ? 1 : 0
+
+  name       = "mysql-exporter"
+  repository = "https://prometheus-community.github.io/helm-charts"
+  chart      = "prometheus-mysql-exporter"
+  namespace  = local.monitoring_namespace
+  version    = "2.6.1"
+
+  values = [
+    templatefile("${path.module}/exporters/mysql-values.yaml", {
+      mysql_host = var.mysql_endpoint
+    })
+  ]
+
+  # Override the placeholder with actual MySQL endpoint
+  set {
+    name  = "mysql.host"
+    value = var.mysql_endpoint
+  }
+
+  # Use the existing wpapp database user for metrics collection
+  set {
+    name  = "mysql.user"
+    value = "wpapp"
+  }
+
+  # Reference the existing wpapp database secret
+  set {
+    name  = "mysql.existingSecret.name"
+    value = "wp-db"
+  }
+
+  set {
+    name  = "mysql.existingSecret.key"
+    value = "password"
+  }
+
+  depends_on = [module.eks_blueprints_addons]
+}
 
 # ------------------------------------------------------------------------------
 # ServiceMonitor Definitions
 # ------------------------------------------------------------------------------
-# TODO: Phase 2 - Implement ServiceMonitor resources for application exporters
-#
 # ServiceMonitors tell Prometheus which services to scrape for metrics.
-# These will be created for:
-# - WordPress PHP-FPM exporter (custom metrics from wordpress-metrics-plugin.php)
-# - MySQL exporter (database performance metrics)
-# - Redis exporter (cache performance metrics)
-# - YACE exporter (CloudWatch metrics)
-#
-# Example structure (to be implemented):
-# resource "kubernetes_manifest" "wordpress_service_monitor" {
-#   count = var.enable_prometheus ? 1 : 0
-#
-#   manifest = {
-#     apiVersion = "monitoring.coreos.com/v1"
-#     kind       = "ServiceMonitor"
-#     metadata = {
-#       name      = "wordpress-metrics"
-#       namespace = local.prometheus_namespace
-#     }
-#     spec = {
-#       selector = {
-#         matchLabels = {
-#           app = "wordpress"
-#         }
-#       }
-#       endpoints = [
-#         {
-#           port     = "metrics"
-#           interval = "30s"
-#           path     = "/metrics"
-#         }
-#       ]
-#     }
-#   }
-# }
+# These are created for application exporters to enable automatic discovery.
 
-# ------------------------------------------------------------------------------
-# PrometheusRule Definitions
-# ------------------------------------------------------------------------------
-# TODO: Phase 4 - Implement PrometheusRule resources for alerting
-#
-# PrometheusRules define alerting rules that trigger when conditions are met.
-# These will include:
-# - High pod CPU/memory usage (>80% for 5 minutes)
-# - Database connection pool exhaustion (>90% connections used)
-# - Redis cache hit rate degradation (<80% hit rate)
-# - WordPress response time SLO violations (p95 > 2s)
-# - Disk space warnings (>85% used)
-# - Certificate expiration warnings (<30 days)
-#
-# Example structure (to be implemented):
-# resource "kubernetes_manifest" "wordpress_alerts" {
-#   count = var.enable_prometheus && var.enable_alertmanager ? 1 : 0
-#
-#   manifest = {
-#     apiVersion = "monitoring.coreos.com/v1"
-#     kind       = "PrometheusRule"
-#     metadata = {
-#       name      = "wordpress-alerts"
-#       namespace = local.prometheus_namespace
-#     }
-#     spec = {
-#       groups = [
-#         {
-#           name = "wordpress"
-#           rules = [
-#             {
-#               alert = "WordPressHighResponseTime"
-#               expr  = "histogram_quantile(0.95, rate(wordpress_request_duration_seconds_bucket[5m])) > 2"
-#               for   = "5m"
-#               labels = {
-#                 severity = "warning"
-#               }
-#               annotations = {
-#                 summary     = "WordPress response time is high"
-#                 description = "95th percentile response time is {{ $value }}s"
-#                 runbook_url = "https://runbooks.example.com/wordpress-slow-response"
-#               }
-#             }
-#           ]
-#         }
-#       ]
-#     }
-#   }
-# }
+# ServiceMonitor for WordPress Exporter
+resource "kubernetes_manifest" "servicemonitor_wordpress" {
+  count = var.enable_prometheus ? 1 : 0
+
+  manifest = {
+    apiVersion = "monitoring.coreos.com/v1"
+    kind       = "ServiceMonitor"
+    metadata = {
+      name      = "wordpress-metrics"
+      namespace = var.wordpress_namespace
+      labels = {
+        app       = "wordpress"
+        component = "metrics"
+      }
+    }
+    spec = {
+      selector = {
+        matchLabels = {
+          app       = "wordpress"
+          component = "metrics"
+        }
+      }
+      endpoints = [
+        {
+          port     = "metrics"
+          interval = "30s"
+          path     = "/metrics"
+        }
+      ]
+    }
+  }
+
+  depends_on = [module.eks_blueprints_addons]
+}
+
+# ServiceMonitor for Redis Exporter
+resource "kubernetes_manifest" "servicemonitor_redis" {
+  count = var.enable_prometheus ? 1 : 0
+
+  manifest = {
+    apiVersion = "monitoring.coreos.com/v1"
+    kind       = "ServiceMonitor"
+    metadata = {
+      name      = "redis-exporter"
+      namespace = local.monitoring_namespace
+      labels = {
+        app = "redis-exporter"
+      }
+    }
+    spec = {
+      selector = {
+        matchLabels = {
+          app = "redis-exporter"
+        }
+      }
+      endpoints = [
+        {
+          port     = "metrics"
+          interval = "30s"
+          path     = "/metrics"
+        }
+      ]
+    }
+  }
+
+  depends_on = [helm_release.redis_exporter]
+}
+
+# ServiceMonitor for MySQL Exporter
+resource "kubernetes_manifest" "servicemonitor_mysql" {
+  count = var.enable_prometheus ? 1 : 0
+
+  manifest = {
+    apiVersion = "monitoring.coreos.com/v1"
+    kind       = "ServiceMonitor"
+    metadata = {
+      name      = "mysql-exporter"
+      namespace = local.monitoring_namespace
+      labels = {
+        app = "mysql-exporter"
+      }
+    }
+    spec = {
+      selector = {
+        matchLabels = {
+          app = "mysql-exporter"
+        }
+      }
+      endpoints = [
+        {
+          port     = "metrics"
+          interval = "30s"
+          path     = "/metrics"
+        }
+      ]
+    }
+  }
+
+  depends_on = [helm_release.mysql_exporter]
+}
+
+# ServiceMonitor for YACE Exporter
+resource "kubernetes_manifest" "servicemonitor_yace" {
+  count = var.enable_yace ? 1 : 0
+
+  manifest = {
+    apiVersion = "monitoring.coreos.com/v1"
+    kind       = "ServiceMonitor"
+    metadata = {
+      name      = "yace"
+      namespace = local.monitoring_namespace
+      labels = {
+        app = "yace"
+      }
+    }
+    spec = {
+      selector = {
+        matchLabels = {
+          app = "yace"
+        }
+      }
+      endpoints = [
+        {
+          port     = "http"
+          interval = "30s"
+          path     = "/metrics"
+        }
+      ]
+    }
+  }
+
+  depends_on = [helm_release.yace]
+}

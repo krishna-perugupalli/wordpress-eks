@@ -100,6 +100,15 @@ module "observability" {
   enable_aws_dashboards  = var.enable_aws_dashboards
   enable_cost_dashboards = var.enable_cost_dashboards
 
+  # WordPress namespace for ServiceMonitor targeting
+  wordpress_namespace = var.wp_namespace
+
+  # Infrastructure endpoints from infra stack
+  redis_endpoint = local.redis_endpoint
+  mysql_endpoint = local.writer_endpoint
+  project_name   = local.tags.Project
+  environment    = local.tags.Environment
+
   # Common tags
   tags = local.tags
 
@@ -165,6 +174,9 @@ module "app_wordpress" {
   admin_user              = var.wp_admin_user
   admin_email             = var.wp_admin_email
   admin_bootstrap_enabled = var.wp_admin_bootstrap_enabled
+
+  # Enable WordPress metrics exporter for Prometheus monitoring
+  enable_metrics_exporter = var.enable_prometheus
 
   replicas_min          = var.wp_replicas_min
   replicas_max          = var.wp_replicas_max

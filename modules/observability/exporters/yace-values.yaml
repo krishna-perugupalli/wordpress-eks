@@ -1,107 +1,129 @@
 # YACE (Yet Another CloudWatch Exporter) Helm Values
 # 
 # Purpose: Export CloudWatch metrics to Prometheus for unified observability
-# Phase: Phase 2 - To be implemented
+# Phase: Phase 2 - Real configuration
 #
-# This exporter will collect metrics from AWS services (RDS, ElastiCache, EFS, ALB, etc.)
-# and expose them in Prometheus format for scraping by kube-prometheus-stack.
+# This exporter collects metrics from AWS services (RDS, ElastiCache, EFS, ALB)
+# and exposes them in Prometheus format for scraping by kube-prometheus-stack.
 #
-# Requirements: 5.5, 6.2
-#
-# TODO Phase 2:
-# - Configure IRSA role with CloudWatch read permissions
-# - Define discovery jobs for Aurora, ElastiCache, EFS, ALB, NAT Gateway
-# - Set appropriate scrape intervals and metric filters
-# - Configure ServiceMonitor for Prometheus scraping
-# - Add resource requests/limits based on metric volume
+# Requirements: 4.2, 4.3, 4.4, 10.1, 10.2
 
-# Example structure (commented out for Phase 1):
-#
-# aws:
-#   role: arn:aws:iam::ACCOUNT_ID:role/yace-cloudwatch-exporter
-#   region: us-east-1
-#
-# discovery:
-#   jobs:
-#     - type: rds
-#       regions:
-#         - us-east-1
-#       searchTags:
-#         - key: Project
-#           value: wordpress-eks
-#       metrics:
-#         - name: CPUUtilization
-#           statistics: [Average, Maximum]
-#           period: 300
-#         - name: DatabaseConnections
-#           statistics: [Average, Maximum]
-#           period: 300
-#         - name: FreeableMemory
-#           statistics: [Average, Minimum]
-#           period: 300
-#
-#     - type: elasticache
-#       regions:
-#         - us-east-1
-#       searchTags:
-#         - key: Project
-#           value: wordpress-eks
-#       metrics:
-#         - name: CPUUtilization
-#           statistics: [Average, Maximum]
-#           period: 300
-#         - name: NetworkBytesIn
-#           statistics: [Sum]
-#           period: 300
-#         - name: CurrConnections
-#           statistics: [Average, Maximum]
-#           period: 300
-#
-#     - type: efs
-#       regions:
-#         - us-east-1
-#       searchTags:
-#         - key: Project
-#           value: wordpress-eks
-#       metrics:
-#         - name: ClientConnections
-#           statistics: [Sum]
-#           period: 300
-#         - name: DataReadIOBytes
-#           statistics: [Sum]
-#           period: 300
-#         - name: DataWriteIOBytes
-#           statistics: [Sum]
-#           period: 300
-#
-#     - type: alb
-#       regions:
-#         - us-east-1
-#       searchTags:
-#         - key: Project
-#           value: wordpress-eks
-#       metrics:
-#         - name: RequestCount
-#           statistics: [Sum]
-#           period: 300
-#         - name: TargetResponseTime
-#           statistics: [Average]
-#           period: 300
-#         - name: HTTPCode_Target_2XX_Count
-#           statistics: [Sum]
-#           period: 300
-#         - name: HTTPCode_Target_5XX_Count
-#           statistics: [Sum]
-#           period: 300
-#
-# resources:
-#   limits:
-#     memory: 512Mi
-#     cpu: 500m
-#   requests:
-#     memory: 256Mi
-#     cpu: 200m
-#
-# serviceMonitor:
-#   enabled: true
-#   interval: 60s
+# AWS Configuration
+# Region will be set via Helm values in addons.tf using data.aws_region.current
+# IRSA role will be configured via serviceAccount annotation in Helm release
+aws:
+  region: "AWS_REGION_PLACEHOLDER"
+
+# YACE Configuration
+config: |-
+  apiVersion: v1alpha1
+  discovery:
+    jobs:
+      # RDS (Aurora MySQL) Metrics
+      - type: rds
+        regions:
+          - "AWS_REGION_PLACEHOLDER"
+        searchTags:
+          - key: Project
+            value: "PROJECT_TAG_PLACEHOLDER"
+          - key: Environment
+            value: "ENVIRONMENT_TAG_PLACEHOLDER"
+        metrics:
+          - name: CPUUtilization
+            statistics: [Average]
+            period: 300
+          - name: DatabaseConnections
+            statistics: [Average]
+            period: 300
+          - name: FreeableMemory
+            statistics: [Average]
+            period: 300
+
+      # ElastiCache (Redis) Metrics
+      - type: elasticache
+        regions:
+          - "AWS_REGION_PLACEHOLDER"
+        searchTags:
+          - key: Project
+            value: "PROJECT_TAG_PLACEHOLDER"
+          - key: Environment
+            value: "ENVIRONMENT_TAG_PLACEHOLDER"
+        metrics:
+          - name: CPUUtilization
+            statistics: [Average]
+            period: 300
+          - name: NetworkBytesIn
+            statistics: [Sum]
+            period: 300
+          - name: CurrConnections
+            statistics: [Average]
+            period: 300
+          - name: BytesUsedForCache
+            statistics: [Average]
+            period: 300
+          - name: DatabaseMemoryUsagePercentage
+            statistics: [Average]
+            period: 300
+          - name: Evictions
+            statistics: [Sum]
+            period: 300
+
+      # EFS (Shared Storage) Metrics
+      - type: efs
+        regions:
+          - "AWS_REGION_PLACEHOLDER"
+        searchTags:
+          - key: Project
+            value: "PROJECT_TAG_PLACEHOLDER"
+          - key: Environment
+            value: "ENVIRONMENT_TAG_PLACEHOLDER"
+        metrics:
+          - name: ClientConnections
+            statistics: [Sum]
+            period: 300
+          - name: DataReadIOBytes
+            statistics: [Sum]
+            period: 300
+          - name: DataWriteIOBytes
+            statistics: [Sum]
+            period: 300
+
+      # ALB (Application Load Balancer) Metrics
+      - type: alb
+        regions:
+          - "AWS_REGION_PLACEHOLDER"
+        searchTags:
+          - key: Project
+            value: "PROJECT_TAG_PLACEHOLDER"
+          - key: Environment
+            value: "ENVIRONMENT_TAG_PLACEHOLDER"
+        metrics:
+          - name: TargetResponseTime
+            statistics: [Average]
+            period: 300
+          - name: HTTPCode_Target_5XX_Count
+            statistics: [Sum]
+            period: 300
+          - name: RequestCount
+            statistics: [Sum]
+            period: 300
+          - name: UnHealthyHostCount
+            statistics: [Average]
+            period: 300
+          - name: HealthyHostCount
+            statistics: [Average]
+            period: 300
+
+# Resource Limits
+resources:
+  limits:
+    memory: 256Mi
+    cpu: 200m
+  requests:
+    memory: 128Mi
+    cpu: 100m
+
+# Service Monitor Configuration
+serviceMonitor:
+  enabled: true
+  interval: 60s

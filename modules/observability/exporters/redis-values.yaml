@@ -1,87 +1,28 @@
-# Redis Exporter Helm Values
-#
-# Purpose: Export ElastiCache Redis metrics to Prometheus
-# Phase: Phase 3 - To be implemented
-#
-# This exporter will connect to ElastiCache Redis cluster and expose
-# detailed metrics about memory usage, connections, commands, replication, etc.
-#
-# Requirements: 5.5, 6.2
-#
-# TODO Phase 3:
-# - Configure connection to ElastiCache Redis endpoint
-# - Set up TLS and AUTH password from Secrets Manager
-# - Deploy ServiceMonitor for Prometheus scraping
-# - Define alerting rules for memory pressure and connection limits
-# - Add resource requests/limits
+# Redis Exporter Configuration
+# Exposes ElastiCache Redis metrics to Prometheus
 
-# Example structure (commented out for Phase 1):
-#
-# image:
-#   repository: oliver006/redis_exporter
-#   tag: v1.55.0
-#   pullPolicy: IfNotPresent
-#
-# # Redis connection configuration
-# redisAddress: redis://redis-cluster.default.svc.cluster.local:6379
-#
-# # Authentication (use External Secrets Operator)
-# auth:
-#   enabled: true
-#   secret:
-#     name: redis-credentials
-#     key: auth-token
-#
-# # TLS configuration for ElastiCache in-transit encryption
-# tls:
-#   enabled: true
-#   skipVerify: false  # Set to true for self-signed certs
-#
-# # Export additional metrics
-# extraArgs:
-#   - --include-system-metrics
-#   - --check-keys=wordpress:*
-#   - --check-single-keys=wordpress:sessions
-#
-# service:
-#   type: ClusterIP
-#   port: 9121
-#   annotations:
-#     prometheus.io/scrape: "true"
-#     prometheus.io/port: "9121"
-#
-# serviceMonitor:
-#   enabled: true
-#   interval: 30s
-#   scrapeTimeout: 10s
-#   labels:
-#     release: kube-prometheus-stack
-#
-# # Key metrics exposed:
-# # - redis_up: Redis instance is reachable
-# # - redis_connected_clients: Number of client connections
-# # - redis_blocked_clients: Clients blocked on blocking calls
-# # - redis_used_memory_bytes: Memory used by Redis
-# # - redis_memory_max_bytes: Maximum memory configured
-# # - redis_evicted_keys_total: Keys evicted due to maxmemory
-# # - redis_expired_keys_total: Keys expired
-# # - redis_keyspace_hits_total: Successful key lookups
-# # - redis_keyspace_misses_total: Failed key lookups
-# # - redis_commands_processed_total: Total commands processed
-# # - redis_connected_slaves: Number of connected replicas
-# # - redis_replication_lag_seconds: Replication lag
-#
-# resources:
-#   limits:
-#     memory: 128Mi
-#     cpu: 100m
-#   requests:
-#     memory: 64Mi
-#     cpu: 50m
-#
-# # Alerting thresholds (to be defined in PrometheusRules)
-# # - Memory pressure: used_memory / memory_max > 0.85
-# # - Connection saturation: connected_clients / maxclients > 0.8
-# # - High eviction rate: evicted_keys_total rate increasing
-# # - Cache hit ratio: hits / (hits + misses) < 0.8
-# # - Replication lag: replication_lag_seconds > 10
+# Redis endpoint will be configured via Helm values in addons.tf
+# This uses the redis_endpoint from infra stack outputs
+redisAddress: "rediss://REDIS_ENDPOINT_PLACEHOLDER:6379"
+
+# Configure TLS authentication for ElastiCache
+auth:
+  secret:
+    name: redis-auth-token
+    key: token
+
+# Resource limits for the exporter
+resources:
+  limits:
+    memory: 128Mi
+    cpu: 100m
+  requests:
+    memory: 64Mi
+    cpu: 50m
+
+service:
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9121"
+  labels:
+    app: redis-exporter

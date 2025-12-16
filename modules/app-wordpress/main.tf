@@ -633,6 +633,20 @@ resource "helm_release" "wordpress" {
             }
           }
         ]
+        extraVolumeMounts = [
+          {
+            name      = "metrics-config"
+            mountPath = "/opt/bitnami/wordpress/wp-content/plugins/wordpress-metrics/wordpress-metrics.php"
+            subPath   = "wordpress-metrics-plugin.php"
+            readOnly  = true
+          },
+          {
+            name      = "metrics-config"
+            mountPath = "/opt/bitnami/wordpress/wp-content/mu-plugins/wordpress-metrics-loader.php"
+            subPath   = "mu-metrics-loader.php"
+            readOnly  = true
+          }
+        ]
       })
     ] : []
   )
@@ -690,6 +704,7 @@ resource "kubernetes_config_map" "wordpress_metrics_config" {
   data = {
     "wordpress-exporter.php"         = file("${path.module}/files/wordpress-exporter.php")
     "wordpress-metrics-plugin.php"   = file("${path.module}/files/wordpress-metrics-plugin.php")
+    "mu-metrics-loader.php"          = file("${path.module}/files/mu-metrics-loader.php")
     "simple-metrics-exporter.php"    = file("${path.module}/files/simple-metrics-exporter.php")
     "metrics-exporter-entrypoint.sh" = file("${path.module}/files/metrics-exporter-entrypoint.sh")
     "simple-entrypoint.sh"           = file("${path.module}/files/simple-entrypoint.sh")

@@ -1,129 +1,29 @@
-# MySQL Exporter Helm Values
-#
-# Purpose: Export Aurora MySQL metrics to Prometheus
-# Phase: Phase 3 - To be implemented
-#
-# This exporter will connect to Aurora MySQL cluster and expose detailed
-# metrics about queries, connections, InnoDB, replication, and table statistics.
-#
-# Requirements: 5.5, 6.2
-#
-# TODO Phase 3:
-# - Configure connection to Aurora MySQL endpoint
-# - Set up database credentials from Secrets Manager via External Secrets
-# - Create monitoring user with limited privileges (PROCESS, REPLICATION CLIENT, SELECT)
-# - Deploy ServiceMonitor for Prometheus scraping
-# - Define alerting rules for connection limits, slow queries, replication lag
-# - Add resource requests/limits
+# MySQL Exporter Configuration
+# Exposes Aurora MySQL metrics to Prometheus
 
-# Example structure (commented out for Phase 1):
-#
-# image:
-#   repository: prom/mysqld-exporter
-#   tag: v0.15.1
-#   pullPolicy: IfNotPresent
-#
-# # MySQL connection configuration
-# mysql:
-#   host: aurora-cluster.cluster-xxxxx.us-east-1.rds.amazonaws.com
-#   port: 3306
-#   user: prometheus_exporter
-#   # Password from External Secrets Operator
-#   existingPasswordSecret:
-#     name: mysql-exporter-credentials
-#     key: password
-#
-# # TLS configuration for Aurora
-# tls:
-#   enabled: true
-#   skipVerify: false
-#
-# # Collector flags
-# collectors:
-#   # Global status metrics
-#   global_status: true
-#   global_variables: true
-#   # InnoDB metrics
-#   engine_innodb_status: true
-#   # Table statistics
-#   info_schema.tables: true
-#   info_schema.tablestats: true
-#   # Query response time
-#   info_schema.query_response_time: true
-#   # Process list
-#   info_schema.processlist: true
-#   # Replication metrics
-#   slave_status: true
-#   # Performance schema
-#   perf_schema.eventswaits: false  # High cardinality
-#   perf_schema.file_events: false  # High cardinality
-#
-# # Custom queries for WordPress-specific metrics
-# customQueries:
-#   - name: wordpress_tables_size
-#     query: |
-#       SELECT 
-#         table_name,
-#         table_rows,
-#         data_length,
-#         index_length
-#       FROM information_schema.tables
-#       WHERE table_schema = 'wordpress'
-#       AND table_name LIKE 'wp_%'
-#     metrics:
-#       - table_name:
-#           usage: LABEL
-#       - table_rows:
-#           usage: GAUGE
-#       - data_length:
-#           usage: GAUGE
-#       - index_length:
-#           usage: GAUGE
-#
-# service:
-#   type: ClusterIP
-#   port: 9104
-#   annotations:
-#     prometheus.io/scrape: "true"
-#     prometheus.io/port: "9104"
-#
-# serviceMonitor:
-#   enabled: true
-#   interval: 30s
-#   scrapeTimeout: 10s
-#   labels:
-#     release: kube-prometheus-stack
-#
-# # Key metrics exposed:
-# # - mysql_up: MySQL server is reachable
-# # - mysql_global_status_threads_connected: Current connections
-# # - mysql_global_status_threads_running: Running threads
-# # - mysql_global_status_max_used_connections: Max connections used
-# # - mysql_global_variables_max_connections: Max connections configured
-# # - mysql_global_status_slow_queries: Slow queries count
-# # - mysql_global_status_queries: Total queries executed
-# # - mysql_global_status_innodb_buffer_pool_pages_*: Buffer pool metrics
-# # - mysql_global_status_innodb_row_lock_waits: Row lock waits
-# # - mysql_slave_status_seconds_behind_master: Replication lag
-# # - mysql_info_schema_table_rows: Rows per table
-# # - mysql_info_schema_table_size_data_length: Table data size
-#
-# resources:
-#   limits:
-#     memory: 128Mi
-#     cpu: 100m
-#   requests:
-#     memory: 64Mi
-#     cpu: 50m
-#
-# # Required MySQL user privileges:
-# # CREATE USER 'prometheus_exporter'@'%' IDENTIFIED BY 'secure_password';
-# # GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'prometheus_exporter'@'%';
-# # FLUSH PRIVILEGES;
-#
-# # Alerting thresholds (to be defined in PrometheusRules)
-# # - Connection saturation: threads_connected / max_connections > 0.8
-# # - High slow query rate: slow_queries rate increasing
-# # - Buffer pool efficiency: buffer_pool_hit_rate < 0.95
-# # - Replication lag: seconds_behind_master > 30
-# # - Table growth: wordpress table sizes growing rapidly
+# MySQL connection configuration
+# Host will be configured via Helm values in addons.tf using writer_endpoint from infra stack
+# Uses the existing wpapp database user and secret for metrics collection
+mysql:
+  host: "MYSQL_HOST_PLACEHOLDER"
+  port: 3306
+  user: "wpapp"
+  existingSecret:
+    name: wp-db
+    key: password
+
+# Resource limits for the exporter
+resources:
+  limits:
+    memory: 128Mi
+    cpu: 100m
+  requests:
+    memory: 64Mi
+    cpu: 50m
+
+service:
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9104"
+  labels:
+    app: mysql-exporter
