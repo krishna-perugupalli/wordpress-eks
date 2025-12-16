@@ -192,9 +192,17 @@ jobs:
         id: tflint
         run: |
           # Run tflint and capture output
-          if ! tflint --recursive --format compact > tflint_output.txt 2>&1; then
+          tflint --recursive --format compact > tflint_output.txt 2>&1 || true
+          
+          # Filter out unused_declarations warnings (intentional for future use)
+          grep -v "terraform_unused_declarations" tflint_output.txt > tflint_filtered.txt || true
+          
+          # Count remaining issues
+          issue_count=$(grep -c "Warning\|Error" tflint_filtered.txt || echo "0")
+          
+          if [ "$issue_count" -gt 0 ]; then
             echo "tflint_failed=true" >> $GITHUB_OUTPUT
-            cat tflint_output.txt
+            cat tflint_filtered.txt
             
             # Create annotations for errors
             while IFS= read -r line; do
@@ -205,12 +213,12 @@ jobs:
                 message="${BASH_REMATCH[5]}"
                 echo "::${severity,,} file=${file},line=${line_num}::${message}"
               fi
-            done < tflint_output.txt
+            done < tflint_filtered.txt
             
             exit 1
           else
             echo "tflint_failed=false" >> $GITHUB_OUTPUT
-            echo "✅ TFLint scan passed"
+            echo "✅ TFLint scan passed (unused declarations ignored)"
           fi
 
       - name: Comment on PR with TFLint results

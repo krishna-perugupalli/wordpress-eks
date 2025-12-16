@@ -248,6 +248,7 @@ variable "control_plane_log_retention_days" {
 }
 
 variable "eks_cluster_management_role_trust_principals" {
+  type    = list(string)
   default = []
 }
 

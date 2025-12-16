@@ -19,7 +19,7 @@ resource "aws_iam_policy" "karpenter_node_role_kms_policy" {
           "kms:DescribeKey"
         ]
         Effect   = "Allow"
-        Resource = ["${module.secrets_iam.kms_secrets_arn}"]
+        Resource = [module.secrets_iam.kms_secrets_arn]
       },
     ]
   })
