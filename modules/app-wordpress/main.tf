@@ -558,20 +558,14 @@ resource "helm_release" "wordpress" {
             name    = "metrics-config-init"
             image   = "busybox:1.36"
             command = ["/bin/sh", "-c"]
-            args    = ["mkdir -p /opt/bitnami/wordpress/wp-content/plugins/wordpress-metrics /opt/bitnami/wordpress/wp-content/mu-plugins"]
+            args = [
+              "mkdir -p /bitnami/wordpress/wp-content/plugins/wordpress-metrics /bitnami/wordpress/wp-content/mu-plugins && cp /tmp/src/wordpress-metrics-plugin.php /bitnami/wordpress/wp-content/plugins/wordpress-metrics/ && cp /tmp/src/mu-metrics-loader.php /bitnami/wordpress/wp-content/mu-plugins/ && cp /tmp/src/*.sh /tmp/src/*.php /metrics-dest/ || true"
+            ]
             volumeMounts = [
               {
                 name      = "wordpress-data"
-                mountPath = "/opt/bitnami/wordpress"
-              }
-            ]
-          },
-          {
-            name    = "metrics-config-copy"
-            image   = "busybox:1.36"
-            command = ["/bin/sh", "-c"]
-            args    = ["cp -av /tmp/src/* /tmp/dest/"]
-            volumeMounts = [
+                mountPath = "/bitnami/wordpress"
+              },
               {
                 name      = "metrics-config"
                 mountPath = "/tmp/src"
@@ -579,7 +573,7 @@ resource "helm_release" "wordpress" {
               },
               {
                 name      = "metrics-config-data"
-                mountPath = "/tmp/dest"
+                mountPath = "/metrics-dest"
               }
             ]
           }
@@ -668,20 +662,7 @@ resource "helm_release" "wordpress" {
             emptyDir = {}
           }
         ]
-        extraVolumeMounts = [
-          {
-            name      = "metrics-config-data"
-            mountPath = "/opt/bitnami/wordpress/wp-content/plugins/wordpress-metrics/wordpress-metrics-plugin.php"
-            subPath   = "wordpress-metrics-plugin.php"
-            readOnly  = true
-          },
-          {
-            name      = "metrics-config-data"
-            mountPath = "/opt/bitnami/wordpress/wp-content/mu-plugins/wordpress-metrics-loader.php"
-            subPath   = "mu-metrics-loader.php"
-            readOnly  = true
-          }
-        ]
+        extraVolumeMounts = []
       })
     ] : []
   )
