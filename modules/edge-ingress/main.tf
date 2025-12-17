@@ -1,11 +1,24 @@
 #############################################
 # Locals
 #############################################
+# #############################################
+# # Data Sources (Dynamic Lookups)
+# #############################################
+data "aws_eks_cluster" "target" {
+  name = var.cluster_name
+}
+
+data "aws_caller_identity" "current" {}
+
 locals {
-  oidc_hostpath = replace(var.cluster_oidc_issuer_url, "https://", "")
-  sa_name       = "aws-load-balancer-controller"
-  sa_ns         = var.controller_namespace
-  create_ns     = var.controller_namespace != "kube-system"
+  # Dynamic lookup to ensure we match the *real* cluster OIDC
+  oidc_issuer_url = data.aws_eks_cluster.target.identity[0].oidc[0].issuer
+  oidc_hostpath   = replace(local.oidc_issuer_url, "https://", "")
+  account_id      = data.aws_caller_identity.current.account_id
+
+  sa_name   = "aws-load-balancer-controller"
+  sa_ns     = var.controller_namespace
+  create_ns = var.controller_namespace != "kube-system"
 
   create_regional_cert = var.create_regional_certificate && var.alb_domain_name != "" && var.alb_hosted_zone_id != ""
   create_cf_cert       = var.create_cf_certificate && var.cf_domain_name != "" && var.cf_hosted_zone_id != ""
@@ -20,7 +33,7 @@ data "aws_iam_policy_document" "alb_controller_trust" {
     actions = ["sts:AssumeRoleWithWebIdentity"]
     principals {
       type        = "Federated"
-      identifiers = [var.oidc_provider_arn]
+      identifiers = ["arn:aws:iam::${local.account_id}:oidc-provider/${local.oidc_hostpath}"]
     }
     condition {
       test     = "StringEquals"
