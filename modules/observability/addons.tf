@@ -378,10 +378,10 @@ resource "time_sleep" "wait_for_servicemonitor_crd" {
 }
 
 # ServiceMonitor for WordPress Exporter
-resource "kubernetes_manifest" "servicemonitor_wordpress" {
+resource "kubectl_manifest" "servicemonitor_wordpress" {
   count = var.enable_prometheus ? 1 : 0
 
-  manifest = {
+  yaml_body = yamlencode({
     apiVersion = "monitoring.coreos.com/v1"
     kind       = "ServiceMonitor"
     metadata = {
@@ -407,7 +407,7 @@ resource "kubernetes_manifest" "servicemonitor_wordpress" {
         }
       ]
     }
-  }
+  })
 
   depends_on = [
     helm_release.prometheus_operator_crds,
@@ -417,10 +417,10 @@ resource "kubernetes_manifest" "servicemonitor_wordpress" {
 }
 
 # ServiceMonitor for Redis Exporter
-resource "kubernetes_manifest" "servicemonitor_redis" {
+resource "kubectl_manifest" "servicemonitor_redis" {
   count = var.enable_prometheus ? 1 : 0
 
-  manifest = {
+  yaml_body = yamlencode({
     apiVersion = "monitoring.coreos.com/v1"
     kind       = "ServiceMonitor"
     metadata = {
@@ -444,7 +444,7 @@ resource "kubernetes_manifest" "servicemonitor_redis" {
         }
       ]
     }
-  }
+  })
 
   depends_on = [
     helm_release.redis_exporter,
@@ -455,10 +455,10 @@ resource "kubernetes_manifest" "servicemonitor_redis" {
 }
 
 # ServiceMonitor for MySQL Exporter
-resource "kubernetes_manifest" "servicemonitor_mysql" {
+resource "kubectl_manifest" "servicemonitor_mysql" {
   count = var.enable_prometheus ? 1 : 0
 
-  manifest = {
+  yaml_body = yamlencode({
     apiVersion = "monitoring.coreos.com/v1"
     kind       = "ServiceMonitor"
     metadata = {
@@ -482,7 +482,7 @@ resource "kubernetes_manifest" "servicemonitor_mysql" {
         }
       ]
     }
-  }
+  })
 
   depends_on = [
     helm_release.mysql_exporter,
@@ -493,10 +493,10 @@ resource "kubernetes_manifest" "servicemonitor_mysql" {
 }
 
 # ServiceMonitor for YACE Exporter
-resource "kubernetes_manifest" "servicemonitor_yace" {
+resource "kubectl_manifest" "servicemonitor_yace" {
   count = var.enable_yace ? 1 : 0
 
-  manifest = {
+  yaml_body = yamlencode({
     apiVersion = "monitoring.coreos.com/v1"
     kind       = "ServiceMonitor"
     metadata = {
@@ -520,7 +520,7 @@ resource "kubernetes_manifest" "servicemonitor_yace" {
         }
       ]
     }
-  }
+  })
 
   depends_on = [
     helm_release.yace,
