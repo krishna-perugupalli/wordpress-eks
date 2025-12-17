@@ -1,0 +1,94 @@
+{
+  "severity_mapping": {
+    "CRITICAL": [
+      "CKV_AWS_109",
+      "CKV_AWS_111",
+      "CKV_AWS_356",
+      "CKV_AWS_260",
+      "CKV_AWS_58"
+    ],
+    "HIGH": [
+      "CKV_AWS_23",
+      "CKV_AWS_130",
+      "CKV_AWS_158",
+      "CKV_AWS_162",
+      "CKV_AWS_166",
+      "CKV_AWS_191",
+      "CKV_AWS_37",
+      "CKV_AWS_382"
+    ],
+    "MEDIUM": [
+      "CKV_AWS_118",
+      "CKV_AWS_131",
+      "CKV_AWS_133",
+      "CKV_AWS_150",
+      "CKV_AWS_226",
+      "CKV_AWS_259",
+      "CKV_AWS_324",
+      "CKV_AWS_325",
+      "CKV_AWS_326",
+      "CKV_AWS_338",
+      "CKV_AWS_353",
+      "CKV_AWS_91",
+      "CKV_AWS_51"
+    ],
+    "LOW": [
+      "CKV_AWS_124",
+      "CKV_AWS_233",
+      "CKV_AWS_310",
+      "CKV_TF_1"
+    ]
+  },
+  "severity_rationale": {
+    "CRITICAL": {
+      "description": "Issues that could lead to immediate security breaches, data exposure, or unauthorized access",
+      "checks": {
+        "CKV_AWS_109": "IAM permissions management without constraints - can lead to privilege escalation",
+        "CKV_AWS_111": "IAM write access without constraints - can lead to unauthorized modifications",
+        "CKV_AWS_356": "IAM wildcard resource permissions - overly permissive access",
+        "CKV_AWS_260": "Security group allows ingress from 0.0.0.0:0 to port 80 - public exposure",
+        "CKV_AWS_58": "EKS secrets encryption disabled - sensitive data at risk"
+      }
+    },
+    "HIGH": {
+      "description": "Significant security risks that should be addressed before production deployment",
+      "checks": {
+        "CKV_AWS_23": "Security groups without descriptions - poor security hygiene",
+        "CKV_AWS_130": "VPC subnets assign public IPs by default - unintended exposure",
+        "CKV_AWS_158": "CloudWatch logs not encrypted by KMS - log data exposure",
+        "CKV_AWS_162": "RDS IAM authentication disabled - weaker authentication",
+        "CKV_AWS_166": "Backup vault not encrypted with KMS CMK - backup data at risk",
+        "CKV_AWS_191": "ElastiCache not encrypted with KMS CMK - cache data exposure",
+        "CKV_AWS_37": "EKS control plane logging not fully enabled - limited audit trail",
+        "CKV_AWS_382": "Security group allows unrestricted egress - potential data exfiltration"
+      }
+    },
+    "MEDIUM": {
+      "description": "Best practices and operational improvements that enhance security and reliability",
+      "checks": {
+        "CKV_AWS_118": "RDS enhanced monitoring disabled - limited visibility",
+        "CKV_AWS_131": "ALB doesn't drop invalid HTTP headers - potential header injection",
+        "CKV_AWS_133": "RDS backup policy not configured - data loss risk",
+        "CKV_AWS_150": "Load balancer deletion protection disabled - accidental deletion risk",
+        "CKV_AWS_226": "RDS minor upgrades not automatic - missing security patches",
+        "CKV_AWS_259": "CloudFront missing HSTS header - weaker transport security",
+        "CKV_AWS_324": "RDS cluster log capture disabled - limited audit trail",
+        "CKV_AWS_325": "RDS Aurora audit logging disabled - compliance issue",
+        "CKV_AWS_326": "RDS Aurora backtracking disabled - limited point-in-time recovery",
+        "CKV_AWS_338": "CloudWatch log retention less than 1 year - compliance issue",
+        "CKV_AWS_353": "RDS performance insights disabled - limited troubleshooting",
+        "CKV_AWS_91": "ELB access logging disabled - limited audit trail",
+        "CKV_AWS_51": "ECR image tags not immutable - supply chain risk"
+      }
+    },
+    "LOW": {
+      "description": "Minor improvements and informational findings",
+      "checks": {
+        "CKV_AWS_124": "CloudFormation stack notifications not configured - operational visibility",
+        "CKV_AWS_233": "ACM certificate lifecycle management - operational best practice",
+        "CKV_AWS_310": "CloudFront origin failover not configured - availability concern",
+        "CKV_TF_1": "Terraform module sources without commit hash - supply chain best practice"
+      }
+    }
+  }
+}

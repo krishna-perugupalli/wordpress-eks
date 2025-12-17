@@ -75,6 +75,7 @@ jobs:
             --directory . \
             --framework terraform \
             --output cli \
+            --output json \
             --output sarif \
             --output-file-path checkov-results \
             --download-external-modules true \
@@ -85,38 +86,66 @@ jobs:
           checkov_exit_code=$?
           echo "checkov_exit_code=${checkov_exit_code}" >> $GITHUB_OUTPUT
           
-          # Parse results for summary
-          if [ -f "checkov-results/results_sarif.sarif" ]; then
-            # Count findings by severity
-            critical_count=$(jq '[.runs[].results[] | select(.level == "error" and (.properties.severity // "MEDIUM") == "CRITICAL")] | length' checkov-results/results_sarif.sarif)
-            high_count=$(jq '[.runs[].results[] | select(.level == "error" and (.properties.severity // "MEDIUM") == "HIGH")] | length' checkov-results/results_sarif.sarif)
-            medium_count=$(jq '[.runs[].results[] | select(.level == "warning" and (.properties.severity // "MEDIUM") == "MEDIUM")] | length' checkov-results/results_sarif.sarif)
-            low_count=$(jq '[.runs[].results[] | select(.level == "note" and (.properties.severity // "LOW") == "LOW")] | length' checkov-results/results_sarif.sarif)
-            info_count=$(jq '[.runs[].results[] | select(.level == "note" and (.properties.severity // "INFO") == "INFO")] | length' checkov-results/results_sarif.sarif)
+          # Load custom severity mapping and apply to results
+          severity_map_file=".github/workflows/checkov-severity-mapping.json"
+          
+          if [ -f "checkov-results/results_json.json" ] && [ -f "$severity_map_file" ]; then
+            echo "📋 Applying custom severity mapping..."
+            
+            # Extract severity lists from mapping file
+            critical_checks=$(jq -r '.severity_mapping.CRITICAL[]' "$severity_map_file" | tr '\n' '|' | sed 's/|$//')
+            high_checks=$(jq -r '.severity_mapping.HIGH[]' "$severity_map_file" | tr '\n' '|' | sed 's/|$//')
+            medium_checks=$(jq -r '.severity_mapping.MEDIUM[]' "$severity_map_file" | tr '\n' '|' | sed 's/|$//')
+            low_checks=$(jq -r '.severity_mapping.LOW[]' "$severity_map_file" | tr '\n' '|' | sed 's/|$//')
+            
+            # Count findings by custom severity mapping
+            critical_count=$(jq --arg checks "$critical_checks" '[.results.failed_checks[] | select(.check_id | test($checks))] | length' checkov-results/results_json.json 2>/dev/null || echo "0")
+            high_count=$(jq --arg checks "$high_checks" '[.results.failed_checks[] | select(.check_id | test($checks))] | length' checkov-results/results_json.json 2>/dev/null || echo "0")
+            medium_count=$(jq --arg checks "$medium_checks" '[.results.failed_checks[] | select(.check_id | test($checks))] | length' checkov-results/results_json.json 2>/dev/null || echo "0")
+            low_count=$(jq --arg checks "$low_checks" '[.results.failed_checks[] | select(.check_id | test($checks))] | length' checkov-results/results_json.json 2>/dev/null || echo "0")
+            
+            # Get total failed checks
+            total_failed=$(jq '.results.failed_checks | length' checkov-results/results_json.json 2>/dev/null || echo "0")
+            
+            # Calculate unmapped checks (not in our severity mapping)
+            mapped_count=$((critical_count + high_count + medium_count + low_count))
+            unmapped_count=$((total_failed - mapped_count))
+            
+            # Treat unmapped checks as MEDIUM by default
+            if [ "$unmapped_count" -gt 0 ]; then
+              echo "::warning::Found ${unmapped_count} checks not in severity mapping, treating as MEDIUM"
+              medium_count=$((medium_count + unmapped_count))
+            fi
+            
+            null_severity_count=0
             
             echo "critical_count=${critical_count}" >> $GITHUB_OUTPUT
             echo "high_count=${high_count}" >> $GITHUB_OUTPUT
             echo "medium_count=${medium_count}" >> $GITHUB_OUTPUT
             echo "low_count=${low_count}" >> $GITHUB_OUTPUT
-            echo "info_count=${info_count}" >> $GITHUB_OUTPUT
+            echo "null_severity_count=${null_severity_count}" >> $GITHUB_OUTPUT
             
-            total_issues=$((critical_count + high_count + medium_count + low_count + info_count))
+            total_issues=${total_failed}
             echo "total_issues=${total_issues}" >> $GITHUB_OUTPUT
             
-            echo "📊 Security Scan Summary:"
+            passed_count=$(jq '.summary.passed // 0' checkov-results/results_json.json 2>/dev/null || echo "0")
+            echo "passed_count=${passed_count}" >> $GITHUB_OUTPUT
+            
+            echo "📊 Security Scan Summary (Custom Severity Mapping):"
+            echo "  ✅ Passed: ${passed_count}"
             echo "  🔴 Critical: ${critical_count}"
             echo "  🟠 High: ${high_count}"
             echo "  🟡 Medium: ${medium_count}"
             echo "  🔵 Low: ${low_count}"
-            echo "  ⚪ Info: ${info_count}"
-            echo "  📋 Total: ${total_issues}"
+            echo "  📋 Total Failed: ${total_issues}"
           else
             echo "critical_count=0" >> $GITHUB_OUTPUT
             echo "high_count=0" >> $GITHUB_OUTPUT
             echo "medium_count=0" >> $GITHUB_OUTPUT
             echo "low_count=0" >> $GITHUB_OUTPUT
-            echo "info_count=0" >> $GITHUB_OUTPUT
+            echo "null_severity_count=0" >> $GITHUB_OUTPUT
             echo "total_issues=0" >> $GITHUB_OUTPUT
+            echo "passed_count=0" >> $GITHUB_OUTPUT
           fi
           
           # Exit with original Checkov exit code
@@ -143,27 +172,38 @@ jobs:
         run: |
           critical_count=${{ steps.checkov.outputs.critical_count }}
           high_count=${{ steps.checkov.outputs.high_count }}
+          medium_count=${{ steps.checkov.outputs.medium_count }}
+          low_count=${{ steps.checkov.outputs.low_count }}
+          total_issues=${{ steps.checkov.outputs.total_issues }}
           
-          echo "Evaluating failure thresholds..."
+          echo "Evaluating failure thresholds (Custom Severity Mapping)..."
           echo "Critical issues: ${critical_count}"
           echo "High severity issues: ${high_count}"
+          echo "Medium severity issues: ${medium_count}"
+          echo "Low severity issues: ${low_count}"
+          echo "Total failed checks: ${total_issues}"
           
-          # Fail if any CRITICAL or HIGH severity issues found
+          # Fail on CRITICAL or HIGH severity issues (based on custom mapping)
           if [ "${critical_count}" -gt 0 ] || [ "${high_count}" -gt 0 ]; then
             echo "should_fail=true" >> $GITHUB_OUTPUT
             echo "::error::Security scan failed: Found ${critical_count} critical and ${high_count} high severity issues"
             exit 1
           else
             echo "should_fail=false" >> $GITHUB_OUTPUT
-            echo "✅ No critical or high severity security issues found"
+            if [ "${total_issues}" -gt 0 ]; then
+              echo "::warning::Found ${total_issues} failed security checks (${medium_count} medium, ${low_count} low severity)"
+              echo "⚠️  Security scan passed with warnings: No critical/high severity issues"
+            else
+              echo "✅ No security issues found"
+            fi
           fi
 
       - name: Generate detailed findings report
         if: always() && steps.checkov.outputs.total_issues != '0'
         id: report
         run: |
-          # Extract detailed findings from SARIF
-          if [ -f "checkov-results/results_sarif.sarif" ]; then
+          # Extract detailed findings from JSON
+          if [ -f "checkov-results/results_json.json" ]; then
             echo "Generating detailed findings report..."
             
             # Create markdown report
@@ -177,7 +217,7 @@ jobs:
             if [ "${critical_count}" -gt 0 ]; then
               echo "### 🔴 Critical Severity Issues (${critical_count})" >> findings_report.md
               echo "" >> findings_report.md
-              jq -r '.runs[].results[] | select(.level == "error" and (.properties.severity // "MEDIUM") == "CRITICAL") | "- **\(.ruleId)**: \(.message.text)\n  - File: `\(.locations[0].physicalLocation.artifactLocation.uri)`\n  - Line: \(.locations[0].physicalLocation.region.startLine)\n  - [More Info](\(.helpUri // "N/A"))\n"' checkov-results/results_sarif.sarif >> findings_report.md
+              jq -r '.results.failed_checks[] | select(.severity == "CRITICAL") | "- **\(.check_id)**: \(.check_name)\n  - File: `\(.file_path)`\n  - Line: \(.file_line_range[0])-\(.file_line_range[1])\n  - Resource: \(.resource)\n  - [More Info](\(.guideline))\n"' checkov-results/results_json.json >> findings_report.md
               echo "" >> findings_report.md
             fi
             
@@ -186,7 +226,7 @@ jobs:
             if [ "${high_count}" -gt 0 ]; then
               echo "### 🟠 High Severity Issues (${high_count})" >> findings_report.md
               echo "" >> findings_report.md
-              jq -r '.runs[].results[] | select(.level == "error" and (.properties.severity // "MEDIUM") == "HIGH") | "- **\(.ruleId)**: \(.message.text)\n  - File: `\(.locations[0].physicalLocation.artifactLocation.uri)`\n  - Line: \(.locations[0].physicalLocation.region.startLine)\n  - [More Info](\(.helpUri // "N/A"))\n"' checkov-results/results_sarif.sarif >> findings_report.md
+              jq -r '.results.failed_checks[] | select(.severity == "HIGH") | "- **\(.check_id)**: \(.check_name)\n  - File: `\(.file_path)`\n  - Line: \(.file_line_range[0])-\(.file_line_range[1])\n  - Resource: \(.resource)\n  - [More Info](\(.guideline))\n"' checkov-results/results_json.json >> findings_report.md
               echo "" >> findings_report.md
             fi
             
@@ -196,10 +236,25 @@ jobs:
               echo "### 🟡 Medium Severity Issues (${medium_count})" >> findings_report.md
               echo "" >> findings_report.md
               if [ "${medium_count}" -gt 10 ]; then
-                echo "_Showing first 10 of ${medium_count} medium severity issues. See full report in Security tab._" >> findings_report.md
+                echo "_Showing first 10 of ${medium_count} medium severity issues. See full report in artifacts._" >> findings_report.md
                 echo "" >> findings_report.md
               fi
-              jq -r '.runs[].results[] | select(.level == "warning" and (.properties.severity // "MEDIUM") == "MEDIUM") | "- **\(.ruleId)**: \(.message.text)\n  - File: `\(.locations[0].physicalLocation.artifactLocation.uri)`\n  - Line: \(.locations[0].physicalLocation.region.startLine)\n"' checkov-results/results_sarif.sarif | head -n 40 >> findings_report.md
+              jq -r '.results.failed_checks[] | select(.severity == "MEDIUM") | "- **\(.check_id)**: \(.check_name)\n  - File: `\(.file_path)`\n  - Resource: \(.resource)\n"' checkov-results/results_json.json | head -n 50 >> findings_report.md
+              echo "" >> findings_report.md
+            fi
+            
+            # Add unrated findings (limited to first 15)
+            null_severity_count=${{ steps.checkov.outputs.null_severity_count }}
+            if [ "${null_severity_count}" -gt 0 ]; then
+              echo "### ⚪ Unrated Severity Issues (${null_severity_count})" >> findings_report.md
+              echo "" >> findings_report.md
+              echo "_These checks don't have explicit severity ratings in Checkov. Review and address as appropriate._" >> findings_report.md
+              echo "" >> findings_report.md
+              if [ "${null_severity_count}" -gt 15 ]; then
+                echo "_Showing first 15 of ${null_severity_count} unrated issues. Download the full report from artifacts._" >> findings_report.md
+                echo "" >> findings_report.md
+              fi
+              jq -r '.results.failed_checks[] | select(.severity == null or .severity == "UNKNOWN" or .severity == "") | "- **\(.check_id)**: \(.check_name)\n  - File: `\(.file_path)`\n  - Resource: \(.resource)\n"' checkov-results/results_json.json | head -n 75 >> findings_report.md
               echo "" >> findings_report.md
             fi
             
@@ -218,8 +273,8 @@ jobs:
             const highCount = '${{ steps.checkov.outputs.high_count }}';
             const mediumCount = '${{ steps.checkov.outputs.medium_count }}';
             const lowCount = '${{ steps.checkov.outputs.low_count }}';
-            const infoCount = '${{ steps.checkov.outputs.info_count }}';
             const totalIssues = '${{ steps.checkov.outputs.total_issues }}';
+            const passedCount = '${{ steps.checkov.outputs.passed_count }}';
             const shouldFail = '${{ steps.evaluate.outputs.should_fail }}';
             
             let body = '';
@@ -229,6 +284,8 @@ jobs:
             
             No security issues detected by Checkov.
             
+            **Passed Checks:** ${passedCount}
+            
             All Terraform configurations meet security best practices.`;
             } else {
               const status = shouldFail === 'true' ? '❌' : '⚠️';
@@ -236,16 +293,18 @@ jobs:
               
               body = `## ${status} Security Scan ${statusText}
             
-            ### 📊 Summary
+            ### 📊 Summary (Custom Severity Mapping)
             
             | Severity | Count |
             |----------|-------|
+            | ✅ Passed | ${passedCount} |
             | 🔴 Critical | ${criticalCount} |
             | 🟠 High | ${highCount} |
             | 🟡 Medium | ${mediumCount} |
             | 🔵 Low | ${lowCount} |
-            | ⚪ Info | ${infoCount} |
-            | **Total** | **${totalIssues}** |
+            | **Total Failed** | **${totalIssues}** |
+            
+            > **Note:** Severity levels are assigned using a custom mapping tailored for this WordPress on EKS infrastructure. Only CRITICAL and HIGH severity issues block PR merging.
             
             `;
               
