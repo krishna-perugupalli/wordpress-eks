@@ -353,6 +353,20 @@ resource "helm_release" "mysql_exporter" {
 # ServiceMonitors tell Prometheus which services to scrape for metrics.
 # These are created for application exporters to enable automatic discovery.
 
+# Install Prometheus Operator CRDs explicitly to avoid race conditions when
+# ServiceMonitor manifests are applied in the same run.
+resource "helm_release" "prometheus_operator_crds" {
+  count = var.enable_prometheus ? 1 : 0
+
+  name             = "prometheus-operator-crds"
+  repository       = "https://prometheus-community.github.io/helm-charts"
+  chart            = "prometheus-operator-crds"
+  version          = "5.0.0" # matches kube-prometheus-stack appVersion v0.66.0 (chart 48.2.3)
+  namespace        = "kube-system"
+  create_namespace = false
+  wait             = true
+}
+
 # Wait briefly after the kube-prometheus-stack release so CRDs are registered
 # before creating ServiceMonitor resources in the same apply.
 resource "time_sleep" "wait_for_servicemonitor_crd" {
@@ -396,6 +410,7 @@ resource "kubernetes_manifest" "servicemonitor_wordpress" {
   }
 
   depends_on = [
+    helm_release.prometheus_operator_crds,
     module.eks_blueprints_addons,
     time_sleep.wait_for_servicemonitor_crd,
   ]
@@ -433,6 +448,7 @@ resource "kubernetes_manifest" "servicemonitor_redis" {
 
   depends_on = [
     helm_release.redis_exporter,
+    helm_release.prometheus_operator_crds,
     module.eks_blueprints_addons,
     time_sleep.wait_for_servicemonitor_crd,
   ]
@@ -470,6 +486,7 @@ resource "kubernetes_manifest" "servicemonitor_mysql" {
 
   depends_on = [
     helm_release.mysql_exporter,
+    helm_release.prometheus_operator_crds,
     module.eks_blueprints_addons,
     time_sleep.wait_for_servicemonitor_crd,
   ]
@@ -507,6 +524,7 @@ resource "kubernetes_manifest" "servicemonitor_yace" {
 
   depends_on = [
     helm_release.yace,
+    helm_release.prometheus_operator_crds,
     module.eks_blueprints_addons,
     time_sleep.wait_for_servicemonitor_crd,
   ]
