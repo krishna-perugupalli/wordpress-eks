@@ -38,4 +38,7 @@ locals {
   deploy_wp_dashboards   = var.enable_grafana && var.enable_wp_dashboards
   deploy_aws_dashboards  = var.enable_grafana && var.enable_aws_dashboards
   deploy_cost_dashboards = var.enable_grafana && var.enable_cost_dashboards
+
+  # OIDC provider host/path portion used in IRSA trust conditions
+  oidc_provider_host = element(split("oidc-provider/", var.oidc_provider_arn), 1)
 }

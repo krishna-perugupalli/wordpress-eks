@@ -555,6 +555,18 @@ resource "helm_release" "wordpress" {
       yamlencode({
         initContainers = [
           {
+            name    = "metrics-config-init"
+            image   = "busybox:1.36"
+            command = ["/bin/sh", "-c"]
+            args    = ["mkdir -p /opt/bitnami/wordpress/wp-content/plugins/wordpress-metrics /opt/bitnami/wordpress/wp-content/mu-plugins"]
+            volumeMounts = [
+              {
+                name      = "wordpress-data"
+                mountPath = "/opt/bitnami/wordpress"
+              }
+            ]
+          },
+          {
             name    = "metrics-config-copy"
             image   = "busybox:1.36"
             command = ["/bin/sh", "-c"]
@@ -659,7 +671,7 @@ resource "helm_release" "wordpress" {
         extraVolumeMounts = [
           {
             name      = "metrics-config-data"
-            mountPath = "/opt/bitnami/wordpress/wp-content/plugins/wordpress-metrics/wordpress-metrics.php"
+            mountPath = "/opt/bitnami/wordpress/wp-content/plugins/wordpress-metrics/wordpress-metrics-plugin.php"
             subPath   = "wordpress-metrics-plugin.php"
             readOnly  = true
           },
