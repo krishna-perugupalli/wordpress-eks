@@ -16,19 +16,19 @@ locals {
   # Namespace names (use Blueprints defaults or overrides)
   prometheus_namespace = coalesce(
     var.prometheus_namespace,
-    "monitoring"
+    "kube-prometheus-stack"
   )
 
   grafana_namespace = coalesce(
     var.grafana_namespace,
-    "monitoring"
+    "kube-prometheus-stack"
   )
 
   # Monitoring namespace for exporters and ServiceMonitors
-  # Uses Blueprints output if available, otherwise defaults to "monitoring"
+  # Uses Blueprints output if available, otherwise defaults to "kube-prometheus-stack"
   monitoring_namespace = try(
     module.eks_blueprints_addons.kube_prometheus_stack.namespace,
-    "monitoring"
+    "kube-prometheus-stack"
   )
 
   # Service account name for YACE IRSA (matches chart default for release name "yace")

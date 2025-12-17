@@ -54,7 +54,7 @@ locals {
         label            = "grafana_dashboard"
         labelValue       = "1"
         folder           = "/tmp/dashboards"
-        searchNamespace  = "monitoring"
+        searchNamespace  = local.monitoring_namespace
         resource         = "configmap"
         folderAnnotation = "grafana_folder"
         provider = {
