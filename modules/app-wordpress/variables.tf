@@ -320,7 +320,7 @@ variable "metrics_exporter_image" {
   description = "Container image for WordPress metrics exporter sidecar"
   type        = string
   # Use a WordPress/PHP image that already has mysqli enabled to match the exporter needs
-  default = "bitnami/wordpress:6.9.0"
+  default = "bitnami/wordpress:latest"
 }
 
 variable "metrics_exporter_resources_requests_cpu" {
