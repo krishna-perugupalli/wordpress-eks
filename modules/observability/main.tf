@@ -37,9 +37,12 @@ module "eks_blueprints_addons" {
       local.kube_prometheus_stack_values,
       {
         # Grafana is part of kube-prometheus-stack
-        grafana = var.enable_grafana ? local.grafana_values : {
-          enabled = false
-        }
+        grafana = merge(
+          local.grafana_values,
+          {
+            enabled = var.enable_grafana
+          }
+        )
       }
     ))]
   } : {}
