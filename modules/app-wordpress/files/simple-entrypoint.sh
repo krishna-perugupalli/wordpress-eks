@@ -5,32 +5,40 @@ set -e
 
 echo "Starting WordPress metrics exporter..."
 
-# Set WordPress path
-export WORDPRESS_PATH=${WORDPRESS_PATH:-/var/www/html}
+# Set WordPress path and port (Bitnami defaults)
+WORDPRESS_PATH=${WORDPRESS_PATH:-/bitnami/wordpress}
+WP_PORT=${WP_PORT:-8080}
 
-# Wait for WordPress to be available
-echo "Waiting for WordPress to be ready..."
+# Wait for WordPress HTTP to be available
+echo "Waiting for WordPress to be ready on 127.0.0.1:${WP_PORT}..."
 timeout=300
 counter=0
 
-while [ $counter -lt $timeout ]; do
-    if [ -f "$WORDPRESS_PATH/wp-config.php" ]; then
-        echo "WordPress configuration found"
-        break
-    fi
-    echo "WordPress not ready yet, waiting... ($counter/$timeout)"
+until curl -f -s "http://127.0.0.1:${WP_PORT}/wp-admin/install.php" > /dev/null 2>&1 || \
+      curl -f -s "http://127.0.0.1:${WP_PORT}/" > /dev/null 2>&1; do
+    echo "WordPress not ready yet, waiting... (${counter}s/${timeout}s)"
     sleep 5
     counter=$((counter + 5))
+    if [ $counter -ge $timeout ]; then
+        echo "Timeout waiting for WordPress HTTP"
+        exit 1
+    fi
 done
 
-if [ $counter -ge $timeout ]; then
-    echo "Timeout waiting for WordPress"
-    exit 1
-fi
+# Resolve actual WordPress path (prefer existing path among provided options)
+for candidate in "$WORDPRESS_PATH" "/opt/bitnami/wordpress" "/bitnami/wordpress" "/var/www/html"; do
+    if [ -f "${candidate}/wp-config.php" ]; then
+        WORDPRESS_PATH="$candidate"
+        export WORDPRESS_PATH
+        break
+    fi
+done
+
+echo "Using WordPress path: ${WORDPRESS_PATH}"
 
 # Copy metrics exporter to WordPress directory
 if [ -f "/usr/local/bin/metrics-files/simple-metrics-exporter.php" ]; then
-    cp /usr/local/bin/metrics-files/simple-metrics-exporter.php $WORDPRESS_PATH/wp-metrics.php
+    cp /usr/local/bin/metrics-files/simple-metrics-exporter.php "$WORDPRESS_PATH/wp-metrics.php"
     echo "Metrics exporter installed"
 fi
 

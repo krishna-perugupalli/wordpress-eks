@@ -8,7 +8,7 @@ header('Content-Type: text/plain; charset=utf-8');
 error_reporting(E_ERROR | E_PARSE);
 ini_set('display_errors', 0);
 
-$wp_path = getenv('WORDPRESS_PATH') ?: '/var/www/html';
+$wp_path = getenv('WORDPRESS_PATH') ?: '/bitnami/wordpress';
 $wp_load = $wp_path . '/wp-load.php';
 $wp_config = $wp_path . '/wp-config.php';
 
