@@ -34,7 +34,7 @@ module "eks_blueprints_addons" {
   # Prometheus configuration with custom Helm values
   kube_prometheus_stack = var.enable_prometheus ? {
     # Ensure CRDs are installed and ready before we create ServiceMonitors.
-    wait     = true
+    wait      = true
     skip_crds = false
     values = [yamlencode(merge(
       local.kube_prometheus_stack_values,
@@ -48,7 +48,12 @@ module "eks_blueprints_addons" {
         )
       }
     ))]
-  } : {}
+  } : {
+    # Preserve object shape when disabled so the conditional type stays consistent.
+    wait      = null
+    skip_crds = null
+    values    = []
+  }
 
   # Fluent Bit configuration with custom Helm values
   aws_for_fluentbit = var.enable_fluentbit ? local.fluentbit_values : {}
