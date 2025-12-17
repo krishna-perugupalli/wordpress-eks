@@ -48,7 +48,7 @@ module "eks_blueprints_addons" {
         )
       }
     ))]
-  } : {
+    } : {
     # Preserve object shape when disabled so the conditional type stays consistent.
     wait      = null
     skip_crds = null

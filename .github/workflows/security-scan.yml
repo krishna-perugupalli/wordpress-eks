@@ -5,7 +5,7 @@ on:
     branches:
       - main
       - master
-      - feat-*
+      # - feat-*
     paths:
       - '**/*.tf'
       - '**/*.tfvars'
