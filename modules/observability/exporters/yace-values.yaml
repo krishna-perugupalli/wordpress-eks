@@ -22,7 +22,7 @@ config: |-
       # Billing Metrics (Global)
       - type: AWS/Billing
         regions:
-          - "${aws_region}"
+          - "us-east-1"
         metrics:
           - name: EstimatedCharges
             statistics: [Maximum]
