@@ -31,8 +31,8 @@ locals {
     "monitoring"
   )
 
-  # Service account name for YACE IRSA
-  yace_service_account = "yace"
+  # Service account name for YACE IRSA (matches chart default for release name "yace")
+  yace_service_account = "yace-prometheus-yet-another-cloudwatch-exporter"
 
   # Dashboard toggles
   deploy_wp_dashboards   = var.enable_grafana && var.enable_wp_dashboards
