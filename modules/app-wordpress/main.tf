@@ -565,6 +565,7 @@ resource "helm_release" "wordpress" {
               {
                 name      = "wordpress-data"
                 mountPath = "/bitnami/wordpress"
+                subPath   = "wordpress"
               },
               {
                 name      = "metrics-config"
@@ -605,6 +606,7 @@ resource "helm_release" "wordpress" {
               {
                 name      = "wordpress-data"
                 mountPath = "/bitnami/wordpress"
+                subPath   = "wordpress"
                 readOnly  = false
               },
               {
