@@ -594,13 +594,17 @@ resource "helm_release" "wordpress" {
             env = [
               {
                 name  = "WORDPRESS_PATH"
-                value = "/var/www/html"
+                value = "/bitnami/wordpress"
+              },
+              {
+                name  = "WP_PORT"
+                value = "8080"
               }
             ]
             volumeMounts = [
               {
                 name      = "wordpress-data"
-                mountPath = "/var/www/html"
+                mountPath = "/bitnami/wordpress"
                 readOnly  = true
               },
               {
@@ -658,7 +662,7 @@ resource "helm_release" "wordpress" {
             }
           },
           {
-            name = "metrics-config-data"
+            name     = "metrics-config-data"
             emptyDir = {}
           }
         ]
