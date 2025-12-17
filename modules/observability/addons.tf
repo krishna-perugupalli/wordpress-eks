@@ -353,6 +353,16 @@ resource "helm_release" "mysql_exporter" {
 # ServiceMonitors tell Prometheus which services to scrape for metrics.
 # These are created for application exporters to enable automatic discovery.
 
+# Wait briefly after the kube-prometheus-stack release so CRDs are registered
+# before creating ServiceMonitor resources in the same apply.
+resource "time_sleep" "wait_for_servicemonitor_crd" {
+  count = var.enable_prometheus ? 1 : 0
+
+  create_duration = "30s"
+
+  depends_on = [module.eks_blueprints_addons]
+}
+
 # ServiceMonitor for WordPress Exporter
 resource "kubernetes_manifest" "servicemonitor_wordpress" {
   count = var.enable_prometheus ? 1 : 0
@@ -385,7 +395,10 @@ resource "kubernetes_manifest" "servicemonitor_wordpress" {
     }
   }
 
-  depends_on = [module.eks_blueprints_addons]
+  depends_on = [
+    module.eks_blueprints_addons,
+    time_sleep.wait_for_servicemonitor_crd,
+  ]
 }
 
 # ServiceMonitor for Redis Exporter
@@ -420,7 +433,8 @@ resource "kubernetes_manifest" "servicemonitor_redis" {
 
   depends_on = [
     helm_release.redis_exporter,
-    module.eks_blueprints_addons.kube_prometheus_stack,
+    module.eks_blueprints_addons,
+    time_sleep.wait_for_servicemonitor_crd,
   ]
 }
 
@@ -456,7 +470,8 @@ resource "kubernetes_manifest" "servicemonitor_mysql" {
 
   depends_on = [
     helm_release.mysql_exporter,
-    module.eks_blueprints_addons.kube_prometheus_stack,
+    module.eks_blueprints_addons,
+    time_sleep.wait_for_servicemonitor_crd,
   ]
 }
 
@@ -492,6 +507,7 @@ resource "kubernetes_manifest" "servicemonitor_yace" {
 
   depends_on = [
     helm_release.yace,
-    module.eks_blueprints_addons.kube_prometheus_stack,
+    module.eks_blueprints_addons,
+    time_sleep.wait_for_servicemonitor_crd,
   ]
 }
