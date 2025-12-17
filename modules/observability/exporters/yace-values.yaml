@@ -27,6 +27,7 @@ config: |-
           - name: EstimatedCharges
             statistics: [Maximum]
             period: 3600
+            length: 3600
 
       # RDS (Aurora MySQL) Metrics
       - type: AWS/RDS
