@@ -783,7 +783,7 @@ resource "kubernetes_service" "wordpress_metrics" {
   spec {
     selector = {
       "app.kubernetes.io/name"     = "wordpress"
-      "app.kubernetes.io/instance" = local.effective_fullname
+      "app.kubernetes.io/instance" = local.helm_release_name
     }
 
     port {
