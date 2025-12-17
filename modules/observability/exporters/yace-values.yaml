@@ -12,7 +12,7 @@
 # Region will be set via Helm values in addons.tf using data.aws_region.current
 # IRSA role will be configured via serviceAccount annotation in Helm release
 aws:
-  region: "AWS_REGION_PLACEHOLDER"
+  region: "${aws_region}"
 
 # YACE Configuration
 config: |-
@@ -20,14 +20,14 @@ config: |-
   discovery:
     jobs:
       # RDS (Aurora MySQL) Metrics
-      - type: rds
+      - type: AWS/RDS
         regions:
-          - "AWS_REGION_PLACEHOLDER"
+          - "${aws_region}"
         searchTags:
           - key: Project
-            value: "PROJECT_TAG_PLACEHOLDER"
+            value: "${project_tag}"
           - key: Environment
-            value: "ENVIRONMENT_TAG_PLACEHOLDER"
+            value: "${environment_tag}"
         metrics:
           - name: CPUUtilization
             statistics: [Average]
@@ -40,14 +40,14 @@ config: |-
             period: 300
 
       # ElastiCache (Redis) Metrics
-      - type: elasticache
+      - type: AWS/ElastiCache
         regions:
-          - "AWS_REGION_PLACEHOLDER"
+          - "${aws_region}"
         searchTags:
           - key: Project
-            value: "PROJECT_TAG_PLACEHOLDER"
+            value: "${project_tag}"
           - key: Environment
-            value: "ENVIRONMENT_TAG_PLACEHOLDER"
+            value: "${environment_tag}"
         metrics:
           - name: CPUUtilization
             statistics: [Average]
@@ -69,14 +69,14 @@ config: |-
             period: 300
 
       # EFS (Shared Storage) Metrics
-      - type: efs
+      - type: AWS/EFS
         regions:
-          - "AWS_REGION_PLACEHOLDER"
+          - "${aws_region}"
         searchTags:
           - key: Project
-            value: "PROJECT_TAG_PLACEHOLDER"
+            value: "${project_tag}"
           - key: Environment
-            value: "ENVIRONMENT_TAG_PLACEHOLDER"
+            value: "${environment_tag}"
         metrics:
           - name: ClientConnections
             statistics: [Sum]
@@ -89,14 +89,14 @@ config: |-
             period: 300
 
       # ALB (Application Load Balancer) Metrics
-      - type: alb
+      - type: AWS/ApplicationELB
         regions:
-          - "AWS_REGION_PLACEHOLDER"
+          - "${aws_region}"
         searchTags:
           - key: Project
-            value: "PROJECT_TAG_PLACEHOLDER"
+            value: "${project_tag}"
           - key: Environment
-            value: "ENVIRONMENT_TAG_PLACEHOLDER"
+            value: "${environment_tag}"
         metrics:
           - name: TargetResponseTime
             statistics: [Average]

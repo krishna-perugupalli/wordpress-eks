@@ -5,7 +5,7 @@
 # Host will be configured via Helm values in addons.tf using writer_endpoint from infra stack
 # Uses the existing wpapp database user and secret for metrics collection
 mysql:
-  host: "MYSQL_HOST_PLACEHOLDER"
+  host: "${mysql_host}"
   port: 3306
   user: "wpapp"
   existingSecret:

@@ -353,18 +353,12 @@ resource "helm_release" "mysql_exporter" {
 # ServiceMonitors tell Prometheus which services to scrape for metrics.
 # These are created for application exporters to enable automatic discovery.
 
-# Install Prometheus Operator CRDs explicitly to avoid race conditions when
-# ServiceMonitor manifests are applied in the same run.
-resource "helm_release" "prometheus_operator_crds" {
+# Apply the ServiceMonitor CRD (matching prometheus-operator v0.66.0) up front
+# to avoid ownership conflicts and discovery races.
+resource "kubectl_manifest" "servicemonitor_crd" {
   count = var.enable_prometheus ? 1 : 0
 
-  name             = "prometheus-operator-crds"
-  repository       = "https://prometheus-community.github.io/helm-charts"
-  chart            = "prometheus-operator-crds"
-  version          = "5.0.0" # matches kube-prometheus-stack appVersion v0.66.0 (chart 48.2.3)
-  namespace        = "kube-system"
-  create_namespace = false
-  wait             = true
+  yaml_body = file("${path.module}/crds/servicemonitor-crd.yaml")
 }
 
 # Wait briefly after the kube-prometheus-stack release so CRDs are registered
@@ -410,7 +404,7 @@ resource "kubectl_manifest" "servicemonitor_wordpress" {
   })
 
   depends_on = [
-    helm_release.prometheus_operator_crds,
+    kubectl_manifest.servicemonitor_crd,
     module.eks_blueprints_addons,
     time_sleep.wait_for_servicemonitor_crd,
   ]
@@ -448,7 +442,7 @@ resource "kubectl_manifest" "servicemonitor_redis" {
 
   depends_on = [
     helm_release.redis_exporter,
-    helm_release.prometheus_operator_crds,
+    kubectl_manifest.servicemonitor_crd,
     module.eks_blueprints_addons,
     time_sleep.wait_for_servicemonitor_crd,
   ]
@@ -486,7 +480,7 @@ resource "kubectl_manifest" "servicemonitor_mysql" {
 
   depends_on = [
     helm_release.mysql_exporter,
-    helm_release.prometheus_operator_crds,
+    kubectl_manifest.servicemonitor_crd,
     module.eks_blueprints_addons,
     time_sleep.wait_for_servicemonitor_crd,
   ]
@@ -524,7 +518,7 @@ resource "kubectl_manifest" "servicemonitor_yace" {
 
   depends_on = [
     helm_release.yace,
-    helm_release.prometheus_operator_crds,
+    kubectl_manifest.servicemonitor_crd,
     module.eks_blueprints_addons,
     time_sleep.wait_for_servicemonitor_crd,
   ]

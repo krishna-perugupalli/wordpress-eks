@@ -629,7 +629,7 @@ resource "helm_release" "wordpress" {
             name = "metrics-config"
             configMap = {
               name        = "${local.effective_fullname}-metrics-config"
-              defaultMode = 0755
+              defaultMode = 420
             }
           }
         ]

@@ -3,7 +3,7 @@
 
 # Redis endpoint will be configured via Helm values in addons.tf
 # This uses the redis_endpoint from infra stack outputs
-redisAddress: "rediss://REDIS_ENDPOINT_PLACEHOLDER:6379"
+redisAddress: "rediss://${redis_endpoint}:6379"
 
 # Configure TLS authentication for ElastiCache
 auth:
