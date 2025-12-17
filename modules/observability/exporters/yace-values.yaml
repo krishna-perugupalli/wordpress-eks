@@ -18,6 +18,7 @@ aws:
 config: |-
   apiVersion: v1alpha1
   discovery:
+    jobs:
       # RDS (Aurora MySQL) Metrics
       - type: AWS/RDS
         regions:
