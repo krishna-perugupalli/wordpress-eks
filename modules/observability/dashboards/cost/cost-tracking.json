@@ -1,539 +1,807 @@
 {
-  "dashboard": {
-    "id": null,
-    "title": "Cost Tracking & Optimization",
-    "description": "AWS cost tracking and optimization dashboard showing daily spending trends, cost breakdown by service, and resource utilization for rightsizing opportunities. Focuses on cost optimization and budget management for business decision-making.",
-    "tags": ["aws", "cost", "billing", "optimization", "production", "monitoring", "budget"],
-    "timezone": "UTC",
-    "refresh": "1h",
-    "time": {
-      "from": "now-7d",
-      "to": "now"
+  "id": null,
+  "title": "Cost Tracking & Optimization",
+  "description": "AWS cost tracking and optimization dashboard showing daily spending trends, cost breakdown by service, and resource utilization for rightsizing opportunities. Focuses on cost optimization and budget management for business decision-making.",
+  "tags": [
+    "aws",
+    "cost",
+    "billing",
+    "optimization",
+    "production",
+    "monitoring",
+    "budget"
+  ],
+  "timezone": "UTC",
+  "refresh": "1h",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "1h",
+      "6h",
+      "12h",
+      "1d"
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Overview",
+      "type": "row",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "collapsed": false,
+      "panels": []
     },
-    "timepicker": {
-      "refresh_intervals": ["1h", "6h", "12h", "1d"]
+    {
+      "id": 2,
+      "title": "Daily AWS Spending - BUDGET CONTROL",
+      "description": "Daily AWS spending trends - BUSINESS CRITICAL METRIC. BUDGET TARGET: <$100/day ($3000/month). WARNING: >$150/day indicates potential overrun. CRITICAL: >$200/day requires immediate cost optimization. Sudden spikes may indicate resource misconfiguration or unexpected scaling.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "expr": "aws_billing_estimated_charges_maximum",
+          "legendFormat": "Daily Spend",
+          "refId": "A"
+        },
+        {
+          "expr": "avg_over_time(aws_billing_estimated_charges_maximum[7d])",
+          "legendFormat": "7-day Average",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "orange",
+                "value": 150
+              },
+              {
+                "color": "red",
+                "value": 200
+              },
+              {
+                "color": "dark-red",
+                "value": 300
+              }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 20
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "7-day Average"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          }
+        ]
+      }
     },
-    "panels": [
-      {
-        "id": 1,
-        "title": "Overview",
-        "type": "row",
-        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
-        "collapsed": false,
-        "panels": []
+    {
+      "id": 3,
+      "title": "Monthly Cost Projection",
+      "description": "Estimated monthly cost projection based on current daily spending rate. Helps with budget forecasting and early warning for budget overruns.",
+      "type": "stat",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 1
       },
-      {
-        "id": 2,
-        "title": "Daily AWS Spending - BUDGET CONTROL",
-        "description": "Daily AWS spending trends - BUSINESS CRITICAL METRIC. BUDGET TARGET: <$100/day ($3000/month). WARNING: >$150/day indicates potential overrun. CRITICAL: >$200/day requires immediate cost optimization. Sudden spikes may indicate resource misconfiguration or unexpected scaling.",
-        "type": "timeseries",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 1},
-        "targets": [
-          {
-            "expr": "aws_billing_estimated_charges_maximum",
-            "legendFormat": "Daily Spend",
-            "refId": "A"
-          },
-          {
-            "expr": "avg_over_time(aws_billing_estimated_charges_maximum[7d])",
-            "legendFormat": "7-day Average",
-            "refId": "B"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "currencyUSD",
-            "min": 0,
-            "thresholds": {
-              "steps": [
-                {"color": "green", "value": null},
-                {"color": "yellow", "value": 100},
-                {"color": "orange", "value": 150},
-                {"color": "red", "value": 200},
-                {"color": "dark-red", "value": 300}
-              ]
-            },
-            "custom": {
-              "fillOpacity": 20
-            }
-          },
-          "overrides": [
-            {
-              "matcher": {"id": "byName", "options": "7-day Average"},
-              "properties": [
-                {"id": "custom.lineStyle", "value": {"dash": [10, 10]}},
-                {"id": "color", "value": {"mode": "fixed", "fixedColor": "purple"}}
-              ]
-            }
-          ]
+      "targets": [
+        {
+          "expr": "aws_billing_estimated_charges_maximum * 30",
+          "legendFormat": "Monthly Projection",
+          "refId": "A"
         }
-      },
-      {
-        "id": 3,
-        "title": "Monthly Cost Projection",
-        "description": "Estimated monthly cost projection based on current daily spending rate. Helps with budget forecasting and early warning for budget overruns.",
-        "type": "stat",
-        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 1},
-        "targets": [
-          {
-            "expr": "aws_billing_estimated_charges_maximum * 30",
-            "legendFormat": "Monthly Projection",
-            "refId": "A"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "currencyUSD",
-            "thresholds": {
-              "steps": [
-                {"color": "green", "value": null},
-                {"color": "yellow", "value": 3000},
-                {"color": "red", "value": 6000}
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 4,
-        "title": "Current Month Spend",
-        "description": "Current month-to-date spending. Compare against monthly budget to track spending velocity and identify potential overruns early.",
-        "type": "stat",
-        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 1},
-        "targets": [
-          {
-            "expr": "sum(aws_billing_estimated_charges_maximum)",
-            "legendFormat": "Month-to-Date",
-            "refId": "A"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "currencyUSD",
-            "thresholds": {
-              "steps": [
-                {"color": "green", "value": null},
-                {"color": "yellow", "value": 2000},
-                {"color": "red", "value": 4000}
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 5,
-        "title": "Breakdown",
-        "type": "row",
-        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 9},
-        "collapsed": false,
-        "panels": []
-      },
-      {
-        "id": 6,
-        "title": "Cost by Service",
-        "description": "Cost breakdown by AWS service (EKS, RDS, ElastiCache, EFS, ALB). Identify the highest cost contributors and focus optimization efforts on expensive services.",
-        "type": "piechart",
-        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 10},
-        "targets": [
-          {
-            "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon Elastic Kubernetes Service\"}",
-            "legendFormat": "EKS",
-            "refId": "A"
-          },
-          {
-            "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon Relational Database Service\"}",
-            "legendFormat": "RDS (Aurora)",
-            "refId": "B"
-          },
-          {
-            "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon ElastiCache\"}",
-            "legendFormat": "ElastiCache",
-            "refId": "C"
-          },
-          {
-            "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon Elastic File System\"}",
-            "legendFormat": "EFS",
-            "refId": "D"
-          },
-          {
-            "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon Elastic Load Balancing\"}",
-            "legendFormat": "ALB",
-            "refId": "E"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "currencyUSD"
-          }
-        }
-      },
-      {
-        "id": 7,
-        "title": "EKS Service Costs",
-        "description": "Detailed EKS-related costs including compute, storage, and networking. Monitor EC2 instance costs for rightsizing opportunities.",
-        "type": "timeseries",
-        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 10},
-        "targets": [
-          {
-            "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon Elastic Kubernetes Service\"}",
-            "legendFormat": "EKS Control Plane",
-            "refId": "A"
-          },
-          {
-            "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon Elastic Compute Cloud - Compute\"}",
-            "legendFormat": "EC2 Compute",
-            "refId": "B"
-          },
-          {
-            "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon Elastic Block Store\"}",
-            "legendFormat": "EBS Storage",
-            "refId": "C"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "currencyUSD",
-            "thresholds": {
-              "steps": [
-                {"color": "green", "value": null},
-                {"color": "yellow", "value": 50},
-                {"color": "red", "value": 100}
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 8,
-        "title": "Data Services Costs",
-        "description": "Cost breakdown for data services (Aurora MySQL, ElastiCache Redis, EFS). Monitor for unexpected cost increases due to scaling or usage patterns.",
-        "type": "timeseries",
-        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 10},
-        "targets": [
-          {
-            "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon Relational Database Service\"}",
-            "legendFormat": "Aurora MySQL",
-            "refId": "A"
-          },
-          {
-            "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon ElastiCache\"}",
-            "legendFormat": "ElastiCache Redis",
-            "refId": "B"
-          },
-          {
-            "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon Elastic File System\"}",
-            "legendFormat": "EFS Storage",
-            "refId": "C"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "currencyUSD",
-            "thresholds": {
-              "steps": [
-                {"color": "green", "value": null},
-                {"color": "yellow", "value": 30},
-                {"color": "red", "value": 60}
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 9,
-        "title": "Service Cost Table",
-        "description": "Detailed cost breakdown table showing current and historical costs by service. Use for detailed cost analysis and trend identification.",
-        "type": "table",
-        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 18},
-        "targets": [
-          {
-            "expr": "aws_billing_estimated_charges_maximum",
-            "legendFormat": "{{dimension_ServiceName}}",
-            "refId": "A",
-            "format": "table"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "currencyUSD"
-          }
-        }
-      },
-      {
-        "id": 10,
-        "title": "Optimization",
-        "type": "row",
-        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 26},
-        "collapsed": false,
-        "panels": []
-      },
-      {
-        "id": 11,
-        "title": "EC2 CPU Utilization - RIGHTSIZING OPPORTUNITIES",
-        "description": "EC2 instance CPU utilization for cost optimization. WASTE INDICATOR: <20% = significant cost savings opportunity. UNDERUTILIZED: 20-40% = consider downsizing. OPTIMAL: 40-70% = right-sized. OVERUTILIZED: >80% = consider upsizing. Each underutilized instance wastes $50-200/month.",
-        "type": "timeseries",
-        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 27},
-        "targets": [
-          {
-            "expr": "aws_ec2_cpuutilization_average",
-            "legendFormat": "{{dimension_InstanceId}} ({{dimension_InstanceType}})",
-            "refId": "A"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "percent",
-            "min": 0,
-            "max": 100,
-            "thresholds": {
-              "steps": [
-                {"color": "dark-red", "value": null},
-                {"color": "red", "value": 20},
-                {"color": "orange", "value": 40},
-                {"color": "green", "value": 60},
-                {"color": "yellow", "value": 80}
-              ]
-            },
-            "custom": {
-              "fillOpacity": 30
-            }
-          }
-        }
-      },
-      {
-        "id": 12,
-        "title": "EC2 Instance Memory Utilization",
-        "description": "EC2 instance memory utilization for rightsizing analysis. Low memory usage combined with low CPU may indicate oversized instances.",
-        "type": "timeseries",
-        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 27},
-        "targets": [
-          {
-            "expr": "aws_ec2_memory_utilization_average",
-            "legendFormat": "Memory % - {{dimension_InstanceId}}",
-            "refId": "A"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "percent",
-            "thresholds": {
-              "steps": [
-                {"color": "red", "value": null},
-                {"color": "yellow", "value": 50},
-                {"color": "green", "value": 70}
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 13,
-        "title": "Instance Rightsizing Opportunities",
-        "description": "EC2 instances with consistently low utilization (CPU < 40%, Memory < 50%) over the past 7 days. Consider downsizing these instances to reduce costs.",
-        "type": "table",
-        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 27},
-        "targets": [
-          {
-            "expr": "avg_over_time(aws_ec2_cpuutilization_average[7d]) < 40 and avg_over_time(aws_ec2_memory_utilization_average[7d]) < 50",
-            "legendFormat": "{{dimension_InstanceId}} - {{dimension_InstanceType}}",
-            "refId": "A",
-            "format": "table"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "percent"
-          }
-        }
-      },
-      {
-        "id": 14,
-        "title": "Trends",
-        "type": "row",
-        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 35},
-        "collapsed": false,
-        "panels": []
-      },
-      {
-        "id": 15,
-        "title": "EFS Storage Growth Trend",
-        "description": "EFS storage usage growth over time. Monitor storage growth patterns to predict future costs and plan for capacity needs. Steep growth may indicate data retention issues.",
-        "type": "timeseries",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 36},
-        "targets": [
-          {
-            "expr": "aws_efs_size_in_bytes_standard_average / 1024 / 1024 / 1024",
-            "legendFormat": "EFS Storage GB - {{dimension_FileSystemId}}",
-            "refId": "A"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "decbytes",
-            "thresholds": {
-              "steps": [
-                {"color": "green", "value": null},
-                {"color": "yellow", "value": 100},
-                {"color": "red", "value": 500}
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 16,
-        "title": "EFS Usage Patterns",
-        "description": "EFS I/O patterns showing read/write activity trends. Understanding usage patterns helps optimize performance tier selection and cost management.",
-        "type": "timeseries",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 36},
-        "targets": [
-          {
-            "expr": "rate(aws_efs_data_read_io_bytes_sum[1h])",
-            "legendFormat": "Read Rate - {{dimension_FileSystemId}}",
-            "refId": "A"
-          },
-          {
-            "expr": "rate(aws_efs_data_write_io_bytes_sum[1h])",
-            "legendFormat": "Write Rate - {{dimension_FileSystemId}}",
-            "refId": "B"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "Bps",
-            "thresholds": {
-              "steps": [
-                {"color": "green", "value": null},
-                {"color": "yellow", "value": 10000000},
-                {"color": "red", "value": 50000000}
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 17,
-        "title": "Cost Trend Analysis",
-        "description": "7-day cost trend analysis showing daily cost changes. Identify cost optimization opportunities and track the impact of cost reduction initiatives.",
-        "type": "timeseries",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 44},
-        "targets": [
-          {
-            "expr": "increase(aws_billing_estimated_charges_maximum[1d])",
-            "legendFormat": "Daily Cost Change - {{dimension_ServiceName}}",
-            "refId": "A"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "currencyUSD",
-            "thresholds": {
-              "steps": [
-                {"color": "green", "value": null},
-                {"color": "yellow", "value": 10},
-                {"color": "red", "value": 25}
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 18,
-        "title": "Monthly Cost Forecast",
-        "description": "Monthly cost forecast based on current spending trends and historical patterns. Use for budget planning and early warning of potential overruns.",
-        "type": "timeseries",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 44},
-        "targets": [
-          {
-            "expr": "predict_linear(aws_billing_estimated_charges_maximum[7d], 30*24*3600)",
-            "legendFormat": "30-day Forecast - {{dimension_ServiceName}}",
-            "refId": "A"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "currencyUSD",
-            "thresholds": {
-              "steps": [
-                {"color": "green", "value": null},
-                {"color": "yellow", "value": 3000},
-                {"color": "red", "value": 6000}
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 19,
-        "title": "Cost Optimization Actions",
-        "type": "row",
-        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 52},
-        "collapsed": false,
-        "panels": []
-      },
-      {
-        "id": 20,
-        "title": "Immediate Cost Savings Opportunities",
-        "description": "Actionable cost optimization opportunities with estimated monthly savings. Focus on high-impact, low-risk optimizations first.",
-        "type": "table",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 53},
-        "targets": [
-          {
-            "expr": "count(aws_ec2_cpuutilization_average < 20) * 50",
-            "legendFormat": "Underutilized EC2 Savings ($)",
-            "refId": "A",
-            "format": "table"
-          },
-          {
-            "expr": "aws_efs_size_in_bytes_standard_average / 1024 / 1024 / 1024 * 0.30",
-            "legendFormat": "EFS IA Tier Savings ($)",
-            "refId": "B",
-            "format": "table"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "currencyUSD",
-            "thresholds": {
-              "steps": [
-                {"color": "green", "value": null},
-                {"color": "yellow", "value": 100},
-                {"color": "red", "value": 500}
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 21,
-        "title": "Budget Alert Status",
-        "description": "Budget tracking against monthly targets. RED indicates budget overrun risk requiring immediate cost control actions.",
-        "type": "stat",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 53},
-        "targets": [
-          {
-            "expr": "sum(aws_billing_estimated_charges_maximum) / 3000 * 100",
-            "legendFormat": "Budget Utilization %",
-            "refId": "A"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "percent",
-            "min": 0,
-            "max": 150,
-            "thresholds": {
-              "steps": [
-                {"color": "green", "value": null},
-                {"color": "yellow", "value": 75},
-                {"color": "orange", "value": 90},
-                {"color": "red", "value": 100},
-                {"color": "dark-red", "value": 120}
-              ]
-            }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 3000
+              },
+              {
+                "color": "red",
+                "value": 6000
+              }
+            ]
           }
         }
       }
-    ]
-  }
+    },
+    {
+      "id": 4,
+      "title": "Current Month Spend",
+      "description": "Current month-to-date spending. Compare against monthly budget to track spending velocity and identify potential overruns early.",
+      "type": "stat",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "targets": [
+        {
+          "expr": "sum(aws_billing_estimated_charges_maximum)",
+          "legendFormat": "Month-to-Date",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 2000
+              },
+              {
+                "color": "red",
+                "value": 4000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Breakdown",
+      "type": "row",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 6,
+      "title": "Cost by Service",
+      "description": "Cost breakdown by AWS service (EKS, RDS, ElastiCache, EFS, ALB). Identify the highest cost contributors and focus optimization efforts on expensive services.",
+      "type": "piechart",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 10
+      },
+      "targets": [
+        {
+          "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon Elastic Kubernetes Service\"}",
+          "legendFormat": "EKS",
+          "refId": "A"
+        },
+        {
+          "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon Relational Database Service\"}",
+          "legendFormat": "RDS (Aurora)",
+          "refId": "B"
+        },
+        {
+          "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon ElastiCache\"}",
+          "legendFormat": "ElastiCache",
+          "refId": "C"
+        },
+        {
+          "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon Elastic File System\"}",
+          "legendFormat": "EFS",
+          "refId": "D"
+        },
+        {
+          "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon Elastic Load Balancing\"}",
+          "legendFormat": "ALB",
+          "refId": "E"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "EKS Service Costs",
+      "description": "Detailed EKS-related costs including compute, storage, and networking. Monitor EC2 instance costs for rightsizing opportunities.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 10
+      },
+      "targets": [
+        {
+          "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon Elastic Kubernetes Service\"}",
+          "legendFormat": "EKS Control Plane",
+          "refId": "A"
+        },
+        {
+          "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon Elastic Compute Cloud - Compute\"}",
+          "legendFormat": "EC2 Compute",
+          "refId": "B"
+        },
+        {
+          "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon Elastic Block Store\"}",
+          "legendFormat": "EBS Storage",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Data Services Costs",
+      "description": "Cost breakdown for data services (Aurora MySQL, ElastiCache Redis, EFS). Monitor for unexpected cost increases due to scaling or usage patterns.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 10
+      },
+      "targets": [
+        {
+          "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon Relational Database Service\"}",
+          "legendFormat": "Aurora MySQL",
+          "refId": "A"
+        },
+        {
+          "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon ElastiCache\"}",
+          "legendFormat": "ElastiCache Redis",
+          "refId": "B"
+        },
+        {
+          "expr": "aws_billing_estimated_charges_maximum{dimension_ServiceName=\"Amazon Elastic File System\"}",
+          "legendFormat": "EFS Storage",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 60
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "Service Cost Table",
+      "description": "Detailed cost breakdown table showing current and historical costs by service. Use for detailed cost analysis and trend identification.",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "targets": [
+        {
+          "expr": "aws_billing_estimated_charges_maximum",
+          "legendFormat": "{{dimension_ServiceName}}",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "Optimization",
+      "type": "row",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 11,
+      "title": "EC2 CPU Utilization - RIGHTSIZING OPPORTUNITIES",
+      "description": "EC2 instance CPU utilization for cost optimization. WASTE INDICATOR: <20% = significant cost savings opportunity. UNDERUTILIZED: 20-40% = consider downsizing. OPTIMAL: 40-70% = right-sized. OVERUTILIZED: >80% = consider upsizing. Each underutilized instance wastes $50-200/month.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 27
+      },
+      "targets": [
+        {
+          "expr": "aws_ec2_cpuutilization_average",
+          "legendFormat": "{{dimension_InstanceId}} ({{dimension_InstanceType}})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              {
+                "color": "dark-red",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 20
+              },
+              {
+                "color": "orange",
+                "value": 40
+              },
+              {
+                "color": "green",
+                "value": 60
+              },
+              {
+                "color": "yellow",
+                "value": 80
+              }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 30
+          }
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "EC2 Instance Memory Utilization",
+      "description": "EC2 instance memory utilization for rightsizing analysis. Low memory usage combined with low CPU may indicate oversized instances.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 27
+      },
+      "targets": [
+        {
+          "expr": "aws_ec2_memory_utilization_average",
+          "legendFormat": "Memory % - {{dimension_InstanceId}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 70
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "Instance Rightsizing Opportunities",
+      "description": "EC2 instances with consistently low utilization (CPU < 40%, Memory < 50%) over the past 7 days. Consider downsizing these instances to reduce costs.",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 27
+      },
+      "targets": [
+        {
+          "expr": "avg_over_time(aws_ec2_cpuutilization_average[7d]) < 40 and avg_over_time(aws_ec2_memory_utilization_average[7d]) < 50",
+          "legendFormat": "{{dimension_InstanceId}} - {{dimension_InstanceType}}",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "Trends",
+      "type": "row",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 35
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 15,
+      "title": "EFS Storage Growth Trend",
+      "description": "EFS storage usage growth over time. Monitor storage growth patterns to predict future costs and plan for capacity needs. Steep growth may indicate data retention issues.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 36
+      },
+      "targets": [
+        {
+          "expr": "aws_efs_size_in_bytes_standard_average / 1024 / 1024 / 1024",
+          "legendFormat": "EFS Storage GB - {{dimension_FileSystemId}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decbytes",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 500
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 16,
+      "title": "EFS Usage Patterns",
+      "description": "EFS I/O patterns showing read/write activity trends. Understanding usage patterns helps optimize performance tier selection and cost management.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 36
+      },
+      "targets": [
+        {
+          "expr": "rate(aws_efs_data_read_io_bytes_sum[1h])",
+          "legendFormat": "Read Rate - {{dimension_FileSystemId}}",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(aws_efs_data_write_io_bytes_sum[1h])",
+          "legendFormat": "Write Rate - {{dimension_FileSystemId}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10000000
+              },
+              {
+                "color": "red",
+                "value": 50000000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 17,
+      "title": "Cost Trend Analysis",
+      "description": "7-day cost trend analysis showing daily cost changes. Identify cost optimization opportunities and track the impact of cost reduction initiatives.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 44
+      },
+      "targets": [
+        {
+          "expr": "increase(aws_billing_estimated_charges_maximum[1d])",
+          "legendFormat": "Daily Cost Change - {{dimension_ServiceName}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 25
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 18,
+      "title": "Monthly Cost Forecast",
+      "description": "Monthly cost forecast based on current spending trends and historical patterns. Use for budget planning and early warning of potential overruns.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 44
+      },
+      "targets": [
+        {
+          "expr": "predict_linear(aws_billing_estimated_charges_maximum[7d], 30*24*3600)",
+          "legendFormat": "30-day Forecast - {{dimension_ServiceName}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 3000
+              },
+              {
+                "color": "red",
+                "value": 6000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 19,
+      "title": "Cost Optimization Actions",
+      "type": "row",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 52
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 20,
+      "title": "Immediate Cost Savings Opportunities",
+      "description": "Actionable cost optimization opportunities with estimated monthly savings. Focus on high-impact, low-risk optimizations first.",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 53
+      },
+      "targets": [
+        {
+          "expr": "count(aws_ec2_cpuutilization_average < 20) * 50",
+          "legendFormat": "Underutilized EC2 Savings ($)",
+          "refId": "A",
+          "format": "table"
+        },
+        {
+          "expr": "aws_efs_size_in_bytes_standard_average / 1024 / 1024 / 1024 * 0.30",
+          "legendFormat": "EFS IA Tier Savings ($)",
+          "refId": "B",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 500
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 21,
+      "title": "Budget Alert Status",
+      "description": "Budget tracking against monthly targets. RED indicates budget overrun risk requiring immediate cost control actions.",
+      "type": "stat",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 53
+      },
+      "targets": [
+        {
+          "expr": "sum(aws_billing_estimated_charges_maximum) / 3000 * 100",
+          "legendFormat": "Budget Utilization %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 150,
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 75
+              },
+              {
+                "color": "orange",
+                "value": 90
+              },
+              {
+                "color": "red",
+                "value": 100
+              },
+              {
+                "color": "dark-red",
+                "value": 120
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
 }
