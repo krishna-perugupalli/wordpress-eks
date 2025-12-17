@@ -21,7 +21,7 @@ if (!file_exists($wp_load) || !file_exists($wp_config)) {
 
 define('ABSPATH', $wp_path . '/');
 define('WP_USE_THEMES', false);
-define('WP_DEBUG', false);
+
 
 $start = microtime(true);
 

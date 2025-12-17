@@ -594,11 +594,31 @@ resource "helm_release" "wordpress" {
             env = [
               {
                 name  = "WORDPRESS_PATH"
-                value = "/bitnami/wordpress"
+                value = "/opt/bitnami/wordpress"
               },
               {
                 name  = "WP_PORT"
                 value = "8080"
+              },
+              {
+                name  = "MARIADB_HOST"
+                value = var.db_host
+              },
+              {
+                name  = "MARIADB_PORT_NUMBER"
+                value = tostring(var.db_port)
+              },
+              {
+                name  = "WORDPRESS_DATABASE_NAME"
+                value = var.db_name
+              },
+              {
+                name  = "WORDPRESS_DATABASE_USER"
+                value = var.db_user
+              },
+              {
+                name  = "WORDPRESS_DATABASE_PASSWORD_FILE"
+                value = "/secrets/mariadb-password"
               }
             ]
             volumeMounts = [
@@ -611,6 +631,11 @@ resource "helm_release" "wordpress" {
                 name      = "metrics-config-data"
                 mountPath = "/usr/local/bin/metrics-files"
                 readOnly  = false
+              },
+              {
+                name      = "wordpress-secrets"
+                mountPath = "/secrets"
+                readOnly  = true
               }
             ]
             resources = {

@@ -9,6 +9,11 @@ echo "Starting WordPress metrics exporter..."
 WORDPRESS_PATH=${WORDPRESS_PATH:-/bitnami/wordpress}
 WP_PORT=${WP_PORT:-8080}
 
+if [ -f "$WORDPRESS_DATABASE_PASSWORD_FILE" ]; then
+    export WORDPRESS_DATABASE_PASSWORD="$(< "$WORDPRESS_DATABASE_PASSWORD_FILE")"
+    export MARIADB_PASSWORD="$WORDPRESS_DATABASE_PASSWORD"
+fi
+
 # Wait for WordPress HTTP to be available
 echo "Waiting for WordPress to be ready on 127.0.0.1:${WP_PORT}..."
 timeout=300
@@ -35,6 +40,12 @@ for candidate in "$WORDPRESS_PATH" "/opt/bitnami/wordpress" "/bitnami/wordpress"
 done
 
 echo "Using WordPress path: ${WORDPRESS_PATH}"
+
+# Ensure wp-config.php is present in the application directory
+if [ -f "/bitnami/wordpress/wordpress/wp-config.php" ]; then
+    echo "Copying configured wp-config.php to ${WORDPRESS_PATH}..."
+    cp -f "/bitnami/wordpress/wordpress/wp-config.php" "${WORDPRESS_PATH}/wp-config.php"
+fi
 
 # Use exporter script in place (avoid writing to WordPress volume)
 METRICS_SCRIPT="/usr/local/bin/metrics-files/simple-metrics-exporter.php"
