@@ -41,8 +41,8 @@ locals {
     service = {
       type = "ClusterIP"
     }
-    "grafana.ini" = {
-      "auth.anonymous" = {
+    grafana_ini = {
+      auth_anonymous = {
         enabled = false
       }
     }
@@ -81,11 +81,13 @@ locals {
 
 locals {
   fluentbit_values = {
-    cloudWatch = {
-      enabled      = true
-      region       = data.aws_region.current.name
-      logGroupName = "/aws/eks/${var.cluster_name}/application"
-    }
+    values = [yamlencode({
+      cloudWatch = {
+        enabled      = true
+        region       = data.aws_region.current.name
+        logGroupName = "/aws/eks/${var.cluster_name}/application"
+      }
+    })]
   }
 }
 

@@ -32,13 +32,17 @@ module "eks_blueprints_addons" {
   enable_aws_for_fluentbit     = var.enable_fluentbit
 
   # Prometheus configuration with custom Helm values
-  kube_prometheus_stack = var.enable_prometheus ? merge(
-    local.kube_prometheus_stack_values,
-    {
-      # Grafana is part of kube-prometheus-stack
-      grafana = var.enable_grafana ? local.grafana_values : {}
-    }
-  ) : {}
+  kube_prometheus_stack = var.enable_prometheus ? {
+    values = [yamlencode(merge(
+      local.kube_prometheus_stack_values,
+      {
+        # Grafana is part of kube-prometheus-stack
+        grafana = var.enable_grafana ? local.grafana_values : {
+          enabled = false
+        }
+      }
+    ))]
+  } : {}
 
   # Fluent Bit configuration with custom Helm values
   aws_for_fluentbit = var.enable_fluentbit ? local.fluentbit_values : {}
