@@ -84,20 +84,29 @@ locals {
 
 locals {
   fluentbit_values = {
-    set = [
-      {
-        name  = "cloudWatchLogs.enabled"
-        value = "true"
-      },
-      {
-        name  = "cloudWatchLogs.region"
-        value = data.aws_region.current.name
-      },
-      {
-        name  = "cloudWatchLogs.logGroupName"
-        value = "/aws/eks/${var.cluster_name}/application"
-      }
-    ]
+    # IAM-related placeholders keep the map type aligned with what the
+    # EKS Blueprints module expects, preventing lookup() default type errors.
+    # role_permissions_boundary_arn = null
+    # role_policies                 = {}
+    # policy_statements             = []
+    # source_policy_documents       = []
+    # override_policy_documents     = []
+    # s3_bucket_arns                = []
+
+    # set = [
+    #   {
+    #     name  = "cloudWatchLogs.enabled"
+    #     value = "true"
+    #   },
+    #   {
+    #     name  = "cloudWatchLogs.region"
+    #     value = data.aws_region.current.name
+    #   },
+    #   {
+    #     name  = "cloudWatchLogs.logGroupName"
+    #     value = "/aws/eks/${var.cluster_name}/application"
+    #   }
+    # ]
   }
 }
 
