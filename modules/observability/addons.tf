@@ -145,6 +145,12 @@ resource "helm_release" "yace" {
     value = aws_iam_role.yace[0].arn
   }
 
+  # Ensure the service account name matches the IRSA trust policy
+  set {
+    name  = "serviceAccount.name"
+    value = local.yace_service_account
+  }
+
   # Configure AWS region from data source
   set {
     name  = "aws.region"
@@ -178,15 +184,15 @@ data "aws_iam_policy_document" "yace_trust" {
 
     condition {
       test     = "StringEquals"
-      variable = "${replace(var.oidc_provider_arn, "/^(.*provider/)/", "")}:sub"
+      variable = "${regexreplace(var.oidc_provider_arn, "^arn:aws:iam::[0-9]+:oidc-provider/", "")}:sub"
       values = [
-        "system:serviceaccount:${local.monitoring_namespace}:yace-yet-another-cloudwatch-exporter"
+        "system:serviceaccount:${local.monitoring_namespace}:${local.yace_service_account}"
       ]
     }
 
     condition {
       test     = "StringEquals"
-      variable = "${replace(var.oidc_provider_arn, "/^(.*provider/)/", "")}:aud"
+      variable = "${regexreplace(var.oidc_provider_arn, "^arn:aws:iam::[0-9]+:oidc-provider/", "")}:aud"
       values   = ["sts.amazonaws.com"]
     }
   }

@@ -553,6 +553,25 @@ resource "helm_release" "wordpress" {
     # WordPress metrics exporter sidecar configuration
     var.enable_metrics_exporter ? [
       yamlencode({
+        initContainers = [
+          {
+            name    = "metrics-config-copy"
+            image   = "busybox:1.36"
+            command = ["/bin/sh", "-c"]
+            args    = ["cp -av /tmp/src/* /tmp/dest/"]
+            volumeMounts = [
+              {
+                name      = "metrics-config"
+                mountPath = "/tmp/src"
+                readOnly  = true
+              },
+              {
+                name      = "metrics-config-data"
+                mountPath = "/tmp/dest"
+              }
+            ]
+          }
+        ]
         sidecars = [
           {
             name    = "metrics-exporter"
@@ -579,7 +598,7 @@ resource "helm_release" "wordpress" {
                 readOnly  = true
               },
               {
-                name      = "metrics-config"
+                name      = "metrics-config-data"
                 mountPath = "/usr/local/bin/metrics-files"
                 readOnly  = true
               }
@@ -631,17 +650,21 @@ resource "helm_release" "wordpress" {
               name        = "${local.effective_fullname}-metrics-config"
               defaultMode = 420
             }
+          },
+          {
+            name = "metrics-config-data"
+            emptyDir = {}
           }
         ]
         extraVolumeMounts = [
           {
-            name      = "metrics-config"
+            name      = "metrics-config-data"
             mountPath = "/opt/bitnami/wordpress/wp-content/plugins/wordpress-metrics/wordpress-metrics.php"
             subPath   = "wordpress-metrics-plugin.php"
             readOnly  = true
           },
           {
-            name      = "metrics-config"
+            name      = "metrics-config-data"
             mountPath = "/opt/bitnami/wordpress/wp-content/mu-plugins/wordpress-metrics-loader.php"
             subPath   = "mu-metrics-loader.php"
             readOnly  = true

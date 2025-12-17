@@ -31,6 +31,9 @@ locals {
     "monitoring"
   )
 
+  # Service account name for YACE IRSA
+  yace_service_account = "yace"
+
   # Dashboard toggles
   deploy_wp_dashboards   = var.enable_grafana && var.enable_wp_dashboards
   deploy_aws_dashboards  = var.enable_grafana && var.enable_aws_dashboards
