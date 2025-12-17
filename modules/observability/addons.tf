@@ -184,7 +184,7 @@ data "aws_iam_policy_document" "yace_trust" {
 
     condition {
       test     = "StringEquals"
-      variable = "${regexreplace(var.oidc_provider_arn, "^arn:aws:iam::[0-9]+:oidc-provider/", "")}:sub"
+      variable = "${replace(var.oidc_provider_arn, "arn:aws:iam::[0-9]+:oidc-provider/", "")}:sub"
       values = [
         "system:serviceaccount:${local.monitoring_namespace}:${local.yace_service_account}"
       ]
@@ -192,7 +192,7 @@ data "aws_iam_policy_document" "yace_trust" {
 
     condition {
       test     = "StringEquals"
-      variable = "${regexreplace(var.oidc_provider_arn, "^arn:aws:iam::[0-9]+:oidc-provider/", "")}:aud"
+      variable = "${replace(var.oidc_provider_arn, "arn:aws:iam::[0-9]+:oidc-provider/", "")}:aud"
       values   = ["sts.amazonaws.com"]
     }
   }
