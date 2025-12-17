@@ -26,10 +26,7 @@ locals {
 
   # Monitoring namespace for exporters and ServiceMonitors
   # Uses Blueprints output if available, otherwise defaults to "kube-prometheus-stack"
-  monitoring_namespace = try(
-    module.eks_blueprints_addons.kube_prometheus_stack.namespace,
-    "kube-prometheus-stack"
-  )
+  monitoring_namespace = local.prometheus_namespace
 
   # Service account name for YACE IRSA (matches chart default for release name "yace")
   yace_service_account = "yace-prometheus-yet-another-cloudwatch-exporter"
