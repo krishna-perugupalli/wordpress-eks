@@ -19,6 +19,15 @@ config: |-
   apiVersion: v1alpha1
   discovery:
     jobs:
+      # Billing Metrics (Global)
+      - type: AWS/Billing
+        regions:
+          - "${aws_region}"
+        metrics:
+          - name: EstimatedCharges
+            statistics: [Maximum]
+            period: 3600
+
       # RDS (Aurora MySQL) Metrics
       - type: AWS/RDS
         regions:
