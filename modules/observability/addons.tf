@@ -78,16 +78,26 @@ locals {
 # ------------------------------------------------------------------------------
 # Fluent Bit Custom Values
 # ------------------------------------------------------------------------------
+# The aws_for_fluentbit parameter accepts a map of configuration options
+# that the EKS Blueprints Addons module will convert to Helm values.
+# Do NOT use the 'values' array format here - the module handles that internally.
 
 locals {
   fluentbit_values = {
-    values = [yamlencode({
-      cloudWatch = {
-        enabled      = true
-        region       = data.aws_region.current.name
-        logGroupName = "/aws/eks/${var.cluster_name}/application"
+    set = [
+      {
+        name  = "cloudWatchLogs.enabled"
+        value = "true"
+      },
+      {
+        name  = "cloudWatchLogs.region"
+        value = data.aws_region.current.name
+      },
+      {
+        name  = "cloudWatchLogs.logGroupName"
+        value = "/aws/eks/${var.cluster_name}/application"
       }
-    })]
+    ]
   }
 }
 
