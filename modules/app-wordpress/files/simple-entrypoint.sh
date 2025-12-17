@@ -36,10 +36,11 @@ done
 
 echo "Using WordPress path: ${WORDPRESS_PATH}"
 
-# Copy metrics exporter to WordPress directory
-if [ -f "/usr/local/bin/metrics-files/simple-metrics-exporter.php" ]; then
-    cp /usr/local/bin/metrics-files/simple-metrics-exporter.php "$WORDPRESS_PATH/wp-metrics.php"
-    echo "Metrics exporter installed"
+# Use exporter script in place (avoid writing to WordPress volume)
+METRICS_SCRIPT="/usr/local/bin/metrics-files/simple-metrics-exporter.php"
+if [ ! -f "${METRICS_SCRIPT}" ]; then
+    echo "Metrics script not found at ${METRICS_SCRIPT}"
+    exit 1
 fi
 
 # Start PHP built-in server for metrics endpoint
@@ -51,7 +52,7 @@ cat > metrics-router.php << 'EOF'
 <?php
 $uri = $_SERVER['REQUEST_URI'];
 if ($uri === '/metrics' || $uri === '/wp-metrics' || strpos($uri, 'metrics') !== false) {
-    include 'wp-metrics.php';
+    include '/usr/local/bin/metrics-files/simple-metrics-exporter.php';
 } else {
     http_response_code(404);
     echo "Not Found";

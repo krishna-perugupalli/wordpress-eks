@@ -605,12 +605,12 @@ resource "helm_release" "wordpress" {
               {
                 name      = "wordpress-data"
                 mountPath = "/bitnami/wordpress"
-                readOnly  = true
+                readOnly  = false
               },
               {
                 name      = "metrics-config-data"
                 mountPath = "/usr/local/bin/metrics-files"
-                readOnly  = true
+                readOnly  = false
               }
             ]
             resources = {
