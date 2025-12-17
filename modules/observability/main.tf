@@ -33,6 +33,9 @@ module "eks_blueprints_addons" {
 
   # Prometheus configuration with custom Helm values
   kube_prometheus_stack = var.enable_prometheus ? {
+    # Ensure CRDs are installed and ready before we create ServiceMonitors.
+    wait     = true
+    skip_crds = false
     values = [yamlencode(merge(
       local.kube_prometheus_stack_values,
       {

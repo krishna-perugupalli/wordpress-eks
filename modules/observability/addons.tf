@@ -293,7 +293,10 @@ resource "helm_release" "redis_exporter" {
     value = "rediss://${var.redis_endpoint}:6379"
   }
 
-  depends_on = [module.eks_blueprints_addons]
+  depends_on = [
+    module.eks_blueprints_addons.kube_prometheus_stack,
+    module.eks_blueprints_addons,
+  ]
 }
 
 # ------------------------------------------------------------------------------
@@ -415,7 +418,10 @@ resource "kubernetes_manifest" "servicemonitor_redis" {
     }
   }
 
-  depends_on = [helm_release.redis_exporter]
+  depends_on = [
+    helm_release.redis_exporter,
+    module.eks_blueprints_addons.kube_prometheus_stack,
+  ]
 }
 
 # ServiceMonitor for MySQL Exporter
@@ -448,7 +454,10 @@ resource "kubernetes_manifest" "servicemonitor_mysql" {
     }
   }
 
-  depends_on = [helm_release.mysql_exporter]
+  depends_on = [
+    helm_release.mysql_exporter,
+    module.eks_blueprints_addons.kube_prometheus_stack,
+  ]
 }
 
 # ServiceMonitor for YACE Exporter
@@ -481,5 +490,8 @@ resource "kubernetes_manifest" "servicemonitor_yace" {
     }
   }
 
-  depends_on = [helm_release.yace]
+  depends_on = [
+    helm_release.yace,
+    module.eks_blueprints_addons.kube_prometheus_stack,
+  ]
 }
