@@ -235,7 +235,8 @@ data "aws_iam_policy_document" "yace" {
       "elasticfilesystem:DescribeFileSystems",
       "elasticloadbalancing:DescribeLoadBalancers",
       "elasticloadbalancing:DescribeTargetGroups",
-      "tag:GetResources"
+      "tag:GetResources",
+      "iam:ListAccountAliases"
     ]
     resources = ["*"]
   }
