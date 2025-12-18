@@ -4,7 +4,7 @@ This directory contains the WordPress metrics exporter implementation that provi
 
 ## Overview
 
-The WordPress metrics exporter is designed to fulfill requirements 4.4, 8.1, and 8.2 by providing:
+The WordPress metrics exporter is designed to fulfill below requirements
 
 - **Page views and response times**: HTTP request metrics with method, status, and endpoint labels
 - **Active user tracking**: Real-time count of active users based on session activity

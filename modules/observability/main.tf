@@ -59,7 +59,6 @@ module "eks_blueprints_addons" {
   # Fluent Bit configuration with custom Helm values
   aws_for_fluentbit = var.enable_fluentbit ? local.fluentbit_values : {}
 
-  # Placeholder for YACE - to be implemented in Phase 2
   # enable_yace_exporter = var.enable_yace
 
   # Common tags for AWS resources
@@ -67,7 +66,7 @@ module "eks_blueprints_addons" {
 }
 
 #############################################
-# PrometheusRule Resources (Phase 4)
+# PrometheusRule Resources
 #############################################
 # These resources deploy alert definitions as PrometheusRule CRDs
 # when alerting is enabled. Each alert domain is deployed as a
@@ -86,7 +85,6 @@ resource "kubernetes_manifest" "wordpress_alerts" {
       labels = {
         app        = "wordpress"
         component  = "alerts"
-        phase      = "4"
         cluster    = var.cluster_name
         prometheus = "kube-prometheus-stack-prometheus"
         role       = "alert-rules"
@@ -111,7 +109,6 @@ resource "kubernetes_manifest" "kubernetes_alerts" {
       labels = {
         app        = "kubernetes"
         component  = "alerts"
-        phase      = "4"
         cluster    = var.cluster_name
         prometheus = "kube-prometheus-stack-prometheus"
         role       = "alert-rules"
@@ -136,7 +133,6 @@ resource "kubernetes_manifest" "aws_alerts" {
       labels = {
         app        = "aws-services"
         component  = "alerts"
-        phase      = "4"
         cluster    = var.cluster_name
         prometheus = "kube-prometheus-stack-prometheus"
         role       = "alert-rules"
@@ -161,7 +157,6 @@ resource "kubernetes_manifest" "cost_alerts" {
       labels = {
         app        = "cost-guardrails"
         component  = "alerts"
-        phase      = "4"
         cluster    = var.cluster_name
         prometheus = "kube-prometheus-stack-prometheus"
         role       = "alert-rules"
@@ -192,7 +187,6 @@ resource "kubernetes_manifest" "alertmanager_config" {
       labels = {
         app        = "alertmanager"
         component  = "config"
-        phase      = "4"
         cluster    = var.cluster_name
         managed-by = "terraform"
       }

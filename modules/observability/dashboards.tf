@@ -20,7 +20,6 @@
 # ------------------------------------------------------------------------------
 # Deploys WordPress application overview dashboard
 # Conditional: requires var.enable_prometheus = true
-# Validates: Requirements 5.2, 8.1
 
 resource "kubernetes_config_map" "wordpress_dashboard" {
   count = var.enable_prometheus ? 1 : 0
@@ -48,7 +47,6 @@ resource "kubernetes_config_map" "wordpress_dashboard" {
 # ------------------------------------------------------------------------------
 # Deploys Kubernetes cluster overview dashboard
 # Conditional: requires var.enable_prometheus = true
-# Validates: Requirements 5.2, 8.2
 
 resource "kubernetes_config_map" "kubernetes_dashboard" {
   count = var.enable_prometheus ? 1 : 0
@@ -76,7 +74,6 @@ resource "kubernetes_config_map" "kubernetes_dashboard" {
 # ------------------------------------------------------------------------------
 # Deploys AWS services monitoring dashboard
 # Conditional: requires var.enable_prometheus = true AND var.enable_yace = true
-# Validates: Requirements 5.2, 8.3
 
 resource "kubernetes_config_map" "aws_services_dashboard" {
   count = var.enable_prometheus && var.enable_yace ? 1 : 0
@@ -104,7 +101,6 @@ resource "kubernetes_config_map" "aws_services_dashboard" {
 # ------------------------------------------------------------------------------
 # Deploys cost tracking and optimization dashboard
 # Conditional: requires var.enable_prometheus = true AND var.enable_yace = true
-# Validates: Requirements 5.2, 8.4
 
 resource "kubernetes_config_map" "cost_dashboard" {
   count = var.enable_prometheus && var.enable_yace ? 1 : 0

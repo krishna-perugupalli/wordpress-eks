@@ -1,12 +1,10 @@
 # YACE (Yet Another CloudWatch Exporter) Helm Values
 # 
 # Purpose: Export CloudWatch metrics to Prometheus for unified observability
-# Phase: Phase 2 - Real configuration
 #
 # This exporter collects metrics from AWS services (RDS, ElastiCache, EFS, ALB)
 # and exposes them in Prometheus format for scraping by kube-prometheus-stack.
 #
-# Requirements: 4.2, 4.3, 4.4, 10.1, 10.2
 
 # AWS Configuration
 # Region will be set via Helm values in addons.tf using data.aws_region.current
@@ -32,6 +30,27 @@ config: |-
             period: 3600
             length: 3600
 
+      # EC2 Metrics (For Rightsizing/Cost)
+      - type: AWS/EC2
+        regions:
+          - "${aws_region}"
+        searchTags:
+          - key: Project
+            value: "${project_tag}"
+          - key: Env
+            value: "${environment_tag}"
+        metrics:
+          - name: CPUUtilization
+            statistics: [Average]
+            period: 300
+          - name: StatusCheckFailed
+            statistics: [Sum]
+            period: 300
+          # MemoryUtilization typically requires CWAgent, adding tentatively
+          - name: MemoryUtilization
+            statistics: [Average]
+            period: 300
+
       # RDS (Aurora MySQL) Metrics
       - type: AWS/RDS
         regions:
@@ -49,6 +68,21 @@ config: |-
             statistics: [Average]
             period: 300
           - name: FreeableMemory
+            statistics: [Average]
+            period: 300
+          - name: ReadIOPS
+            statistics: [Average]
+            period: 300
+          - name: WriteIOPS
+            statistics: [Average]
+            period: 300
+          - name: ReadLatency
+            statistics: [Average]
+            period: 300
+          - name: WriteLatency
+            statistics: [Average]
+            period: 300
+          - name: FreeStorageSpace
             statistics: [Average]
             period: 300
 
@@ -80,6 +114,15 @@ config: |-
           - name: Evictions
             statistics: [Sum]
             period: 300
+          - name: CacheHits
+            statistics: [Sum]
+            period: 300
+          - name: CacheMisses
+            statistics: [Sum]
+            period: 300
+          - name: NetworkBytesOut
+            statistics: [Sum]
+            period: 300
 
       # EFS (Shared Storage) Metrics
       - type: AWS/EFS
@@ -100,6 +143,18 @@ config: |-
           - name: DataWriteIOBytes
             statistics: [Sum]
             period: 300
+          - name: TotalIOBytes
+            statistics: [Sum]
+            period: 300
+          - name: BurstCreditBalance
+            statistics: [Average]
+            period: 300
+          - name: PermittedThroughput
+            statistics: [Average]
+            period: 300
+          - name: StorageBytes
+            statistics: [Average]
+            period: 300
 
       # ALB (Application Load Balancer) Metrics
       - type: AWS/ApplicationELB
@@ -118,6 +173,9 @@ config: |-
             statistics: [Sum]
             period: 300
           - name: RequestCount
+            statistics: [Sum]
+            period: 300
+          - name: HTTPCode_Target_4XX_Count
             statistics: [Sum]
             period: 300
           - name: UnHealthyHostCount
