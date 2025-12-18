@@ -1,6 +1,5 @@
 ---
 # Alertmanager Configuration for WordPress EKS Platform
-# Phase 4: Production-grade alerting with severity-based routing
 #
 # Template Variables:
 # - notification_provider: "slack" or "sns"

@@ -8,7 +8,7 @@
 # EKS Blueprints Addons module doesn't expose expected values.
 
 output "grafana_url" {
-  description = "Grafana service URL (placeholder for Phase 2)"
+  description = "Grafana service URL"
   value       = try(module.eks_blueprints_addons.grafana_url, "")
 }
 
@@ -69,7 +69,7 @@ output "grafana_dashboard_folders" {
   ])
 }
 
-# Alerting Outputs (Phase 4)
+# Alerting Outputs
 output "alerting_enabled" {
   description = "Current alerting toggle state"
   value       = var.enable_alerting
