@@ -56,7 +56,7 @@
       },
       "targets": [
         {
-          "expr": "wordpress_response_time_seconds",
+          "expr": "rate(wordpress_http_request_duration_seconds_sum[5m]) / rate(wordpress_http_request_duration_seconds_count[5m])",
           "legendFormat": "Response Time",
           "refId": "A"
         }
@@ -133,7 +133,7 @@
       },
       "targets": [
         {
-          "expr": "wordpress_site_health",
+          "expr": "up{app=\"wordpress\"}",
           "legendFormat": "Health Status",
           "refId": "A"
         }
@@ -177,7 +177,7 @@
     },
     {
       "id": 4,
-      "title": "Active User Sessions",
+      "title": "User Login Rate",
       "description": "Current active user sessions indicating real-time site engagement. NORMAL: 10-100 sessions during business hours. ALERT: Sudden drops >50% may indicate site outage or performance issues. CAPACITY: >500 sessions may require scaling.",
       "type": "stat",
       "gridPos": {
@@ -188,7 +188,7 @@
       },
       "targets": [
         {
-          "expr": "wordpress_active_sessions",
+          "expr": "rate(wordpress_user_logins_total[5m]) * 60",
           "legendFormat": "Active Sessions",
           "refId": "A"
         }
@@ -260,7 +260,7 @@
       },
       "targets": [
         {
-          "expr": "wordpress_uptime_percentage",
+          "expr": "avg_over_time(up{app=\"wordpress\"}[1h]) * 100",
           "legendFormat": "Uptime %",
           "refId": "A"
         }
@@ -302,7 +302,7 @@
     },
     {
       "id": 7,
-      "title": "Database Query Performance",
+      "title": "Page Generation Performance",
       "description": "WordPress database query execution time - CRITICAL USER IMPACT METRIC. OPTIMAL: <50ms average. WARNING: 100ms+ causes noticeable page load delays. CRITICAL: >500ms severely impacts user experience. ACTION: Optimize slow queries, add indexes, or scale database.",
       "type": "timeseries",
       "gridPos": {
@@ -313,17 +313,17 @@
       },
       "targets": [
         {
-          "expr": "wordpress_db_query_time_seconds",
+          "expr": "rate(wordpress_page_generation_time_seconds_sum[5m]) / rate(wordpress_page_generation_time_seconds_count[5m])",
           "legendFormat": "Avg Query Time",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.95, wordpress_db_query_time_seconds_bucket)",
+          "expr": "histogram_quantile(0.95, rate(wordpress_page_generation_time_seconds_bucket[5m]))",
           "legendFormat": "95th Percentile Query Time",
           "refId": "B"
         },
         {
-          "expr": "rate(wordpress_db_queries_total[5m])",
+          "expr": "avg_over_time(wordpress_queries_count[5m])",
           "legendFormat": "Queries/sec",
           "refId": "C"
         }
@@ -390,17 +390,17 @@
       },
       "targets": [
         {
-          "expr": "redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_total) * 100",
+          "expr": "sum(wordpress_cache_hits_total) / (sum(wordpress_cache_hits_total) + sum(wordpress_cache_misses_total)) * 100",
           "legendFormat": "Cache Hit Ratio",
           "refId": "A"
         },
         {
-          "expr": "rate(redis_keyspace_hits_total[5m])",
+          "expr": "sum(rate(wordpress_cache_hits_total[5m]))",
           "legendFormat": "Cache Hits/sec",
           "refId": "B"
         },
         {
-          "expr": "rate(redis_keyspace_misses_total[5m])",
+          "expr": "sum(rate(wordpress_cache_misses_total[5m]))",
           "legendFormat": "Cache Misses/sec",
           "refId": "C"
         }
@@ -511,7 +511,7 @@
       },
       "targets": [
         {
-          "expr": "wordpress_plugin_execution_time_seconds",
+          "expr": "rate(wordpress_plugins_execution_time_seconds_sum[5m])",
           "legendFormat": "{{plugin_name}}",
           "refId": "A"
         }
@@ -786,7 +786,7 @@
       },
       "targets": [
         {
-          "expr": "rate(wordpress_page_views_total[5m])",
+          "expr": "rate(wordpress_http_requests_total[5m])",
           "legendFormat": "Page Views/sec",
           "refId": "A"
         }
