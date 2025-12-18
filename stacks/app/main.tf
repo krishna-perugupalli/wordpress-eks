@@ -79,20 +79,37 @@ module "cert_manager" {
 # Basic Observability (CloudWatch + Fluent Bit)
 # ---------------------------
 module "observability" {
-  source                  = "../../modules/observability"
-  name                    = local.name
-  region                  = var.region
-  cluster_name            = local.cluster_name
-  cluster_oidc_issuer_url = local.cluster_oidc_issuer_url
-  oidc_provider_arn       = local.oidc_provider_arn
+  source = "../../modules/observability"
 
-  namespace         = var.observability_namespace
-  kms_logs_key_arn  = local.kms_logs_arn
-  cw_retention_days = var.cw_retention_days
+  # Cluster configuration
+  cluster_name      = local.cluster_name
+  cluster_endpoint  = local.cluster_endpoint
+  cluster_version   = local.cluster_version
+  cluster_ca_data   = local.cluster_ca_data
+  oidc_provider_arn = local.oidc_provider_arn
 
-  install_cloudwatch_agent = var.install_cloudwatch_agent
-  install_fluent_bit       = var.install_fluent_bit
+  # Component toggles
+  enable_prometheus   = var.enable_prometheus
+  enable_grafana      = var.enable_grafana
+  enable_alertmanager = var.enable_alertmanager
+  enable_fluentbit    = var.enable_fluentbit
+  enable_yace         = var.enable_yace
 
+  # Dashboard toggles
+  enable_wp_dashboards   = var.enable_wp_dashboards
+  enable_aws_dashboards  = var.enable_aws_dashboards
+  enable_cost_dashboards = var.enable_cost_dashboards
+
+  # WordPress namespace for ServiceMonitor targeting
+  wordpress_namespace = var.wp_namespace
+
+  # Infrastructure endpoints from infra stack
+  redis_endpoint = local.redis_endpoint
+  mysql_endpoint = local.writer_endpoint
+  project_name   = local.tags.Project
+  environment    = local.tags.Env
+
+  # Common tags
   tags = local.tags
 
   depends_on = [module.edge_ingress]
@@ -157,6 +174,9 @@ module "app_wordpress" {
   admin_user              = var.wp_admin_user
   admin_email             = var.wp_admin_email
   admin_bootstrap_enabled = var.wp_admin_bootstrap_enabled
+
+  # Enable WordPress metrics exporter for Prometheus monitoring
+  enable_metrics_exporter = var.enable_prometheus
 
   replicas_min          = var.wp_replicas_min
   replicas_max          = var.wp_replicas_max

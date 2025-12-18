@@ -1,0 +1,235 @@
+# Cost Guardrail Alerts (Best-Effort)
+#
+# IMPORTANT: Direct billing metrics are not available via YACE configuration.
+# These alerts use resource utilization metrics as cost proxies to provide
+# early warning signals of potential cost increases.
+#
+# Cost Proxy Strategy:
+# - AWS billing metrics are not configured in YACE (requires special setup)
+# - Using available resource metrics that correlate with cost increases
+# - Focus on trend detection and resource usage patterns
+# - Provides awareness without direct cost measurement
+#
+# Data Sources Used:
+# - RDS metrics (CPU, connections, memory) - correlate with instance costs
+# - ElastiCache metrics (memory, connections) - correlate with cache costs  
+# - EFS metrics (data transfer) - correlate with storage costs
+# - ALB metrics (request volume) - correlate with load balancer costs
+#
+# Limitations:
+# - These are cost proxies, not actual billing amounts
+# - Cannot provide exact dollar amounts or spending thresholds
+# - Focused on detecting resource usage patterns that may increase costs
+# - For actual cost monitoring, AWS Cost Explorer or billing metrics needed
+
+groups:
+  - name: cost.guardrails
+    rules:
+      # Resource Usage Increase Alert (Cost Proxy - Info Severity)
+      # Detects significant increases in resource utilization that may indicate cost growth
+      # Proxy for "daily AWS spend increase > 50% vs 7-day average"
+      - alert: ResourceUsageIncreaseHigh
+        expr: |
+          (
+            (
+              avg(aws_rds_cpuutilization_average) + 
+              avg(aws_elasticache_database_memory_usage_percentage_average) +
+              avg(rate(aws_efs_data_read_iobytes_sum[1h]) + rate(aws_efs_data_write_iobytes_sum[1h])) / 1024 / 1024 +
+              avg(rate(aws_alb_request_count_sum[1h]))
+            ) - 
+            avg_over_time(
+              (
+                avg(aws_rds_cpuutilization_average) + 
+                avg(aws_elasticache_database_memory_usage_percentage_average) +
+                avg(rate(aws_efs_data_read_iobytes_sum[1h]) + rate(aws_efs_data_write_iobytes_sum[1h])) / 1024 / 1024 +
+                avg(rate(aws_alb_request_count_sum[1h]))
+              )[7d:]
+            )
+          ) / avg_over_time(
+            (
+              avg(aws_rds_cpuutilization_average) + 
+              avg(aws_elasticache_database_memory_usage_percentage_average) +
+              avg(rate(aws_efs_data_read_iobytes_sum[1h]) + rate(aws_efs_data_write_iobytes_sum[1h])) / 1024 / 1024 +
+              avg(rate(aws_alb_request_count_sum[1h]))
+            )[7d:]
+          ) * 100 > 50
+        for: 2h
+        labels:
+          severity: info
+          component: cost
+          service: resource-usage
+        annotations:
+          summary: "Resource utilization increased significantly - potential cost impact"
+          description: "Combined resource utilization (RDS CPU, ElastiCache memory, EFS I/O, ALB requests) has increased by {{ $value | humanizePercentage }} compared to 7-day average, which may indicate increased AWS costs."
+          remediation: "Review recent deployments, check for traffic spikes, verify auto-scaling behavior, and investigate workload changes. Monitor actual AWS billing for cost confirmation. This is informational only - no immediate action required."
+          data_source: "AWS CloudWatch metrics via YACE exporter (RDS, ElastiCache, EFS, ALB)"
+          limitations: "This is a cost proxy based on resource utilization, not actual billing amounts. Correlation with costs may vary by workload patterns."
+          runbook_url: "https://runbooks.example.com/cost-resource-usage-increase"
+          dashboard_url: "https://grafana.example.com/d/aws-services"
+
+      # High Resource Utilization Alert (Cost Proxy - Warning Severity)  
+      # Detects sustained high resource usage that may lead to higher costs
+      # Proxy for "monthly projected spend > $1000"
+      - alert: HighResourceUtilizationSustained
+        expr: |
+          (
+            avg(aws_rds_cpuutilization_average) > 70 or
+            avg(aws_elasticache_database_memory_usage_percentage_average) > 80 or
+            avg(rate(aws_alb_request_count_sum[1h])) > 1000
+          )
+        for: 4h
+        labels:
+          severity: warning
+          component: cost
+          service: resource-usage
+        annotations:
+          summary: "Sustained high resource utilization - monitor for cost impact"
+          description: "High resource utilization detected: RDS CPU {{ with query \"avg(aws_rds_cpuutilization_average)\" }}{{ . | first | value | humanizePercentage }}{{ end }}, ElastiCache Memory {{ with query \"avg(aws_elasticache_database_memory_usage_percentage_average)\" }}{{ . | first | value | humanizePercentage }}{{ end }}, ALB Requests {{ with query \"avg(rate(aws_alb_request_count_sum[1h]))\" }}{{ . | first | value | humanize }}/hr{{ end }}. Sustained high usage may lead to increased costs."
+          remediation: "Review resource sizing, check for optimization opportunities, verify cost allocation, and consider implementing cost controls. Monitor AWS billing for actual cost impact."
+          data_source: "AWS CloudWatch metrics via YACE exporter (RDS, ElastiCache, ALB)"
+          limitations: "Resource utilization proxy for cost monitoring. Actual costs depend on instance types, pricing models, and usage patterns."
+          runbook_url: "https://runbooks.example.com/cost-high-utilization"
+          dashboard_url: "https://grafana.example.com/d/aws-services"
+
+      # EKS Workload Resource Increase Alert (Cost Proxy - Info Severity)
+      # Detects increases in EKS-related resource usage
+      # Proxy for "EKS cluster cost increase > 30% day-over-day"  
+      - alert: EKSWorkloadResourceIncreaseHigh
+        expr: |
+          (
+            (
+              avg(rate(aws_alb_request_count_sum[1h])) +
+              avg(aws_rds_database_connections_average) +
+              avg(aws_elasticache_curr_connections_average)
+            ) - 
+            (
+              avg(rate(aws_alb_request_count_sum[1h])) +
+              avg(aws_rds_database_connections_average) +
+              avg(aws_elasticache_curr_connections_average)
+            ) offset 1d
+          ) / (
+            (
+              avg(rate(aws_alb_request_count_sum[1h])) +
+              avg(aws_rds_database_connections_average) +
+              avg(aws_elasticache_curr_connections_average)
+            ) offset 1d
+          ) * 100 > 30
+        for: 3h
+        labels:
+          severity: info
+          component: cost
+          service: eks-workload
+        annotations:
+          summary: "EKS workload resource usage increased significantly"
+          description: "EKS workload indicators (ALB requests, RDS connections, cache connections) have increased by {{ $value | humanizePercentage }} compared to yesterday. Current: ALB {{ with query \"avg(rate(aws_alb_request_count_sum[1h]))\" }}{{ . | first | value | humanize }}/hr{{ end }}, RDS {{ with query \"avg(aws_rds_database_connections_average)\" }}{{ . | first | value | humanize }} conn{{ end }}, Cache {{ with query \"avg(aws_elasticache_curr_connections_average)\" }}{{ . | first | value | humanize }} conn{{ end }}."
+          remediation: "Check for new deployments, verify Karpenter scaling behavior, review workload changes, and investigate traffic patterns. Monitor EKS-related costs in AWS billing. This is informational only."
+          data_source: "AWS CloudWatch metrics via YACE exporter (ALB, RDS, ElastiCache)"
+          limitations: "Workload activity proxy for EKS cost monitoring. Actual EKS costs include compute, storage, and networking charges not directly measured here."
+          runbook_url: "https://runbooks.example.com/cost-eks-workload-increase"
+          dashboard_url: "https://grafana.example.com/d/aws-services"
+
+      # ========================================================================
+      # COST ALERT TEMPLATES - UNCOMMENT WHEN BILLING METRICS ARE AVAILABLE
+      # ========================================================================
+      
+      # Daily AWS Spend Increase Alert (Info Severity)
+      # Requirement: Alert for daily AWS spend increase > 50% vs 7-day average
+      # - alert: DailyAWSSpendIncreaseHigh
+      #   expr: |
+      #     (
+      #       aws_billing_estimated_charges_maximum{currency="USD"} -
+      #       avg_over_time(aws_billing_estimated_charges_maximum{currency="USD"}[7d])
+      #     ) / avg_over_time(aws_billing_estimated_charges_maximum{currency="USD"}[7d]) * 100 > 50
+      #   for: 2h
+      #   labels:
+      #     severity: info
+      #     component: cost
+      #     service: billing
+      #   annotations:
+      #     summary: "Daily AWS spend increased by more than 50% compared to 7-day average"
+      #     description: "Current daily spend is {{ $value | humanizePercentage }} higher than the 7-day average. Current: ${{ with query \"aws_billing_estimated_charges_maximum{currency='USD'}\" }}{{ . | first | value | humanize }}{{ end }}, 7-day avg: ${{ with query \"avg_over_time(aws_billing_estimated_charges_maximum{currency='USD'}[7d])\" }}{{ . | first | value | humanize }}{{ end }}"
+      #     remediation: "Review recent resource deployments, check for unexpected usage spikes, verify auto-scaling behavior, and investigate any new services or increased traffic patterns. This is informational only - no immediate action required."
+      #     data_source: "AWS CloudWatch Billing metrics via YACE exporter"
+      #     limitations: "Billing metrics may have 6-24 hour delays. Does not include detailed service breakdown."
+      #     runbook_url: "https://runbooks.example.com/cost-daily-increase"
+      #     dashboard_url: "https://grafana.example.com/d/cost-tracking"
+
+      # Monthly Projected Spend Alert (Warning Severity)
+      # Requirement: Alert for monthly projected spend > $1000
+      # - alert: MonthlyProjectedSpendHigh
+      #   expr: |
+      #     (
+      #       aws_billing_estimated_charges_maximum{currency="USD"} * 
+      #       (30 / day_of_month())
+      #     ) > 1000
+      #   for: 4h
+      #   labels:
+      #     severity: warning
+      #     component: cost
+      #     service: billing
+      #   annotations:
+      #     summary: "Monthly projected AWS spend exceeds $1000"
+      #     description: "Based on current daily spend rate, monthly projection is ${{ $value | humanize }}. Current daily rate: ${{ with query \"aws_billing_estimated_charges_maximum{currency='USD'}\" }}{{ . | first | value | humanize }}{{ end }}, days elapsed: {{ day_of_month() }}"
+      #     remediation: "Review cost allocation by service, check for unexpected resource usage, verify cost optimization measures are in place, and consider implementing cost controls or budget alerts. Monitor for cost anomalies."
+      #     data_source: "AWS CloudWatch Billing metrics via YACE exporter, calculated projection"
+      #     limitations: "Simple linear projection based on current month progress. Does not account for usage patterns or seasonal variations."
+      #     runbook_url: "https://runbooks.example.com/cost-monthly-projection"
+      #     dashboard_url: "https://grafana.example.com/d/cost-tracking"
+
+      # EKS Cluster Cost Increase Alert (Info Severity)
+      # Requirement: Alert for EKS cluster cost increase > 30% day-over-day
+      # NOTE: This would require EKS-specific cost allocation tags or Cost Explorer API
+      # - alert: EKSClusterCostIncreaseHigh
+      #   expr: |
+      #     (
+      #       aws_cost_service_charges_maximum{service="Amazon Elastic Kubernetes Service"} -
+      #       aws_cost_service_charges_maximum{service="Amazon Elastic Kubernetes Service"} offset 1d
+      #     ) / (aws_cost_service_charges_maximum{service="Amazon Elastic Kubernetes Service"} offset 1d) * 100 > 30
+      #   for: 3h
+      #   labels:
+      #     severity: info
+      #     component: cost
+      #     service: eks
+      #   annotations:
+      #     summary: "EKS cluster cost increased by more than 30% day-over-day"
+      #     description: "EKS cluster costs have increased by {{ $value | humanizePercentage }} compared to yesterday. Current: ${{ with query \"aws_cost_service_charges_maximum{service='Amazon Elastic Kubernetes Service'}\" }}{{ . | first | value | humanize }}{{ end }}, Previous: ${{ with query \"aws_cost_service_charges_maximum{service='Amazon Elastic Kubernetes Service'} offset 1d\" }}{{ . | first | value | humanize }}{{ end }}"
+      #     remediation: "Check for new node deployments, verify Karpenter scaling behavior, review pod resource requests, investigate workload changes, and check for spot instance availability issues. This is informational only."
+      #     data_source: "AWS Cost Explorer service-level charges via YACE exporter"
+      #     limitations: "Requires service-level cost breakdown. May not capture all EKS-related costs (EC2, EBS, etc.). Cost data has delays."
+      #     runbook_url: "https://runbooks.example.com/cost-eks-increase"
+      #     dashboard_url: "https://grafana.example.com/d/cost-tracking"
+
+      # Placeholder for future cost alerts when billing metrics become available
+      # Additional cost guardrail alerts can be added here following the same pattern:
+      # - Use only "info" or "warning" severity (never "critical")
+      # - Include data_source and limitations annotations
+      # - Use appropriate for: clauses to prevent flapping
+      # - Focus on trend detection rather than absolute thresholds
+      # - Provide actionable remediation guidance
+
+# Configuration Notes for Future Implementation:
+#
+# Required YACE Configuration Addition:
+# Add to exporters/yace-values.yaml under discovery.jobs:
+#
+# - type: billing
+#   regions:
+#     - us-east-1  # Billing metrics only available in us-east-1
+#   metrics:
+#     - name: EstimatedCharges
+#       statistics: [Maximum]
+#       period: 86400  # Daily
+#       dimensions:
+#         - name: Currency
+#           value: USD
+#
+# Required CloudWatch Setup:
+# 1. Enable billing alerts in AWS account preferences
+# 2. Verify CloudWatch billing metrics are populated
+# 3. Configure appropriate IAM permissions for YACE service account
+#
+# Testing Checklist:
+# 1. Verify metrics appear in Prometheus targets
+# 2. Test alert expressions with actual data
+# 3. Validate alert routing to low-priority channels
+# 4. Confirm alerts do not page on-call engineers

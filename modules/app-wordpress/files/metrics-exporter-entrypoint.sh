@@ -3,10 +3,12 @@
 
 set -e
 
-# Wait for WordPress to be available
+# Wait for WordPress to be available (Bitnami WordPress listens on 8080 by default)
+WP_PORT="${WP_PORT:-8080}"
+
 echo "Waiting for WordPress to be ready..."
-until curl -f -s "http://localhost:80/wp-admin/install.php" > /dev/null 2>&1 || \
-      curl -f -s "http://localhost:80/" > /dev/null 2>&1; do
+until curl -f -s "http://127.0.0.1:${WP_PORT}/wp-admin/install.php" > /dev/null 2>&1 || \
+      curl -f -s "http://127.0.0.1:${WP_PORT}/" > /dev/null 2>&1; do
     echo "WordPress not ready yet, waiting..."
     sleep 5
 done

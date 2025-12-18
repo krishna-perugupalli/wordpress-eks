@@ -553,6 +553,31 @@ resource "helm_release" "wordpress" {
     # WordPress metrics exporter sidecar configuration
     var.enable_metrics_exporter ? [
       yamlencode({
+        initContainers = [
+          {
+            name    = "metrics-config-init"
+            image   = "busybox:1.36"
+            command = ["/bin/sh", "-c"]
+            args = [
+              "mkdir -p /bitnami/wordpress/wp-content/plugins/wordpress-metrics /bitnami/wordpress/wp-content/mu-plugins && cp /tmp/src/wordpress-metrics-plugin.php /bitnami/wordpress/wp-content/plugins/wordpress-metrics/ && cp /tmp/src/mu-metrics-loader.php /bitnami/wordpress/wp-content/mu-plugins/ && cp /tmp/src/*.sh /tmp/src/*.php /metrics-dest/ || true"
+            ]
+            volumeMounts = [
+              {
+                name      = "wordpress-data"
+                mountPath = "/bitnami/wordpress"
+              },
+              {
+                name      = "metrics-config"
+                mountPath = "/tmp/src"
+                readOnly  = true
+              },
+              {
+                name      = "metrics-config-data"
+                mountPath = "/metrics-dest"
+              }
+            ]
+          }
+        ]
         sidecars = [
           {
             name    = "metrics-exporter"
@@ -569,18 +594,47 @@ resource "helm_release" "wordpress" {
             env = [
               {
                 name  = "WORDPRESS_PATH"
-                value = "/var/www/html"
+                value = "/opt/bitnami/wordpress"
+              },
+              {
+                name  = "WP_PORT"
+                value = "8080"
+              },
+              {
+                name  = "MARIADB_HOST"
+                value = var.db_host
+              },
+              {
+                name  = "MARIADB_PORT_NUMBER"
+                value = tostring(var.db_port)
+              },
+              {
+                name  = "WORDPRESS_DATABASE_NAME"
+                value = var.db_name
+              },
+              {
+                name  = "WORDPRESS_DATABASE_USER"
+                value = var.db_user
+              },
+              {
+                name  = "WORDPRESS_DATABASE_PASSWORD_FILE"
+                value = "/secrets/mariadb-password"
               }
             ]
             volumeMounts = [
               {
                 name      = "wordpress-data"
-                mountPath = "/var/www/html"
-                readOnly  = true
+                mountPath = "/bitnami/wordpress"
+                readOnly  = false
               },
               {
-                name      = "metrics-config"
+                name      = "metrics-config-data"
                 mountPath = "/usr/local/bin/metrics-files"
+                readOnly  = false
+              },
+              {
+                name      = "wordpress-secrets"
+                mountPath = "/secrets"
                 readOnly  = true
               }
             ]
@@ -629,10 +683,15 @@ resource "helm_release" "wordpress" {
             name = "metrics-config"
             configMap = {
               name        = "${local.effective_fullname}-metrics-config"
-              defaultMode = 0755
+              defaultMode = 420
             }
+          },
+          {
+            name     = "metrics-config-data"
+            emptyDir = {}
           }
         ]
+        extraVolumeMounts = []
       })
     ] : []
   )
@@ -690,6 +749,7 @@ resource "kubernetes_config_map" "wordpress_metrics_config" {
   data = {
     "wordpress-exporter.php"         = file("${path.module}/files/wordpress-exporter.php")
     "wordpress-metrics-plugin.php"   = file("${path.module}/files/wordpress-metrics-plugin.php")
+    "mu-metrics-loader.php"          = file("${path.module}/files/mu-metrics-loader.php")
     "simple-metrics-exporter.php"    = file("${path.module}/files/simple-metrics-exporter.php")
     "metrics-exporter-entrypoint.sh" = file("${path.module}/files/metrics-exporter-entrypoint.sh")
     "simple-entrypoint.sh"           = file("${path.module}/files/simple-entrypoint.sh")
@@ -723,7 +783,7 @@ resource "kubernetes_service" "wordpress_metrics" {
   spec {
     selector = {
       "app.kubernetes.io/name"     = "wordpress"
-      "app.kubernetes.io/instance" = local.effective_fullname
+      "app.kubernetes.io/instance" = local.helm_release_name
     }
 
     port {

@@ -1,0 +1,1159 @@
+{
+  "id": null,
+  "title": "AWS Services Monitoring",
+  "description": "Comprehensive AWS services monitoring dashboard showing Aurora MySQL, ElastiCache Redis, EFS, ALB, and EKS performance metrics. Focuses on managed AWS service health and performance for operational decision-making by platform engineers.",
+  "tags": [
+    "aws",
+    "services",
+    "production",
+    "monitoring",
+    "aurora",
+    "elasticache",
+    "efs",
+    "alb",
+    "eks"
+  ],
+  "timezone": "UTC",
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "2h",
+      "1d"
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Database",
+      "type": "row",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 2,
+      "title": "Aurora MySQL CPU - PERFORMANCE CRITICAL",
+      "description": "Database CPU utilization - DIRECTLY IMPACTS ALL USER REQUESTS. OPTIMAL: 20-60% provides good performance with headroom. WARNING: 70-80% may cause query slowdowns. CRITICAL: >85% causes significant performance degradation and potential timeouts. ACTION: Scale up, optimize queries, or add read replicas.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "expr": "aws_rds_cpuutilization_average",
+          "legendFormat": "CPU % - {{dimension_DBInstanceIdentifier}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "orange",
+                "value": 75
+              },
+              {
+                "color": "red",
+                "value": 85
+              },
+              {
+                "color": "dark-red",
+                "value": 95
+              }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 30,
+            "gradientMode": "hue"
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Aurora Database Connections",
+      "description": "Number of active database connections to Aurora MySQL. Monitor for connection pool exhaustion. Typical range: 10-100 connections depending on load.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 1
+      },
+      "targets": [
+        {
+          "expr": "aws_rds_database_connections_average",
+          "legendFormat": "{{dimension_DBInstanceIdentifier}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Aurora Query Latency - USER EXPERIENCE",
+      "description": "Database query response times - CRITICAL FOR PAGE LOAD SPEED. EXCELLENT: <10ms. GOOD: 10-20ms. POOR: >20ms causes noticeable delays. CRITICAL: >50ms severely impacts user experience. Each 10ms of latency adds ~100ms to page load time due to multiple queries per page.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      },
+      "targets": [
+        {
+          "expr": "aws_rds_read_latency_average * 1000",
+          "legendFormat": "Read Latency (ms)",
+          "refId": "A"
+        },
+        {
+          "expr": "aws_rds_write_latency_average * 1000",
+          "legendFormat": "Write Latency (ms)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "light-green",
+                "value": 10
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "orange",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 25
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Write Latency (ms)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 5,
+      "title": "Aurora IOPS",
+      "description": "Aurora MySQL read and write IOPS (Input/Output Operations Per Second). High IOPS may indicate heavy database activity or inefficient queries.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "targets": [
+        {
+          "expr": "aws_rds_read_iops_average",
+          "legendFormat": "Read IOPS - {{dimension_DBInstanceIdentifier}}",
+          "refId": "A"
+        },
+        {
+          "expr": "aws_rds_write_iops_average",
+          "legendFormat": "Write IOPS - {{dimension_DBInstanceIdentifier}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "iops",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1000
+              },
+              {
+                "color": "red",
+                "value": 3000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Aurora Free Storage Space",
+      "description": "Available storage space in Aurora MySQL cluster. Low free space (below 20%) requires immediate attention to prevent service disruption.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "targets": [
+        {
+          "expr": "aws_rds_free_storage_space_average / 1024 / 1024 / 1024",
+          "legendFormat": "Free Storage GB - {{dimension_DBInstanceIdentifier}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decbytes",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "green",
+                "value": 20
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Cache",
+      "type": "row",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 8,
+      "title": "ElastiCache Redis CPU Utilization",
+      "description": "ElastiCache Redis CPU utilization percentage. High CPU usage (above 80%) may indicate heavy cache load or inefficient operations. Normal range: 10-50%.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 18
+      },
+      "targets": [
+        {
+          "expr": "aws_elasticache_cpuutilization_average",
+          "legendFormat": "{{dimension_CacheClusterId}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "ElastiCache Redis Memory Usage",
+      "description": "ElastiCache Redis memory utilization percentage. High memory usage (above 80%) may lead to cache evictions and performance degradation.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 18
+      },
+      "targets": [
+        {
+          "expr": "aws_elasticache_database_memory_usage_percentage_average",
+          "legendFormat": "{{dimension_CacheClusterId}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "ElastiCache Redis Connections",
+      "description": "Number of active connections to ElastiCache Redis. Monitor for connection pool exhaustion. Typical range: 10-500 connections depending on application load.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 18
+      },
+      "targets": [
+        {
+          "expr": "aws_elasticache_curr_connections_average",
+          "legendFormat": "{{dimension_CacheClusterId}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 400
+              },
+              {
+                "color": "red",
+                "value": 500
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "ElastiCache Cache Performance",
+      "description": "ElastiCache Redis cache hit and miss rates. Low hit rates (below 80%) indicate cache inefficiency and potential performance issues.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 26
+      },
+      "targets": [
+        {
+          "expr": "aws_elasticache_cache_hits_sum",
+          "legendFormat": "Cache Hits - {{dimension_CacheClusterId}}",
+          "refId": "A"
+        },
+        {
+          "expr": "aws_elasticache_cache_misses_sum",
+          "legendFormat": "Cache Misses - {{dimension_CacheClusterId}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1000
+              },
+              {
+                "color": "red",
+                "value": 5000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "ElastiCache Network Performance",
+      "description": "ElastiCache Redis network bytes in/out. High network usage may indicate heavy cache operations or large object transfers.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 26
+      },
+      "targets": [
+        {
+          "expr": "aws_elasticache_network_bytes_in_sum",
+          "legendFormat": "Bytes In - {{dimension_CacheClusterId}}",
+          "refId": "A"
+        },
+        {
+          "expr": "aws_elasticache_network_bytes_out_sum",
+          "legendFormat": "Bytes Out - {{dimension_CacheClusterId}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100000000
+              },
+              {
+                "color": "red",
+                "value": 500000000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "Storage",
+      "type": "row",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 14,
+      "title": "EFS Throughput",
+      "description": "EFS read and write throughput for wp-content storage. High throughput may indicate performance bottlenecks or heavy file operations. Monitor for burst credit depletion.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 35
+      },
+      "targets": [
+        {
+          "expr": "aws_efs_data_read_io_bytes_sum",
+          "legendFormat": "Read Throughput - {{dimension_FileSystemId}}",
+          "refId": "A"
+        },
+        {
+          "expr": "aws_efs_data_write_io_bytes_sum",
+          "legendFormat": "Write Throughput - {{dimension_FileSystemId}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100000000
+              },
+              {
+                "color": "red",
+                "value": 500000000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 15,
+      "title": "EFS IOPS",
+      "description": "EFS Input/Output Operations Per Second. High IOPS may indicate heavy file system activity or small file operations that could benefit from optimization.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 35
+      },
+      "targets": [
+        {
+          "expr": "aws_efs_data_read_io_operations_sum",
+          "legendFormat": "Read IOPS - {{dimension_FileSystemId}}",
+          "refId": "A"
+        },
+        {
+          "expr": "aws_efs_data_write_io_operations_sum",
+          "legendFormat": "Write IOPS - {{dimension_FileSystemId}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "iops",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1000
+              },
+              {
+                "color": "red",
+                "value": 3000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 16,
+      "title": "EFS Client Connections",
+      "description": "Number of client connections to EFS filesystem. High connection counts may indicate scaling issues or connection leaks. Monitor for connection limits.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 35
+      },
+      "targets": [
+        {
+          "expr": "aws_efs_client_connections_sum",
+          "legendFormat": "Client Connections - {{dimension_FileSystemId}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 200
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 17,
+      "title": "EFS Total I/O",
+      "description": "Total EFS I/O operations showing overall filesystem activity. Useful for capacity planning and understanding usage patterns.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 43
+      },
+      "targets": [
+        {
+          "expr": "aws_efs_total_io_bytes_sum",
+          "legendFormat": "Total I/O - {{dimension_FileSystemId}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1000000000
+              },
+              {
+                "color": "red",
+                "value": 5000000000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 18,
+      "title": "EFS Burst Credit Balance",
+      "description": "EFS burst credit balance for performance mode. Low credits (below 20%) may lead to throttling and performance degradation. Monitor for sustained high usage.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 43
+      },
+      "targets": [
+        {
+          "expr": "aws_efs_burst_credit_balance_average",
+          "legendFormat": "Burst Credits - {{dimension_FileSystemId}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1000000
+              },
+              {
+                "color": "green",
+                "value": 5000000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 19,
+      "title": "Load Balancer",
+      "type": "row",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 51
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 20,
+      "title": "ALB Request Count",
+      "description": "Total requests processed by the Application Load Balancer. Indicates overall traffic volume and helps with capacity planning. Monitor for traffic spikes.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 52
+      },
+      "targets": [
+        {
+          "expr": "rate(aws_applicationelb_request_count_sum[5m])",
+          "legendFormat": "Requests/sec - {{dimension_LoadBalancer}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 500
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 21,
+      "title": "ALB Target Response Time",
+      "description": "Response time from ALB to WordPress targets. High values indicate backend performance issues. Normal range: 100-500ms for web applications.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 52
+      },
+      "targets": [
+        {
+          "expr": "aws_applicationelb_target_response_time_average",
+          "legendFormat": "Response Time - {{dimension_LoadBalancer}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 22,
+      "title": "ALB Error Rates",
+      "description": "HTTP error rates from ALB (4xx and 5xx responses). Error rates above 1% indicate application or infrastructure issues requiring immediate attention.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 52
+      },
+      "targets": [
+        {
+          "expr": "rate(aws_applicationelb_httpcode_target_4xx_count_sum[5m])",
+          "legendFormat": "4xx Errors/sec - {{dimension_LoadBalancer}}",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(aws_applicationelb_httpcode_target_5xx_count_sum[5m])",
+          "legendFormat": "5xx Errors/sec - {{dimension_LoadBalancer}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 23,
+      "title": "ALB Active Connections",
+      "description": "Number of active connections to the ALB. High connection counts may indicate connection pooling issues or sustained high load.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 60
+      },
+      "targets": [
+        {
+          "expr": "aws_applicationelb_active_connection_count_sum",
+          "legendFormat": "Active Connections - {{dimension_LoadBalancer}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1000
+              },
+              {
+                "color": "red",
+                "value": 5000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 24,
+      "title": "ALB Healthy Target Count",
+      "description": "Number of healthy targets behind the ALB. All targets should be healthy for full availability. Monitor for target health issues.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 60
+      },
+      "targets": [
+        {
+          "expr": "aws_applicationelb_healthy_host_count_average",
+          "legendFormat": "Healthy Targets - {{dimension_LoadBalancer}}",
+          "refId": "A"
+        },
+        {
+          "expr": "aws_applicationelb_un_healthy_host_count_average",
+          "legendFormat": "Unhealthy Targets - {{dimension_LoadBalancer}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 2
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 25,
+      "title": "EKS",
+      "type": "row",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 68
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 26,
+      "title": "EKS API Server Response Time",
+      "description": "EKS cluster API server response time. High latency (above 100ms) indicates API server performance issues that may affect cluster operations.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 69
+      },
+      "targets": [
+        {
+          "expr": "aws_eks_cluster_failed_request_count_sum",
+          "legendFormat": "Failed Requests - {{dimension_ClusterName}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 27,
+      "title": "EKS Cluster Error Rates",
+      "description": "EKS cluster API server error rates. High error rates indicate cluster API issues that may affect workload deployments and operations.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 69
+      },
+      "targets": [
+        {
+          "expr": "rate(aws_eks_cluster_failed_request_count_sum[5m])",
+          "legendFormat": "Error Rate - {{dimension_ClusterName}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 28,
+      "title": "Service Health Dashboard",
+      "type": "row",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 77
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 29,
+      "title": "AWS Services Health Matrix",
+      "description": "Real-time health status of all critical AWS services. RED indicates service degradation affecting user experience. All services should show GREEN for optimal performance.",
+      "type": "stat",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 78
+      },
+      "targets": [
+        {
+          "expr": "aws_rds_cpuutilization_average < 80",
+          "legendFormat": "Aurora CPU OK",
+          "refId": "A"
+        },
+        {
+          "expr": "aws_rds_read_latency_average < 0.02",
+          "legendFormat": "Aurora Latency OK",
+          "refId": "B"
+        },
+        {
+          "expr": "aws_elasticache_cpuutilization_average < 80",
+          "legendFormat": "Redis CPU OK",
+          "refId": "C"
+        },
+        {
+          "expr": "aws_elasticache_database_memory_usage_percentage_average < 80",
+          "legendFormat": "Redis Memory OK",
+          "refId": "D"
+        },
+        {
+          "expr": "aws_applicationelb_target_response_time_average < 0.5",
+          "legendFormat": "ALB Response OK",
+          "refId": "E"
+        },
+        {
+          "expr": "aws_applicationelb_healthy_host_count_average >= 2",
+          "legendFormat": "ALB Targets OK",
+          "refId": "F"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "text": "DEGRADED",
+                  "color": "red"
+                }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "1": {
+                  "text": "HEALTHY",
+                  "color": "green"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

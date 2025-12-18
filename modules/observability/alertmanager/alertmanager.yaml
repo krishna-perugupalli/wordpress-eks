@@ -1,0 +1,262 @@
+---
+# Alertmanager Configuration for WordPress EKS Platform
+# Phase 4: Production-grade alerting with severity-based routing
+#
+# Template Variables:
+# - notification_provider: "slack" or "sns"
+# - slack_webhook_url: Slack webhook URL (when provider=slack)
+# - sns_topic_arn: SNS topic ARN (when provider=sns)
+# - cluster_name: EKS cluster name for alert context
+
+global:
+  # Global configuration
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alertmanager@${cluster_name}.local'
+  resolve_timeout: 5m
+
+# Route configuration - defines how alerts are routed based on labels
+route:
+  # Default settings for all alerts
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'web.hook'
+
+  # Routing rules based on specificity (most specific first)
+  routes:
+    # Cost alerts FIRST - most specific match
+    - match:
+        component: cost
+      receiver: 'cost-alerts'
+      group_wait: 10m
+      group_interval: 1h
+      repeat_interval: 24h
+      continue: false
+
+    # Critical alerts - immediate notification to primary channel
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 0s
+      group_interval: 5m
+      repeat_interval: 30m
+      continue: false
+
+    # Warning alerts - standard notification to primary channel
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 30s
+      group_interval: 10m
+      repeat_interval: 2h
+      continue: false
+
+    # Info alerts - low priority or suppressed
+    - match:
+        severity: info
+      receiver: 'info-alerts'
+      group_wait: 5m
+      group_interval: 30m
+      repeat_interval: 12h
+      continue: false
+
+# Receiver definitions - where alerts are sent
+receivers:
+  # Default receiver (fallback)
+  - name: 'web.hook'
+    webhook_configs:
+      - url: 'http://127.0.0.1:5001/'
+        send_resolved: true
+
+  # Critical alerts receiver
+  - name: 'critical-alerts'
+%{ if notification_provider == "slack" }
+    slack_configs:
+      - api_url: '${slack_webhook_url}'
+        channel: '#alerts-critical'
+        title: '🚨 CRITICAL Alert - ${cluster_name}'
+        text: |
+          *Alert:*
+          {{ range .Alerts }}- {{ .Annotations.summary }}
+          {{ end }}
+          *Cluster:* ${cluster_name}
+          *Severity:* {{ .CommonLabels.severity }}
+          *Component:* {{ .CommonLabels.component }}
+          
+          {{ range .Alerts }}
+          *Description:* {{ .Annotations.description }}
+          *Remediation:* {{ .Annotations.remediation }}
+          {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+          {{ if .Annotations.dashboard_url }}*Dashboard:* {{ .Annotations.dashboard_url }}{{ end }}
+          {{ end }}
+        send_resolved: true
+        color: 'danger'
+%{ endif }
+%{ if notification_provider == "sns" }
+    sns_configs:
+      - topic_arn: '${sns_topic_arn}'
+        subject: 'CRITICAL Alert - ${cluster_name}'
+        message: |
+          Alert: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          Cluster: ${cluster_name}
+          Severity: {{ .CommonLabels.severity }}
+          Component: {{ .CommonLabels.component }}
+          
+          {{ range .Alerts }}
+          Description: {{ .Annotations.description }}
+          Remediation: {{ .Annotations.remediation }}
+          {{ if .Annotations.runbook_url }}Runbook: {{ .Annotations.runbook_url }}{{ end }}
+          {{ end }}
+        attributes:
+          severity: 'critical'
+          cluster: '${cluster_name}'
+%{ endif }
+
+  # Warning alerts receiver
+  - name: 'warning-alerts'
+%{ if notification_provider == "slack" }
+    slack_configs:
+      - api_url: '${slack_webhook_url}'
+        channel: '#alerts-warning'
+        title: '⚠️ Warning Alert - ${cluster_name}'
+        text: |
+          *Alert:*
+          {{ range .Alerts }}- {{ .Annotations.summary }}
+          {{ end }}
+          *Cluster:* ${cluster_name}
+          *Severity:* {{ .CommonLabels.severity }}
+          *Component:* {{ .CommonLabels.component }}
+          
+          {{ range .Alerts }}
+          *Description:* {{ .Annotations.description }}
+          *Remediation:* {{ .Annotations.remediation }}
+          {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+          {{ if .Annotations.dashboard_url }}*Dashboard:* {{ .Annotations.dashboard_url }}{{ end }}
+          {{ end }}
+        send_resolved: true
+        color: 'warning'
+%{ endif }
+%{ if notification_provider == "sns" }
+    sns_configs:
+      - topic_arn: '${sns_topic_arn}'
+        subject: 'Warning Alert - ${cluster_name}'
+        message: |
+          Alert: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          Cluster: ${cluster_name}
+          Severity: {{ .CommonLabels.severity }}
+          Component: {{ .CommonLabels.component }}
+          
+          {{ range .Alerts }}
+          Description: {{ .Annotations.description }}
+          Remediation: {{ .Annotations.remediation }}
+          {{ if .Annotations.runbook_url }}Runbook: {{ .Annotations.runbook_url }}{{ end }}
+          {{ end }}
+        attributes:
+          severity: 'warning'
+          cluster: '${cluster_name}'
+%{ endif }
+
+  # Info alerts receiver - low priority
+  - name: 'info-alerts'
+%{ if notification_provider == "slack" }
+    slack_configs:
+      - api_url: '${slack_webhook_url}'
+        channel: '#alerts-info'
+        title: 'ℹ️ Info Alert - ${cluster_name}'
+        text: |
+          *Alert:*
+          {{ range .Alerts }}- {{ .Annotations.summary }}
+          {{ end }}
+          *Cluster:* ${cluster_name}
+          *Severity:* {{ .CommonLabels.severity }}
+          *Component:* {{ .CommonLabels.component }}
+          
+          {{ range .Alerts }}
+          *Description:* {{ .Annotations.description }}
+          {{ if .Annotations.remediation }}*Remediation:* {{ .Annotations.remediation }}{{ end }}
+          {{ end }}
+        send_resolved: false
+        color: 'good'
+%{ endif }
+%{ if notification_provider == "sns" }
+    sns_configs:
+      - topic_arn: '${sns_topic_arn}'
+        subject: 'Info Alert - ${cluster_name}'
+        message: |
+          Alert: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          Cluster: ${cluster_name}
+          Severity: {{ .CommonLabels.severity }}
+          Component: {{ .CommonLabels.component }}
+          
+          {{ range .Alerts }}
+          Description: {{ .Annotations.description }}
+          {{ end }}
+        attributes:
+          severity: 'info'
+          cluster: '${cluster_name}'
+%{ endif }
+
+  # Cost alerts receiver - special handling for cost guardrails
+  - name: 'cost-alerts'
+%{ if notification_provider == "slack" }
+    slack_configs:
+      - api_url: '${slack_webhook_url}'
+        channel: '#alerts-cost'
+        title: '💰 Cost Alert - ${cluster_name}'
+        text: |
+          *Cost Alert:*
+          {{ range .Alerts }}- {{ .Annotations.summary }}
+          {{ end }}
+          *Cluster:* ${cluster_name}
+          *Severity:* {{ .CommonLabels.severity }}
+          
+          {{ range .Alerts }}
+          *Description:* {{ .Annotations.description }}
+          {{ if .Annotations.remediation }}*Remediation:* {{ .Annotations.remediation }}{{ end }}
+          {{ end }}
+          
+          _Note: This is a cost guardrail alert for awareness only._
+        send_resolved: false
+        color: '#36a64f'
+%{ endif }
+%{ if notification_provider == "sns" }
+    sns_configs:
+      - topic_arn: '${sns_topic_arn}'
+        subject: 'Cost Alert - ${cluster_name}'
+        message: |
+          Cost Alert: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          Cluster: ${cluster_name}
+          Severity: {{ .CommonLabels.severity }}
+          
+          {{ range .Alerts }}
+          Description: {{ .Annotations.description }}
+          {{ end }}
+          
+          Note: This is a cost guardrail alert for awareness only.
+        attributes:
+          severity: 'cost'
+          cluster: '${cluster_name}'
+%{ endif }
+
+# Inhibition rules - suppress certain alerts when others are firing
+inhibit_rules:
+  # Suppress warning alerts when critical alerts for the same service are firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'cluster', 'service']
+
+  # Suppress info alerts when warning or critical alerts for the same service are firing
+  - source_match:
+      severity: 'warning'
+    target_match:
+      severity: 'info'
+    equal: ['alertname', 'cluster', 'service']
+
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'info'
+    equal: ['alertname', 'cluster', 'service']

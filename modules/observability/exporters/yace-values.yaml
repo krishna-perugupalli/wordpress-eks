@@ -1,0 +1,142 @@
+# YACE (Yet Another CloudWatch Exporter) Helm Values
+# 
+# Purpose: Export CloudWatch metrics to Prometheus for unified observability
+# Phase: Phase 2 - Real configuration
+#
+# This exporter collects metrics from AWS services (RDS, ElastiCache, EFS, ALB)
+# and exposes them in Prometheus format for scraping by kube-prometheus-stack.
+#
+# Requirements: 4.2, 4.3, 4.4, 10.1, 10.2
+
+# AWS Configuration
+# Region will be set via Helm values in addons.tf using data.aws_region.current
+# IRSA role will be configured via serviceAccount annotation in Helm release
+aws:
+  region: "${aws_region}"
+
+# YACE Configuration
+config: |-
+  apiVersion: v1alpha1
+  discovery:
+    jobs:
+      # Billing Metrics (Global)
+      - type: AWS/Billing
+        regions:
+          - "us-east-1"
+        dimensionNameRequirements:
+          - ServiceName
+          - Currency
+        metrics:
+          - name: EstimatedCharges
+            statistics: [Maximum]
+            period: 3600
+            length: 3600
+
+      # RDS (Aurora MySQL) Metrics
+      - type: AWS/RDS
+        regions:
+          - "${aws_region}"
+        searchTags:
+          - key: Project
+            value: "${project_tag}"
+          - key: Env
+            value: "${environment_tag}"
+        metrics:
+          - name: CPUUtilization
+            statistics: [Average]
+            period: 300
+          - name: DatabaseConnections
+            statistics: [Average]
+            period: 300
+          - name: FreeableMemory
+            statistics: [Average]
+            period: 300
+
+      # ElastiCache (Redis) Metrics
+      - type: AWS/ElastiCache
+        regions:
+          - "${aws_region}"
+        searchTags:
+          - key: Project
+            value: "${project_tag}"
+          - key: Env
+            value: "${environment_tag}"
+        metrics:
+          - name: CPUUtilization
+            statistics: [Average]
+            period: 300
+          - name: NetworkBytesIn
+            statistics: [Sum]
+            period: 300
+          - name: CurrConnections
+            statistics: [Average]
+            period: 300
+          - name: BytesUsedForCache
+            statistics: [Average]
+            period: 300
+          - name: DatabaseMemoryUsagePercentage
+            statistics: [Average]
+            period: 300
+          - name: Evictions
+            statistics: [Sum]
+            period: 300
+
+      # EFS (Shared Storage) Metrics
+      - type: AWS/EFS
+        regions:
+          - "${aws_region}"
+        searchTags:
+          - key: Project
+            value: "${project_tag}"
+          - key: Env
+            value: "${environment_tag}"
+        metrics:
+          - name: ClientConnections
+            statistics: [Sum]
+            period: 300
+          - name: DataReadIOBytes
+            statistics: [Sum]
+            period: 300
+          - name: DataWriteIOBytes
+            statistics: [Sum]
+            period: 300
+
+      # ALB (Application Load Balancer) Metrics
+      - type: AWS/ApplicationELB
+        regions:
+          - "${aws_region}"
+        searchTags:
+          - key: Project
+            value: "${project_tag}"
+          - key: Env
+            value: "${environment_tag}"
+        metrics:
+          - name: TargetResponseTime
+            statistics: [Average]
+            period: 300
+          - name: HTTPCode_Target_5XX_Count
+            statistics: [Sum]
+            period: 300
+          - name: RequestCount
+            statistics: [Sum]
+            period: 300
+          - name: UnHealthyHostCount
+            statistics: [Average]
+            period: 300
+          - name: HealthyHostCount
+            statistics: [Average]
+            period: 300
+
+# Resource Limits
+resources:
+  limits:
+    memory: 256Mi
+    cpu: 200m
+  requests:
+    memory: 128Mi
+    cpu: 100m
+
+# Service Monitor Configuration
+serviceMonitor:
+  enabled: true
+  interval: 60s

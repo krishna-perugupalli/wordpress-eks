@@ -1,0 +1,158 @@
+groups:
+  - name: kubernetes.platform
+    rules:
+      # Node CPU Usage Alert (Warning)
+      - alert: KubernetesNodeCPUUsageHigh
+        expr: |
+          (
+            100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+          ) > 85
+        for: 15m
+        labels:
+          severity: warning
+          component: kubernetes
+          service: node-resources
+        annotations:
+          summary: "Kubernetes node CPU usage is above 85%"
+          description: "Node {{ $labels.instance }} has CPU usage of {{ $value | humanizePercentage }} for more than 15 minutes, exceeding the 85% threshold."
+          remediation: "Check node resource utilization, review pod resource requests/limits, consider scaling cluster with Karpenter, or investigate high CPU consuming processes."
+          runbook_url: "https://runbooks.example.com/kubernetes-node-cpu-high"
+          dashboard_url: "https://grafana.example.com/d/kubernetes-cluster"
+
+      # Node Memory Usage Alert (Critical)
+      - alert: KubernetesNodeMemoryUsageHigh
+        expr: |
+          (
+            (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes
+          ) * 100 > 90
+        for: 10m
+        labels:
+          severity: critical
+          component: kubernetes
+          service: node-resources
+        annotations:
+          summary: "Kubernetes node memory usage is above 90%"
+          description: "Node {{ $labels.instance }} has memory usage of {{ $value | humanizePercentage }} for more than 10 minutes, exceeding the critical 90% threshold."
+          remediation: "Immediately check for memory pressure, review pod memory limits, consider emergency node scaling, or investigate memory leaks. Node may start evicting pods."
+          runbook_url: "https://runbooks.example.com/kubernetes-node-memory-critical"
+          dashboard_url: "https://grafana.example.com/d/kubernetes-cluster"
+
+      # Pod Scheduling Failures for WordPress (Critical)
+      - alert: KubernetesWordPressPodSchedulingFailures
+        expr: |
+          kube_pod_status_phase{pod=~".*wordpress.*", phase="Pending"} == 1
+        for: 5m
+        labels:
+          severity: critical
+          component: kubernetes
+          service: pod-scheduling
+        annotations:
+          summary: "WordPress pods are failing to schedule"
+          description: "WordPress pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been pending for more than 5 minutes due to scheduling failures."
+          remediation: "Check node capacity, verify resource requests, review node selectors/affinity rules, check for tainted nodes, and ensure Karpenter can provision new nodes if needed."
+          runbook_url: "https://runbooks.example.com/kubernetes-pod-scheduling-failures"
+          dashboard_url: "https://grafana.example.com/d/kubernetes-cluster"
+
+      # Persistent Volume Usage for WordPress (Warning)
+      - alert: KubernetesWordPressPVUsageHigh
+        expr: |
+          (
+            kubelet_volume_stats_used_bytes{persistentvolumeclaim=~".*wordpress.*"} /
+            kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~".*wordpress.*"}
+          ) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: kubernetes
+          service: storage
+        annotations:
+          summary: "WordPress persistent volume usage is above 85%"
+          description: "Persistent volume {{ $labels.persistentvolumeclaim }} in namespace {{ $labels.namespace }} is {{ $value | humanizePercentage }} full, exceeding the 85% threshold."
+          remediation: "Check disk usage in WordPress pods, clean up unnecessary files, consider expanding the persistent volume, or review WordPress media storage configuration."
+          runbook_url: "https://runbooks.example.com/kubernetes-pv-usage-high"
+          dashboard_url: "https://grafana.example.com/d/kubernetes-cluster"
+
+      # Karpenter Node Provisioning Failures (Warning)
+      # Note: Requires Karpenter metrics to be exposed. Verify metrics availability before enabling.
+      - alert: KarpenterNodeProvisioningFailures
+        expr: |
+          increase(karpenter_nodes_created_total[10m]) == 0 and
+          increase(karpenter_pods_state{state="pending"}[10m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+          component: kubernetes
+          service: karpenter
+        annotations:
+          summary: "Karpenter is failing to provision new nodes"
+          description: "Karpenter has pending pods but has not created any new nodes in the last 10 minutes, indicating potential provisioning issues."
+          remediation: "Check Karpenter logs, verify EC2 instance limits, review NodePool configurations, check IAM permissions, and verify subnet capacity and availability zones."
+          runbook_url: "https://runbooks.example.com/karpenter-provisioning-failures"
+          dashboard_url: "https://grafana.example.com/d/kubernetes-cluster"
+
+      # Additional Kubernetes platform alerts for better coverage
+
+      # Kubernetes API Server Availability
+      - alert: KubernetesAPIServerDown
+        expr: |
+          up{job="kubernetes-apiservers"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: kubernetes
+          service: api-server
+        annotations:
+          summary: "Kubernetes API server is down"
+          description: "Kubernetes API server {{ $labels.instance }} has been down for more than 5 minutes."
+          remediation: "Check EKS control plane status in AWS console, verify network connectivity, and check for any ongoing AWS service issues."
+          runbook_url: "https://runbooks.example.com/kubernetes-api-server-down"
+          dashboard_url: "https://grafana.example.com/d/kubernetes-cluster"
+
+      # Kubernetes Node Not Ready
+      - alert: KubernetesNodeNotReady
+        expr: |
+          kube_node_status_condition{condition="Ready", status="true"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: kubernetes
+          service: node-health
+        annotations:
+          summary: "Kubernetes node is not ready"
+          description: "Node {{ $labels.node }} has been in NotReady state for more than 5 minutes."
+          remediation: "Check node status with 'kubectl describe node {{ $labels.node }}', verify kubelet logs, check network connectivity, and investigate system resources."
+          runbook_url: "https://runbooks.example.com/kubernetes-node-not-ready"
+          dashboard_url: "https://grafana.example.com/d/kubernetes-cluster"
+
+      # Kubernetes Pod Crash Looping (General)
+      - alert: KubernetesPodCrashLooping
+        expr: |
+          increase(kube_pod_container_status_restarts_total[15m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: kubernetes
+          service: pod-health
+        annotations:
+          summary: "Kubernetes pod is crash looping"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted {{ $value }} times in the last 15 minutes."
+          remediation: "Check pod logs with 'kubectl logs {{ $labels.pod }} -n {{ $labels.namespace }}', review resource limits, verify configuration, and check for application errors."
+          runbook_url: "https://runbooks.example.com/kubernetes-pod-crash-looping"
+          dashboard_url: "https://grafana.example.com/d/kubernetes-cluster"
+
+      # Kubernetes Deployment Replica Mismatch
+      - alert: KubernetesDeploymentReplicaMismatch
+        expr: |
+          kube_deployment_spec_replicas{deployment=~".*wordpress.*"} != 
+          kube_deployment_status_replicas_available{deployment=~".*wordpress.*"}
+        for: 10m
+        labels:
+          severity: warning
+          component: kubernetes
+          service: deployment-health
+        annotations:
+          summary: "Kubernetes deployment has replica mismatch"
+          description: "Deployment {{ $labels.deployment }} in namespace {{ $labels.namespace }} has a mismatch between desired and available replicas."
+          remediation: "Check deployment status with 'kubectl describe deployment {{ $labels.deployment }} -n {{ $labels.namespace }}', verify pod scheduling, and check for resource constraints."
+          runbook_url: "https://runbooks.example.com/kubernetes-deployment-replica-mismatch"
+          dashboard_url: "https://grafana.example.com/d/kubernetes-cluster"

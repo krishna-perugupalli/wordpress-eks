@@ -31,6 +31,8 @@ locals {
 
   cluster_name                      = local.infra_outputs.cluster_name
   cluster_endpoint                  = local.infra_outputs.cluster_endpoint
+  cluster_version                   = local.infra_outputs.cluster_version
+  cluster_ca_data                   = local.infra_outputs.cluster_certificate_authority_data
   karpenter_controller_iam_role_arn = local.infra_outputs.karpenter_role_arn
   karpenter_sqs_queue_name          = local.infra_outputs.karpenter_sqs_queue_name
   karpenter_node_iam_role_name      = local.infra_outputs.karpenter_node_iam_role_name

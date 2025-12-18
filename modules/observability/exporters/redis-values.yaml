@@ -1,0 +1,28 @@
+# Redis Exporter Configuration
+# Exposes ElastiCache Redis metrics to Prometheus
+
+# Redis endpoint will be configured via Helm values in addons.tf
+# This uses the redis_endpoint from infra stack outputs
+redisAddress: "rediss://${redis_endpoint}:6379"
+
+# Configure TLS authentication for ElastiCache
+auth:
+  secret:
+    name: redis-auth-token
+    key: token
+
+# Resource limits for the exporter
+resources:
+  limits:
+    memory: 128Mi
+    cpu: 100m
+  requests:
+    memory: 64Mi
+    cpu: 50m
+
+service:
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9121"
+  labels:
+    app: redis-exporter

@@ -1,369 +1,211 @@
-data "aws_caller_identity" "current" {}
+#############################################
+# Data Sources
+#############################################
+
+data "aws_region" "current" {}
 
 #############################################
-# Locals
+# EKS Blueprints Addons Integration
 #############################################
-locals {
-  ns                = var.namespace
-  oidc_hostpath     = replace(var.cluster_oidc_issuer_url, "https://", "")
-  kms_logs_key_trim = trimspace(coalesce(var.kms_logs_key_arn, ""))
-  has_kms_logs_key  = local.kms_logs_key_trim != ""
+# This module uses the official AWS EKS Blueprints Addons module
+# to deploy core observability components: Prometheus, Grafana,
+# Alertmanager, and Fluent Bit.
+#
+# The module handles:
+# - Helm chart deployments
+# - IRSA role creation and management
+# - Namespace management
+# - Service account configuration
 
-  lg_app       = "/aws/eks/${var.cluster_name}/application"
-  lg_dataplane = "/aws/eks/${var.cluster_name}/dataplane"
-  lg_host      = "/aws/eks/${var.cluster_name}/host"
+module "eks_blueprints_addons" {
+  source  = "aws-ia/eks-blueprints-addons/aws"
+  version = "~> 1.0"
 
-  account_number = data.aws_caller_identity.current.account_id
+  # Cluster configuration
+  cluster_name      = var.cluster_name
+  cluster_endpoint  = var.cluster_endpoint
+  cluster_version   = var.cluster_version
+  oidc_provider_arn = var.oidc_provider_arn
 
-}
+  # Component toggles
+  enable_kube_prometheus_stack = var.enable_prometheus
+  enable_aws_for_fluentbit     = var.enable_fluentbit
 
-#############################################
-# CloudWatch Log Groups (encrypted, retention)
-#############################################
-resource "aws_cloudwatch_log_group" "app" {
-  count             = var.install_fluent_bit ? 1 : 0
-  name              = local.lg_app
-  kms_key_id        = local.has_kms_logs_key ? local.kms_logs_key_trim : null
-  retention_in_days = var.cw_retention_days
-  tags              = var.tags
-}
-
-resource "aws_cloudwatch_log_group" "dataplane" {
-  count             = var.install_fluent_bit ? 1 : 0
-  name              = local.lg_dataplane
-  kms_key_id        = local.has_kms_logs_key ? local.kms_logs_key_trim : null
-  retention_in_days = var.cw_retention_days
-  tags              = var.tags
-}
-
-resource "aws_cloudwatch_log_group" "host" {
-  count             = var.install_fluent_bit ? 1 : 0
-  name              = local.lg_host
-  kms_key_id        = local.has_kms_logs_key ? local.kms_logs_key_trim : null
-  retention_in_days = var.cw_retention_days
-  tags              = var.tags
-}
-
-#############################################
-# IRSA: CloudWatch Agent (metrics)
-#############################################
-data "aws_iam_policy_document" "cwagent_trust" {
-  statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRoleWithWebIdentity"]
-    principals {
-      type        = "Federated"
-      identifiers = [var.oidc_provider_arn]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "${local.oidc_hostpath}:sub"
-      values   = ["system:serviceaccount:${local.ns}:cloudwatch-agent"]
-    }
-  }
-}
-
-resource "aws_iam_role" "cwagent" {
-  count              = var.install_cloudwatch_agent ? 1 : 0
-  name               = "${var.name}-cwagent"
-  assume_role_policy = data.aws_iam_policy_document.cwagent_trust.json
-  tags               = var.tags
-}
-
-resource "aws_iam_role_policy_attachment" "cwagent_attach" {
-  count      = var.install_cloudwatch_agent ? 1 : 0
-  role       = aws_iam_role.cwagent[0].name
-  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
-}
-
-#############################################
-# IRSA: Fluent Bit (logs → CloudWatch Logs)
-#############################################
-data "aws_iam_policy_document" "fluentbit_trust" {
-  statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRoleWithWebIdentity"]
-    principals {
-      type        = "Federated"
-      identifiers = [var.oidc_provider_arn]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "${local.oidc_hostpath}:sub"
-      values   = ["system:serviceaccount:${local.ns}:fluent-bit"]
-    }
-  }
-}
-
-data "aws_iam_policy_document" "fluentbit" {
-  statement {
-    sid    = "CWLogsWrite"
-    effect = "Allow"
-    actions = [
-      "logs:CreateLogGroup",
-      "logs:CreateLogStream",
-      "logs:DescribeLogStreams",
-      "logs:PutLogEvents",
-      "logs:PutRetentionPolicy"
-    ]
-    resources = [
-      "arn:aws:logs:${var.region}:${local.account_number}:log-group:${local.lg_app}:*",
-      "arn:aws:logs:${var.region}:${local.account_number}:log-group:${local.lg_dataplane}:*",
-      "arn:aws:logs:${var.region}:${local.account_number}:log-group:${local.lg_host}:*",
-      "arn:aws:logs:${var.region}:${local.account_number}:log-group:/aws/eks/*:*"
-    ]
+  # Prometheus configuration with custom Helm values
+  kube_prometheus_stack = var.enable_prometheus ? {
+    # Ensure CRDs are installed and ready before we create ServiceMonitors.
+    wait      = true
+    skip_crds = false
+    values = [yamlencode(merge(
+      local.kube_prometheus_stack_values,
+      {
+        # Grafana is part of kube-prometheus-stack
+        grafana = merge(
+          local.grafana_values,
+          {
+            enabled = var.enable_grafana
+          }
+        )
+      }
+    ))]
+    } : {
+    # Preserve object shape when disabled so the conditional type stays consistent.
+    wait      = null
+    skip_crds = null
+    values    = []
   }
 
-  dynamic "statement" {
-    for_each = local.has_kms_logs_key ? [1] : []
-    content {
-      sid    = "AllowCWLogsKmsUsage"
-      effect = "Allow"
-      actions = [
-        "kms:Encrypt",
-        "kms:Decrypt",
-        "kms:ReEncrypt*",
-        "kms:GenerateDataKey*",
-        "kms:DescribeKey"
-      ]
-      resources = [local.kms_logs_key_trim]
-      condition {
-        test     = "StringEquals"
-        variable = "kms:ViaService"
-        values   = ["logs.${var.region}.amazonaws.com"]
+  # Fluent Bit configuration with custom Helm values
+  aws_for_fluentbit = var.enable_fluentbit ? local.fluentbit_values : {}
+
+  # Placeholder for YACE - to be implemented in Phase 2
+  # enable_yace_exporter = var.enable_yace
+
+  # Common tags for AWS resources
+  tags = local.common_tags
+}
+
+#############################################
+# PrometheusRule Resources (Phase 4)
+#############################################
+# These resources deploy alert definitions as PrometheusRule CRDs
+# when alerting is enabled. Each alert domain is deployed as a
+# separate PrometheusRule resource for better organization.
+
+# WordPress Application Alerts
+resource "kubernetes_manifest" "wordpress_alerts" {
+  count = var.enable_alerting ? 1 : 0
+
+  manifest = {
+    apiVersion = "monitoring.coreos.com/v1"
+    kind       = "PrometheusRule"
+    metadata = {
+      name      = "wordpress-alerts"
+      namespace = local.monitoring_namespace
+      labels = {
+        app        = "wordpress"
+        component  = "alerts"
+        phase      = "4"
+        cluster    = var.cluster_name
+        prometheus = "kube-prometheus-stack-prometheus"
+        role       = "alert-rules"
       }
     }
+    spec = yamldecode(file("${path.module}/alerts/wordpress-alerts.yaml"))
   }
+
+  depends_on = [module.eks_blueprints_addons]
 }
 
-resource "aws_iam_role" "fluentbit" {
-  count              = var.install_fluent_bit ? 1 : 0
-  name               = "${var.name}-fluentbit"
-  assume_role_policy = data.aws_iam_policy_document.fluentbit_trust.json
-  tags               = var.tags
-}
+# Kubernetes Platform Alerts
+resource "kubernetes_manifest" "kubernetes_alerts" {
+  count = var.enable_alerting ? 1 : 0
 
-resource "aws_iam_policy" "fluentbit" {
-  count  = var.install_fluent_bit ? 1 : 0
-  name   = "${var.name}-fluentbit-cwlogs"
-  policy = data.aws_iam_policy_document.fluentbit.json
-  tags   = var.tags
-}
-
-resource "aws_iam_role_policy_attachment" "fluentbit_attach" {
-  count      = var.install_fluent_bit ? 1 : 0
-  role       = aws_iam_role.fluentbit[0].name
-  policy_arn = aws_iam_policy.fluentbit[0].arn
-}
-
-#############################################
-# Namespace + ServiceAccounts
-#############################################
-resource "kubernetes_namespace" "ns" {
-  metadata { name = local.ns }
-}
-
-resource "kubernetes_service_account" "cwagent" {
-  count = var.install_cloudwatch_agent ? 1 : 0
-  metadata {
-    name      = "cloudwatch-agent"
-    namespace = local.ns
-    annotations = {
-      "eks.amazonaws.com/role-arn" = aws_iam_role.cwagent[0].arn
+  manifest = {
+    apiVersion = "monitoring.coreos.com/v1"
+    kind       = "PrometheusRule"
+    metadata = {
+      name      = "kubernetes-alerts"
+      namespace = local.monitoring_namespace
+      labels = {
+        app        = "kubernetes"
+        component  = "alerts"
+        phase      = "4"
+        cluster    = var.cluster_name
+        prometheus = "kube-prometheus-stack-prometheus"
+        role       = "alert-rules"
+      }
     }
+    spec = yamldecode(file("${path.module}/alerts/kubernetes-alerts.yaml"))
   }
-  automount_service_account_token = true
 
-  depends_on = [kubernetes_namespace.ns]
+  depends_on = [module.eks_blueprints_addons]
 }
 
-resource "kubernetes_service_account" "fluentbit" {
-  count = var.install_fluent_bit ? 1 : 0
-  metadata {
-    name      = "fluent-bit"
-    namespace = local.ns
-    annotations = {
-      "eks.amazonaws.com/role-arn" = aws_iam_role.fluentbit[0].arn
+# AWS Services Alerts
+resource "kubernetes_manifest" "aws_alerts" {
+  count = var.enable_alerting ? 1 : 0
+
+  manifest = {
+    apiVersion = "monitoring.coreos.com/v1"
+    kind       = "PrometheusRule"
+    metadata = {
+      name      = "aws-alerts"
+      namespace = local.monitoring_namespace
+      labels = {
+        app        = "aws-services"
+        component  = "alerts"
+        phase      = "4"
+        cluster    = var.cluster_name
+        prometheus = "kube-prometheus-stack-prometheus"
+        role       = "alert-rules"
+      }
     }
+    spec = yamldecode(file("${path.module}/alerts/aws-alerts.yaml"))
   }
-  automount_service_account_token = true
 
-  depends_on = [kubernetes_namespace.ns]
+  depends_on = [module.eks_blueprints_addons]
+}
+
+# Cost Guardrail Alerts
+resource "kubernetes_manifest" "cost_alerts" {
+  count = var.enable_alerting ? 1 : 0
+
+  manifest = {
+    apiVersion = "monitoring.coreos.com/v1"
+    kind       = "PrometheusRule"
+    metadata = {
+      name      = "cost-alerts"
+      namespace = local.monitoring_namespace
+      labels = {
+        app        = "cost-guardrails"
+        component  = "alerts"
+        phase      = "4"
+        cluster    = var.cluster_name
+        prometheus = "kube-prometheus-stack-prometheus"
+        role       = "alert-rules"
+      }
+    }
+    spec = yamldecode(file("${path.module}/alerts/cost-alerts.yaml"))
+  }
+
+  depends_on = [module.eks_blueprints_addons]
 }
 
 #############################################
-# Helm: CloudWatch Agent (Container Insights)
+# Alertmanager Configuration (Phase 4)
 #############################################
-# EKS managed add-on for CloudWatch Observability
-resource "aws_eks_addon" "cloudwatch_observability" {
-  cluster_name                = var.cluster_name # pass this into the module
-  addon_name                  = "amazon-cloudwatch-observability"
-  resolve_conflicts_on_create = "OVERWRITE"
-  resolve_conflicts_on_update = "OVERWRITE"
-  # addon_version               = var.cloudwatch_addon_version  # optional: pin if you want
-  tags = var.tags
-}
+# This resource deploys the Alertmanager configuration as a Secret
+# when alerting is enabled. The configuration includes routing rules
+# based on severity and notification provider setup.
 
-#############################################
-# Helm: aws-for-fluent-bit (logs → CloudWatch Logs)
-#############################################
-resource "helm_release" "fluentbit" {
-  count      = var.install_fluent_bit ? 1 : 0
-  name       = "aws-for-fluent-bit"
-  namespace  = local.ns
-  repository = "https://aws.github.io/eks-charts"
-  chart      = "aws-for-fluent-bit"
-  version    = "0.1.32"
+resource "kubernetes_manifest" "alertmanager_config" {
+  count = var.enable_alerting ? 1 : 0
 
-  set {
-    name  = "serviceAccount.create"
-    value = "false"
-  }
-  set {
-    name  = "serviceAccount.name"
-    value = "fluent-bit"
-  }
-
-
-  # Primary app logs
-  set {
-    name  = "cloudWatch.enabled"
-    value = "true"
-  }
-  set {
-    name  = "cloudWatch.match"
-    value = "kube.*"
-  }
-  set {
-    name  = "cloudWatch.region"
-    value = var.region
-  }
-  set {
-    name  = "cloudWatch.logGroupName"
-    value = local.lg_app
-  }
-  set {
-    name  = "cloudWatch.logStreamPrefix"
-    value = "app"
-  }
-  set {
-    name  = "cloudWatchLogs.enabled"
-    value = "false"
+  manifest = {
+    apiVersion = "v1"
+    kind       = "Secret"
+    metadata = {
+      name      = "alertmanager-kube-prometheus-stack-alertmanager"
+      namespace = local.monitoring_namespace
+      labels = {
+        app        = "alertmanager"
+        component  = "config"
+        phase      = "4"
+        cluster    = var.cluster_name
+        managed-by = "terraform"
+      }
+    }
+    data = {
+      "alertmanager.yml" = base64encode(templatefile("${path.module}/alertmanager/alertmanager.yaml", {
+        notification_provider = var.notification_provider
+        slack_webhook_url     = var.slack_webhook_url
+        sns_topic_arn         = var.sns_topic_arn
+        cluster_name          = var.cluster_name
+      }))
+    }
+    type = "Opaque"
   }
 
-  values = [yamlencode({
-    additionalInputs = <<-EOT
-[INPUT]
-    Name              tail
-    Tag               dataplane.kube-proxy
-    Path              /var/log/containers/kube-proxy*.log
-    Parser            docker
-    DB                /var/log/flb_dataplane_kube-proxy.db
-    Mem_Buf_Limit     5MB
-    Skip_Long_Lines   On
-    Refresh_Interval  10
-[INPUT]
-    Name              tail
-    Tag               dataplane.aws-node
-    Path              /var/log/containers/aws-node*.log
-    Parser            docker
-    DB                /var/log/flb_dataplane_aws-node.db
-    Mem_Buf_Limit     5MB
-    Skip_Long_Lines   On
-    Refresh_Interval  10
-[INPUT]
-    Name              tail
-    Tag               dataplane.coredns
-    Path              /var/log/containers/coredns*.log
-    Parser            docker
-    DB                /var/log/flb_dataplane_coredns.db
-    Mem_Buf_Limit     5MB
-    Skip_Long_Lines   On
-    Refresh_Interval  10
-[INPUT]
-    Name              tail
-    Tag               host.messages
-    Path              /var/log/messages
-    Parser            syslog
-    DB                /var/log/flb_host_messages.db
-    Mem_Buf_Limit     5MB
-    Skip_Long_Lines   On
-    Refresh_Interval  10
-[INPUT]
-    Name              tail
-    Tag               host.secure
-    Path              /var/log/secure
-    Parser            syslog
-    DB                /var/log/flb_host_secure.db
-    Mem_Buf_Limit     5MB
-    Skip_Long_Lines   On
-    Refresh_Interval  10
-[INPUT]
-    Name              tail
-    Tag               host.dmesg
-    Path              /var/log/dmesg
-    Parser            syslog
-    DB                /var/log/flb_host_dmesg.db
-    Mem_Buf_Limit     5MB
-    Skip_Long_Lines   On
-    Refresh_Interval  10
-EOT
-    additionalOutputs = <<-EOT
-[OUTPUT]
-    Name                  cloudwatch
-    Match                 dataplane.*
-    region                ${var.region}
-    log_group_name        ${local.lg_dataplane}
-    log_stream_prefix     dataplane
-    auto_create_group     true
-[OUTPUT]
-    Name                  cloudwatch
-    Match                 host.*
-    region                ${var.region}
-    log_group_name        ${local.lg_host}
-    log_stream_prefix     host
-    auto_create_group     true
-EOT
-  })]
-
-  # Ensure AWS SDK inside Fluent Bit always uses the IRSA role/token
-  set {
-    name  = "extraEnvs[0].name"
-    value = "AWS_ROLE_ARN"
-  }
-  set {
-    name  = "extraEnvs[0].value"
-    value = aws_iam_role.fluentbit[0].arn
-  }
-  set {
-    name  = "extraEnvs[1].name"
-    value = "AWS_WEB_IDENTITY_TOKEN_FILE"
-  }
-  set {
-    name  = "extraEnvs[1].value"
-    value = "/var/run/secrets/eks.amazonaws.com/serviceaccount/token"
-  }
-  set {
-    name  = "extraEnvs[2].name"
-    value = "AWS_REGION"
-  }
-  set {
-    name  = "extraEnvs[2].value"
-    value = var.region
-  }
-  set {
-    name  = "extraEnvs[3].name"
-    value = "AWS_DEFAULT_REGION"
-  }
-  set {
-    name  = "extraEnvs[3].value"
-    value = var.region
-  }
-
-  depends_on = [
-    kubernetes_service_account.fluentbit,
-    aws_cloudwatch_log_group.app,
-    aws_cloudwatch_log_group.dataplane,
-    aws_cloudwatch_log_group.host
-  ]
+  depends_on = [module.eks_blueprints_addons]
 }

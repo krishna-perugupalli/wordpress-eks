@@ -1,0 +1,29 @@
+# MySQL Exporter Configuration
+# Exposes Aurora MySQL metrics to Prometheus
+
+# MySQL connection configuration
+# Host will be configured via Helm values in addons.tf using writer_endpoint from infra stack
+# Uses the existing wpapp database user and secret for metrics collection
+mysql:
+  host: "${mysql_host}"
+  port: 3306
+  user: "wpapp"
+  existingSecret:
+    name: wp-db
+    key: password
+
+# Resource limits for the exporter
+resources:
+  limits:
+    memory: 128Mi
+    cpu: 100m
+  requests:
+    memory: 64Mi
+    cpu: 50m
+
+service:
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9104"
+  labels:
+    app: mysql-exporter

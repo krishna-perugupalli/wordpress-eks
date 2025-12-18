@@ -319,7 +319,8 @@ variable "enable_metrics_exporter" {
 variable "metrics_exporter_image" {
   description = "Container image for WordPress metrics exporter sidecar"
   type        = string
-  default     = "php:8.2-cli-alpine"
+  # Use a WordPress/PHP image that already has mysqli enabled to match the exporter needs
+  default = "bitnami/wordpress:latest"
 }
 
 variable "metrics_exporter_resources_requests_cpu" {

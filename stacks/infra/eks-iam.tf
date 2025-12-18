@@ -251,7 +251,7 @@ resource "aws_iam_role_policy" "eks_node_group_role_kms_policy" {
           "kms:ListGrants",
           "kms:RevokeGrant"
         ],
-        "Resource" = "${local.kms_key_arn}"
+        "Resource" = local.kms_key_arn
       }
     ]
   })

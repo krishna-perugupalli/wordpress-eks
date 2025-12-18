@@ -16,6 +16,7 @@ class WordPressMetricsPlugin {
     
     private $metrics_data = [];
     private $start_time;
+    private $table_ready = false;
     
     public function __construct() {
         $this->start_time = microtime(true);
@@ -30,9 +31,6 @@ class WordPressMetricsPlugin {
         // Hook into plugin execution tracking
         add_action('plugins_loaded', [$this, 'start_plugin_tracking'], 1);
         add_action('wp_loaded', [$this, 'end_plugin_tracking'], 999);
-        
-        // Database query tracking
-        add_filter('query', [$this, 'track_database_query']);
         
         // Cache tracking
         add_action('wp_cache_get', [$this, 'track_cache_get'], 10, 2);
@@ -62,6 +60,13 @@ class WordPressMetricsPlugin {
      * Initialize metrics storage in database
      */
     private function init_metrics_storage() {
+        $this->ensure_metrics_table();
+    }
+
+    /**
+     * Ensure the metrics table exists (safe to call multiple times)
+     */
+    private function ensure_metrics_table() {
         global $wpdb;
         
         $table_name = $wpdb->prefix . 'prometheus_metrics';
@@ -81,6 +86,15 @@ class WordPressMetricsPlugin {
         
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
+
+        // Verify table exists before writing to it
+        $exists = $wpdb->get_var($wpdb->prepare(
+            "SHOW TABLES LIKE %s",
+            $table_name
+        ));
+
+        $this->table_ready = ($exists === $table_name);
+        return $this->table_ready;
     }
     
     /**
@@ -193,18 +207,6 @@ class WordPressMetricsPlugin {
     }
     
     /**
-     * Track database queries
-     */
-    public function track_database_query($query) {
-        $query_type = $this->get_query_type($query);
-        $this->increment_counter('wordpress_database_queries_total', [
-            'type' => $query_type
-        ]);
-        
-        return $query;
-    }
-    
-    /**
      * Track cache gets
      */
     public function track_cache_get($key, $found) {
@@ -295,31 +297,6 @@ class WordPressMetricsPlugin {
     }
     
     /**
-     * Get query type from SQL query
-     */
-    private function get_query_type($query) {
-        $query = trim(strtoupper($query));
-        
-        if (strpos($query, 'SELECT') === 0) {
-            return 'select';
-        } elseif (strpos($query, 'INSERT') === 0) {
-            return 'insert';
-        } elseif (strpos($query, 'UPDATE') === 0) {
-            return 'update';
-        } elseif (strpos($query, 'DELETE') === 0) {
-            return 'delete';
-        } elseif (strpos($query, 'CREATE') === 0) {
-            return 'create';
-        } elseif (strpos($query, 'ALTER') === 0) {
-            return 'alter';
-        } elseif (strpos($query, 'DROP') === 0) {
-            return 'drop';
-        } else {
-            return 'other';
-        }
-    }
-    
-    /**
      * Increment a counter metric
      */
     private function increment_counter($metric_name, $labels = [], $value = 1) {
@@ -345,6 +322,10 @@ class WordPressMetricsPlugin {
      */
     private function store_metric($metric_name, $value, $labels = [], $type = 'counter') {
         global $wpdb;
+
+        if (!$this->ensure_metrics_table()) {
+            return;
+        }
         
         $table_name = $wpdb->prefix . 'prometheus_metrics';
         $labels_json = json_encode($labels);

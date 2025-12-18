@@ -1,0 +1,48 @@
+# Checkov Security Scanning Configuration
+# https://www.checkov.io/2.Basics/CLI%20Command%20Reference.html
+
+# Framework to scan
+framework:
+  - terraform
+
+# Output settings
+output:
+  - cli
+  - sarif
+
+# Compact output for cleaner logs
+compact: true
+
+# Download external modules for comprehensive scanning
+download-external-modules: true
+
+# Soft fail mode (don't fail on findings, let workflow handle thresholds)
+soft-fail: true
+
+# Skip specific checks (add check IDs here for false positives)
+# Example: CKV_AWS_123 - Description of why this check is skipped
+skip-check:
+  # Uncomment and add checks to skip as needed
+  # - CKV_AWS_123  # Example: Skip specific check with justification
+
+# Suppress specific resources (use sparingly)
+# skip-path:
+#   - modules/example/main.tf  # Example: Skip specific file
+
+# Enable specific checks only (optional - leave commented to run all checks)
+# check:
+#   - CKV_AWS_1
+#   - CKV_AWS_2
+
+# External checks directory (optional)
+# external-checks-dir:
+#   - .checkov/custom-checks
+
+# Baseline file for tracking known issues (optional)
+# baseline: .checkov.baseline
+
+# Severity thresholds (handled by workflow, but can be configured here)
+# These are informational - the workflow enforces CRITICAL and HIGH failures
+# skip-severity:
+#   - LOW
+#   - INFO

@@ -1,107 +1,178 @@
-variable "name" {
-  description = "Logical name / cluster name (used in log group names)"
-  type        = string
-}
-
-variable "region" {
-  description = "AWS region"
-  type        = string
-}
+# ============================================================================
+# Cluster Configuration Variables
+# ============================================================================
 
 variable "cluster_name" {
   description = "EKS cluster name"
   type        = string
 }
 
-variable "cluster_oidc_issuer_url" {
-  description = "EKS OIDC issuer URL (https://...)"
+variable "cluster_endpoint" {
+  description = "EKS cluster API endpoint"
+  type        = string
+}
+
+variable "cluster_version" {
+  description = "EKS cluster Kubernetes version"
+  type        = string
+}
+
+variable "cluster_ca_data" {
+  description = "EKS cluster certificate authority data"
   type        = string
 }
 
 variable "oidc_provider_arn" {
-  description = "EKS OIDC provider ARN"
+  description = "EKS OIDC provider ARN for IRSA"
   type        = string
 }
 
-variable "namespace" {
-  description = "Namespace for agents"
-  type        = string
-  default     = "observability"
-}
+# ============================================================================
+# Component Toggle Variables
+# ============================================================================
 
-variable "kms_logs_key_arn" {
-  description = "KMS key ARN to encrypt CloudWatch log groups (use your security-baseline key)"
-  type        = string
-  default     = null
-}
-
-variable "cw_retention_days" {
-  description = "CloudWatch Logs retention (days)"
-  type        = number
-  default     = 30
-}
-
-variable "install_cloudwatch_agent" {
-  description = "Install CloudWatch Agent for Container Insights"
+variable "enable_prometheus" {
+  description = "Enable Prometheus (kube-prometheus-stack)"
   type        = bool
   default     = true
 }
 
-variable "install_fluent_bit" {
-  description = "Install aws-for-fluent-bit for logs"
+variable "enable_grafana" {
+  description = "Enable Grafana"
   type        = bool
   default     = true
 }
 
-# Optional ALB alarms (REGIONAL). Pass arn_suffixes from edge-ingress outputs.
-variable "create_alb_alarms" {
-  description = "Create ALB 5XX/latency alarms if ALB/TargetGroup identifiers are provided"
+variable "enable_alertmanager" {
+  description = "Enable Alertmanager"
+  type        = bool
+  default     = true
+}
+
+variable "enable_fluentbit" {
+  description = "Enable Fluent Bit for log forwarding"
+  type        = bool
+  default     = true
+}
+
+variable "enable_yace" {
+  description = "Enable YACE CloudWatch exporter (placeholder for Phase 2)"
+  type        = bool
+  default     = true
+}
+
+# ============================================================================
+# Dashboard Toggle Variables
+# ============================================================================
+
+variable "enable_wp_dashboards" {
+  description = "Enable WordPress-specific dashboards"
+  type        = bool
+  default     = true
+}
+
+variable "enable_aws_dashboards" {
+  description = "Enable AWS service dashboards (RDS, ElastiCache, etc.)"
+  type        = bool
+  default     = true
+}
+
+variable "enable_cost_dashboards" {
+  description = "Enable cost allocation dashboards"
+  type        = bool
+  default     = true
+}
+
+# ============================================================================
+# Optional Override Variables
+# ============================================================================
+
+variable "prometheus_namespace" {
+  description = "Namespace for Prometheus stack (default: managed by Blueprints)"
+  type        = string
+  default     = ""
+}
+
+variable "grafana_namespace" {
+  description = "Namespace for Grafana (default: managed by Blueprints)"
+  type        = string
+  default     = ""
+}
+
+variable "wordpress_namespace" {
+  description = "Namespace where WordPress is deployed (for ServiceMonitor targeting)"
+  type        = string
+  default     = "wordpress"
+}
+
+# ============================================================================
+# Infrastructure Endpoint Variables
+# ============================================================================
+
+variable "redis_endpoint" {
+  description = "ElastiCache Redis primary endpoint address"
+  type        = string
+  default     = ""
+}
+
+variable "mysql_endpoint" {
+  description = "Aurora MySQL writer endpoint"
+  type        = string
+  default     = ""
+}
+
+variable "project_name" {
+  description = "Project name for resource tagging (used in YACE discovery)"
+  type        = string
+  default     = ""
+}
+
+variable "environment" {
+  description = "Environment name for resource tagging (used in YACE discovery)"
+  type        = string
+  default     = ""
+}
+
+# ============================================================================
+# Alerting Configuration Variables (Phase 4)
+# ============================================================================
+
+variable "enable_alerting" {
+  description = "Enable PrometheusRule alert definitions"
   type        = bool
   default     = false
 }
 
-variable "alb_arn_suffixes" {
-  description = "List of ALB ARN suffixes (e.g., app/xxx/yyy) for alarms"
-  type        = list(string)
-  default     = []
+variable "notification_provider" {
+  description = "Primary notification provider: 'slack' or 'sns'"
+  type        = string
+  default     = "slack"
+
+  validation {
+    condition     = contains(["slack", "sns"], var.notification_provider)
+    error_message = "Notification provider must be 'slack' or 'sns'."
+  }
 }
 
-variable "target_group_arn_suffixes" {
-  description = "List of Target Group ARN suffixes (e.g., targetgroup/xxx/yyy) to pair with ALBs"
-  type        = list(string)
-  default     = []
+variable "slack_webhook_url" {
+  description = "Slack webhook URL for alert notifications (when provider=slack)"
+  type        = string
+  default     = ""
+  sensitive   = true
 }
 
-variable "alarm_email_sns_topic_arn" {
-  description = "SNS Topic ARN to receive alarm notifications"
+variable "sns_topic_arn" {
+  description = "SNS topic ARN for alert notifications (when provider=sns)"
   type        = string
   default     = ""
 }
+
+# ============================================================================
+# Common Variables
+# ============================================================================
 
 variable "tags" {
-  description = "Common tags"
+  description = "Common tags for AWS resources"
   type        = map(string)
   default     = {}
-}
-
-variable "ingress_name" {
-  description = "K8s Ingress name (to auto-discover the ALB via tags)"
-  type        = string
-  default     = ""
-}
-
-variable "ingress_namespace" {
-  description = "K8s Ingress namespace"
-  type        = string
-  default     = "wordpress"
-}
-variable "service_name" {
-  description = "K8s Service name backing the Ingress (to auto-discover TG via tags)"
-  type        = string
-  default     = "wordpress"
-}
-variable "service_namespace" {
-  description = "K8s Service namespace"
-  type        = string
-  default     = "wordpress"
 }
