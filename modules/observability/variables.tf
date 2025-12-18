@@ -56,7 +56,13 @@ variable "enable_fluentbit" {
 }
 
 variable "enable_yace" {
-  description = "Enable YACE CloudWatch exporter (placeholder for Phase 2)"
+  description = "Enable YACE CloudWatch exporter"
+  type        = bool
+  default     = true
+}
+
+variable "enable_metrics_server" {
+  description = "Enable Metrics Server"
   type        = bool
   default     = true
 }
@@ -134,7 +140,7 @@ variable "environment" {
 }
 
 # ============================================================================
-# Alerting Configuration Variables (Phase 4)
+# Alerting Configuration Variables
 # ============================================================================
 
 variable "enable_alerting" {

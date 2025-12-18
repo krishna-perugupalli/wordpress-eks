@@ -136,6 +136,12 @@ resource "helm_release" "yace" {
       aws_region      = data.aws_region.current.name
       project_tag     = var.project_name
       environment_tag = var.environment
+      environment_tag = var.environment
+    }),
+    yamlencode({
+      extraArgs = {
+        "log.level" = "debug"
+      }
     })
   ]
 
