@@ -140,7 +140,7 @@ resource "helm_release" "yace" {
     }),
     yamlencode({
       extraArgs = {
-        "debug" = "true"
+        "log.level" = "debug"
       }
     })
   ]

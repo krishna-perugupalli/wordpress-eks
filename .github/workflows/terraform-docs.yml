@@ -1,0 +1,324 @@
+name: Terraform Documentation
+
+on:
+  pull_request:
+    paths:
+      - 'modules/**/*.tf'
+      - '.github/workflows/terraform-docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: terraform-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TERRAFORM_DOCS_VERSION: "v0.18.0"
+
+jobs:
+  discover-modules:
+    name: Discover Terraform Modules
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.find-modules.outputs.modules }}
+      module_count: ${{ steps.find-modules.outputs.module_count }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find module directories
+        id: find-modules
+        run: |
+          # Find all directories under modules/ that contain .tf files
+          # Each module should have main.tf, variables.tf, outputs.tf, versions.tf
+          module_dirs=$(find modules -mindepth 1 -maxdepth 1 -type d | sort | jq -R -s -c 'split("\n")[:-1]')
+          module_count=$(echo "$module_dirs" | jq 'length')
+          
+          echo "modules=${module_dirs}" >> $GITHUB_OUTPUT
+          echo "module_count=${module_count}" >> $GITHUB_OUTPUT
+          
+          echo "Found ${module_count} modules:"
+          echo "$module_dirs" | jq -r '.[]'
+
+  generate-docs:
+    name: Generate Documentation (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    needs: discover-modules
+    if: needs.discover-modules.outputs.module_count != '0'
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJson(needs.discover-modules.outputs.modules) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup terraform-docs
+        run: |
+          # Download and install terraform-docs
+          curl -sSLo terraform-docs.tar.gz \
+            "https://github.com/terraform-docs/terraform-docs/releases/download/${{ env.TERRAFORM_DOCS_VERSION }}/terraform-docs-${{ env.TERRAFORM_DOCS_VERSION }}-linux-amd64.tar.gz"
+          tar -xzf terraform-docs.tar.gz
+          chmod +x terraform-docs
+          sudo mv terraform-docs /usr/local/bin/
+          terraform-docs --version
+
+      - name: Generate module documentation
+        id: generate
+        working-directory: ${{ matrix.module }}
+        run: |
+          echo "Generating documentation for ${{ matrix.module }}..."
+          
+          # Check if module has required files
+          if [ ! -f "variables.tf" ] && [ ! -f "outputs.tf" ]; then
+            echo "Module has no variables.tf or outputs.tf, skipping documentation generation"
+            echo "skipped=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Generate documentation and inject into README.md
+          # This will update the section between <!-- BEGIN_TF_DOCS --> and <!-- END_TF_DOCS -->
+          set +e
+          terraform-docs markdown table \
+            --output-file README.md \
+            --output-mode inject \
+            --sort-by required \
+            --header-from main.tf \
+            . > /tmp/terraform-docs-output.txt 2>&1
+          
+          exit_code=$?
+          
+          if [ $exit_code -ne 0 ]; then
+            echo "generation_failed=true" >> $GITHUB_OUTPUT
+            echo "error_message<<EOF" >> $GITHUB_OUTPUT
+            cat /tmp/terraform-docs-output.txt >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            
+            echo "::error::Failed to generate documentation for ${{ matrix.module }}"
+            cat /tmp/terraform-docs-output.txt
+            exit 1
+          else
+            echo "generation_failed=false" >> $GITHUB_OUTPUT
+            echo "skipped=false" >> $GITHUB_OUTPUT
+            echo "Documentation generated successfully"
+          fi
+
+      - name: Check for documentation changes
+        id: check-changes
+        if: steps.generate.outputs.skipped != 'true' && steps.generate.outputs.generation_failed != 'true'
+        working-directory: ${{ matrix.module }}
+        run: |
+          # Check if README.md was modified
+          if git diff --quiet README.md; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo " No documentation changes detected"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Documentation changes detected"
+            
+            # Show the diff for logging
+            echo "Changes:"
+            git diff README.md
+          fi
+
+      - name: Commit documentation changes
+        if: steps.check-changes.outputs.has_changes == 'true'
+        working-directory: ${{ matrix.module }}
+        run: |
+          # Configure git
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # Stage and commit changes
+          git add README.md
+          git commit -m "docs: update terraform-docs for ${{ matrix.module }}"
+          
+          echo "Committed documentation changes for ${{ matrix.module }}"
+
+      - name: Push documentation changes
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          # Push changes to the PR branch
+          git pull --rebase origin ${{ github.head_ref }}
+          git push origin HEAD:${{ github.head_ref }}
+          
+          echo "Pushed documentation changes to PR branch"
+
+      - name: Report generation error
+        if: failure() && steps.generate.outputs.generation_failed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const errorMessage = `${{ steps.generate.outputs.error_message }}`;
+            const body = `## Documentation Generation Error
+            
+            Failed to generate documentation for \`${{ matrix.module }}\`.
+            
+            ### Error Details
+            
+            \`\`\`
+            ${errorMessage}
+            \`\`\`
+            
+            ### Troubleshooting
+            
+            - Ensure the module has valid \`variables.tf\` and \`outputs.tf\` files
+            - Check that all Terraform syntax is correct
+            - Verify that variable and output descriptions are properly formatted
+            
+            The workflow will continue, but this module's documentation was not updated.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  documentation-summary:
+    name: Documentation Summary
+    runs-on: ubuntu-latest
+    needs: [discover-modules, generate-docs]
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Check for documentation updates
+        id: check-updates
+        run: |
+          # Check if any README files were updated in this workflow run
+          # We'll check the recent commits from github-actions bot
+          recent_commits=$(git log --author="github-actions\[bot\]" --since="5 minutes ago" --oneline --grep="docs: update terraform-docs" | wc -l)
+          
+          echo "updated_modules=${recent_commits}" >> $GITHUB_OUTPUT
+          
+          if [ "$recent_commits" -gt 0 ]; then
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+            echo "${recent_commits} module(s) had documentation updates"
+          else
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+            echo "No documentation updates were needed"
+          fi
+
+      - name: Evaluate results
+        id: evaluate
+        run: |
+          generate_result="${{ needs.generate-docs.result }}"
+          module_count="${{ needs.discover-modules.outputs.module_count }}"
+          
+          echo "## Documentation Generation Results"
+          echo "- Modules discovered: ${module_count}"
+          echo "- Generation status: ${generate_result}"
+          
+          if [[ "$generate_result" == "failure" ]]; then
+            echo "workflow_failed=true" >> $GITHUB_OUTPUT
+            echo "::warning::Some modules failed documentation generation"
+          else
+            echo "workflow_failed=false" >> $GITHUB_OUTPUT
+            echo "Documentation generation completed successfully"
+          fi
+
+      - name: Comment on PR with summary
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const moduleCount = '${{ needs.discover-modules.outputs.module_count }}';
+            const hasUpdates = '${{ steps.check-updates.outputs.has_updates }}';
+            const updatedModules = '${{ steps.check-updates.outputs.updated_modules }}';
+            const workflowFailed = '${{ steps.evaluate.outputs.workflow_failed }}';
+            const generateResult = '${{ needs.generate-docs.result }}';
+            
+            let body = '';
+            
+            if (generateResult === 'skipped') {
+              body = `## Terraform Documentation
+            
+            No modules were found or all modules were skipped.
+            
+            **Modules discovered:** ${moduleCount}`;
+            } else if (workflowFailed === 'true') {
+              body = `## Terraform Documentation - Completed with Errors
+            
+            Documentation generation completed, but some modules encountered errors.
+            
+            **Modules discovered:** ${moduleCount}
+            **Modules updated:** ${updatedModules}
+            
+            Please check the workflow logs for details on which modules failed.
+            The errors have been posted as separate comments above.`;
+            } else if (hasUpdates === 'true') {
+              body = `## Terraform Documentation Updated
+            
+            Module documentation has been automatically updated and committed to this PR.
+            
+            **Modules discovered:** ${moduleCount}
+            **Modules updated:** ${updatedModules}
+            
+            ### What was updated?
+            
+            - Variable documentation (inputs)
+            - Output documentation
+            - Provider requirements
+            - Terraform version requirements
+            
+            The changes have been committed to your PR branch. Please review the updated README files.`;
+            } else {
+              body = `## Terraform Documentation - Up to Date
+            
+            All module documentation is current. No updates were needed.
+            
+            **Modules discovered:** ${moduleCount}
+            
+            Your module documentation is synchronized with the code.`;
+            }
+            
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Terraform Documentation')
+            );
+            
+            // Update or create comment
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+      - name: Final status check
+        run: |
+          workflow_failed="${{ steps.evaluate.outputs.workflow_failed }}"
+          
+          if [[ "$workflow_failed" == "true" ]]; then
+            echo "::warning::Documentation generation completed with some errors"
+            # Don't fail the workflow - errors were reported in comments
+            exit 0
+          fi
+          
+          echo "Documentation workflow completed successfully!"
