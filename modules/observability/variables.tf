@@ -61,6 +61,12 @@ variable "enable_yace" {
   default     = true
 }
 
+variable "enable_metrics_server" {
+  description = "Enable Metrics Server"
+  type        = bool
+  default     = true
+}
+
 # ============================================================================
 # Dashboard Toggle Variables
 # ============================================================================

@@ -30,6 +30,7 @@ module "eks_blueprints_addons" {
   # Component toggles
   enable_kube_prometheus_stack = var.enable_prometheus
   enable_aws_for_fluentbit     = var.enable_fluentbit
+  enable_metrics_server        = var.enable_metrics_server
 
   # Prometheus configuration with custom Helm values
   kube_prometheus_stack = var.enable_prometheus ? {

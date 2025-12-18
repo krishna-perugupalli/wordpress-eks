@@ -352,6 +352,12 @@ variable "enable_yace" {
   default     = true
 }
 
+variable "enable_metrics_server" {
+  description = "Enable Metrics Server for HPA"
+  type        = bool
+  default     = true
+}
+
 # Dashboard toggles
 variable "enable_wp_dashboards" {
   description = "Enable WordPress-specific dashboards"

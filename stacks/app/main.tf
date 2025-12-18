@@ -94,6 +94,7 @@ module "observability" {
   enable_alertmanager = var.enable_alertmanager
   enable_fluentbit    = var.enable_fluentbit
   enable_yace         = var.enable_yace
+  enable_metrics_server = var.enable_metrics_server
 
   # Dashboard toggles
   enable_wp_dashboards   = var.enable_wp_dashboards
