@@ -133,7 +133,7 @@
       },
       "targets": [
         {
-          "expr": "up{app=\"wordpress\"}",
+          "expr": "up{service=\"coreline-metrics\"}",
           "legendFormat": "Health Status",
           "refId": "A"
         }
@@ -260,7 +260,7 @@
       },
       "targets": [
         {
-          "expr": "avg_over_time(up{app=\"wordpress\"}[1h]) * 100",
+          "expr": "avg_over_time(up{service=\"coreline-metrics\"}[1h]) * 100",
           "legendFormat": "Uptime %",
           "refId": "A"
         }
