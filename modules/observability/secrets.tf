@@ -1,5 +1,5 @@
 resource "kubectl_manifest" "grafana_secret" {
-  count = var.enable_grafana && var.grafana_secret_arn != "" ? 1 : 0
+  count = var.enable_grafana && var.grafana_secret_arn != null && var.grafana_secret_arn != "" ? 1 : 0
 
   yaml_body = yamlencode({
     apiVersion = "external-secrets.io/v1beta1"
