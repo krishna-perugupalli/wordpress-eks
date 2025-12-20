@@ -80,6 +80,7 @@ module "cert_manager" {
 # ---------------------------
 module "observability" {
   source = "../../modules/observability"
+  region = var.region
 
   # Cluster configuration
   cluster_name      = local.cluster_name
