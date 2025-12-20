@@ -28,14 +28,14 @@ resource "kubectl_manifest" "grafana_secret" {
         {
           secretKey = "username"
           remoteRef = {
-            key      = element(split(":", var.grafana_secret_arn), length(split(":", var.grafana_secret_arn)) - 1)
+            key      = var.grafana_secret_arn
             property = "username"
           }
         },
         {
           secretKey = "password"
           remoteRef = {
-            key      = element(split(":", var.grafana_secret_arn), length(split(":", var.grafana_secret_arn)) - 1)
+            key      = var.grafana_secret_arn
             property = "password"
           }
         }
@@ -46,4 +46,13 @@ resource "kubectl_manifest" "grafana_secret" {
   depends_on = [
     kubectl_manifest.monitoring_namespace
   ]
+}
+
+# Wait for ESO to reconcile and create the actual Secret
+resource "time_sleep" "wait_for_grafana_secret" {
+  count = var.enable_grafana && var.grafana_secret_arn != null && var.grafana_secret_arn != "" ? 1 : 0
+
+  create_duration = "30s"
+
+  depends_on = [kubectl_manifest.grafana_secret]
 }

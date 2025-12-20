@@ -65,7 +65,7 @@ module "eks_blueprints_addons" {
   tags = local.common_tags
 
   depends_on = [
-    kubectl_manifest.grafana_secret,
+    time_sleep.wait_for_grafana_secret,
     kubectl_manifest.monitoring_namespace
   ]
 }
