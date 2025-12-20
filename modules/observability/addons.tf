@@ -58,7 +58,7 @@ locals {
         name   = "Loki"
         type   = "loki"
         uid    = "loki"
-        url    = "http://loki-gateway.${local.monitoring_namespace}.svc.cluster.local"
+        url    = "http://loki-read.${local.monitoring_namespace}.svc.cluster.local:3100"
         access = "proxy"
         jsonData = {
           derivedFields = [
@@ -154,8 +154,8 @@ locals {
       [OUTPUT]
           Name loki
           Match *
-          Host loki-gateway.${local.monitoring_namespace}.svc.cluster.local
-          Port 80
+          Host loki-write.${local.monitoring_namespace}.svc.cluster.local
+          Port 3100
           Labels job=fluentbit
           Auto_Kubernetes_Labels on
     EOT
