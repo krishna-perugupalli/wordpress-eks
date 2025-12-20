@@ -137,30 +137,19 @@ locals {
 # Do NOT use the 'values' array format here - the module handles that internally.
 
 locals {
-  fluentbit_values = {
-    # IAM-related placeholders keep the map type aligned with what the
-    # EKS Blueprints module expects, preventing lookup() default type errors.
-    # role_permissions_boundary_arn = null
-    # role_policies                 = {}
-    # policy_statements             = []
-    # source_policy_documents       = []
-    # override_policy_documents     = []
-    # s3_bucket_arns                = []
+  # Define the structure with default values to ensure type consistency
+  fluentbit_defaults = {
+    role_permissions_boundary_arn = null
+    role_policies                 = {}
+    policy_statements             = []
+    source_policy_documents       = []
+    override_policy_documents     = []
+    s3_bucket_arns                = []
+    additionalOutputs             = ""
+  }
 
-    # set = [
-    #   {
-    #     name  = "cloudWatchLogs.enabled"
-    #     value = "true"
-    #   },
-    #   {
-    #     name  = "cloudWatchLogs.region"
-    #     value = data.aws_region.current.name
-    #   },
-    #   {
-    #     name  = "cloudWatchLogs.logGroupName"
-    #     value = "/aws/eks/${var.cluster_name}/application"
-    #   }
-    # ]
+  # Configured values matching the same structure
+  fluentbit_values = merge(local.fluentbit_defaults, {
     additionalOutputs = <<-EOT
       [OUTPUT]
           Name loki
@@ -170,7 +159,7 @@ locals {
           Labels job=fluentbit
           Auto_Kubernetes_Labels on
     EOT
-  }
+  })
 }
 
 # ------------------------------------------------------------------------------

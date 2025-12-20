@@ -57,7 +57,7 @@ module "eks_blueprints_addons" {
   }
 
   # Fluent Bit configuration with custom Helm values
-  aws_for_fluentbit = var.enable_fluentbit ? local.fluentbit_values : {}
+  aws_for_fluentbit = var.enable_fluentbit ? local.fluentbit_values : local.fluentbit_defaults
 
   # enable_yace_exporter = var.enable_yace
 
