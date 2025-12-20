@@ -133,6 +133,7 @@ resource "helm_release" "loki" {
 
   values = [
     yamlencode({
+      deploymentMode = "SingleBinary"
       serviceAccount = {
         create = true
         name   = local.loki_sa_name
@@ -152,6 +153,23 @@ resource "helm_release" "loki" {
             admin  = aws_s3_bucket.loki[0].id
           }
           type = "s3"
+        }
+      }
+      singleBinary = {
+        replicas = 1
+        resources = {
+          limits = {
+            cpu    = "500m"
+            memory = "512Mi"
+          }
+          requests = {
+            cpu    = "100m"
+            memory = "128Mi"
+          }
+        }
+        persistence = {
+          enabled = true
+          size    = "10Gi"
         }
       }
     })
