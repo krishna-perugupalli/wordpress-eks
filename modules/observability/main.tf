@@ -63,6 +63,11 @@ module "eks_blueprints_addons" {
 
   # Common tags for AWS resources
   tags = local.common_tags
+
+  depends_on = [
+    kubectl_manifest.grafana_secret,
+    kubernetes_namespace.monitoring
+  ]
 }
 
 #############################################

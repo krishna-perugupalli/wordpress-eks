@@ -43,5 +43,7 @@ resource "kubectl_manifest" "grafana_secret" {
     }
   })
 
-  depends_on = [module.eks_blueprints_addons]
+  depends_on = [
+    kubernetes_namespace.monitoring
+  ]
 }
