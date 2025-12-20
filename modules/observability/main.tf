@@ -181,6 +181,10 @@ resource "helm_release" "loki" {
             memory = "512Mi"
           }
         }
+        persistence = {
+          size             = "10Gi"
+          storageClassName = "gp2"
+        }
       }
       backend = {
         replicas = 1
@@ -193,6 +197,10 @@ resource "helm_release" "loki" {
             cpu    = "200m"
             memory = "512Mi"
           }
+        }
+        persistence = {
+          size             = "10Gi"
+          storageClassName = "gp2"
         }
       }
     })
