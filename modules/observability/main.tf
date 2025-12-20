@@ -146,12 +146,14 @@ resource "helm_release" "loki" {
           replication_factor = 1
         }
         storage = {
+        storage = {
           bucketNames = {
             chunks = aws_s3_bucket.loki[0].id
             ruler  = aws_s3_bucket.loki[0].id
             admin  = aws_s3_bucket.loki[0].id
           }
-          type = "s3"
+          type   = "s3"
+          region = var.region
         }
       }
       # Tuning for t3a.medium (2vCPU / 4GB RAM)
