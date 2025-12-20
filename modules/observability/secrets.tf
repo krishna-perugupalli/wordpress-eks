@@ -44,6 +44,6 @@ resource "kubectl_manifest" "grafana_secret" {
   })
 
   depends_on = [
-    kubernetes_namespace.monitoring
+    kubectl_manifest.monitoring_namespace
   ]
 }

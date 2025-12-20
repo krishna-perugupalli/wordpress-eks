@@ -66,7 +66,7 @@ module "eks_blueprints_addons" {
 
   depends_on = [
     kubectl_manifest.grafana_secret,
-    kubernetes_namespace.monitoring
+    kubectl_manifest.monitoring_namespace
   ]
 }
 
