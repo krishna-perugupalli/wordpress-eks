@@ -182,7 +182,9 @@ resource "helm_release" "loki" {
           }
         }
         persistence = {
+          enabled          = true
           size             = "10Gi"
+          storageClass     = "gp2"
           storageClassName = "gp2"
         }
       }
@@ -199,7 +201,9 @@ resource "helm_release" "loki" {
           }
         }
         persistence = {
+          enabled          = true
           size             = "10Gi"
+          storageClass     = "gp2"
           storageClassName = "gp2"
         }
       }
