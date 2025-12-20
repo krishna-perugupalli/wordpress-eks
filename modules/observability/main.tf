@@ -151,6 +151,8 @@ resource "helm_release" "loki" {
             ruler  = aws_s3_bucket.loki[0].id
             admin  = aws_s3_bucket.loki[0].id
           }
+          type = "s3"
+        }
       }
       # Tuning for t3a.medium (2vCPU / 4GB RAM)
       # Default SimpleScalable is too heavy, so we scale down to 1 replica and low resources
