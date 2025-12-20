@@ -346,6 +346,18 @@ variable "enable_fluentbit" {
   default     = true
 }
 
+variable "enable_loki" {
+  description = "Enable Loki for log aggregation"
+  type        = bool
+  default     = true
+}
+
+variable "enable_tempo" {
+  description = "Enable Tempo for distributed tracing"
+  type        = bool
+  default     = true
+}
+
 variable "enable_yace" {
   description = "Enable YACE CloudWatch exporter (placeholder)"
   type        = bool

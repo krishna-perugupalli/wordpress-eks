@@ -97,6 +97,25 @@ variable "wp_admin_email" {
   default     = "admin@example.com"
 }
 
+variable "create_grafana_admin_secret" {
+  description = "Create Secrets Manager secret for Grafana admin creds"
+  type        = bool
+  default     = false
+}
+
+variable "grafana_admin_secret_name" {
+  description = "Name for the Grafana admin secret"
+  type        = string
+  default     = "grafana-admin"
+}
+
+variable "grafana_admin_password" {
+  description = "If empty, a strong random password is generated"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 # -----------------------------------------
 # IAM policies for readers (ESO, etc.)
 # List the ARNs that readers should access.

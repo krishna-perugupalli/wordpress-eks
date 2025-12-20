@@ -61,6 +61,18 @@ variable "enable_yace" {
   default     = true
 }
 
+variable "enable_loki" {
+  description = "Enable Loki for log aggregation"
+  type        = bool
+  default     = true
+}
+
+variable "enable_tempo" {
+  description = "Enable Tempo for distributed tracing"
+  type        = bool
+  default     = true
+}
+
 variable "enable_metrics_server" {
   description = "Enable Metrics Server"
   type        = bool
@@ -140,6 +152,22 @@ variable "environment" {
 }
 
 # ============================================================================
+# Storage Configuration
+# ============================================================================
+
+variable "loki_retention_days" {
+  description = "Retention period for Loki logs in days"
+  type        = number
+  default     = 30
+}
+
+variable "tempo_retention_hours" {
+  description = "Retention period for Tempo traces in hours"
+  type        = number
+  default     = 168 # 7 days
+}
+
+# ============================================================================
 # Alerting Configuration Variables
 # ============================================================================
 
@@ -169,6 +197,16 @@ variable "slack_webhook_url" {
 
 variable "sns_topic_arn" {
   description = "SNS topic ARN for alert notifications (when provider=sns)"
+  type        = string
+  default     = ""
+}
+
+# ============================================================================
+# Secrets Variables
+# ============================================================================
+
+variable "grafana_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing Grafana admin credentials"
   type        = string
   default     = ""
 }

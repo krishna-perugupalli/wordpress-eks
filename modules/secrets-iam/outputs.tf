@@ -43,3 +43,8 @@ output "eso_role_arn" {
   description = "IAM Role ARN for the External Secrets Operator (IRSA)."
   value       = aws_iam_role.eso.arn
 }
+
+output "grafana_admin_secret_arn" {
+  description = "ARN of created Grafana admin secret (if created)"
+  value       = try(aws_secretsmanager_secret.grafana_admin[0].arn, null)
+}

@@ -66,6 +66,135 @@ module "eks_blueprints_addons" {
 }
 
 #############################################
+# Storage Resources
+#############################################
+
+# Loki S3 Bucket
+resource "aws_s3_bucket" "loki" {
+  count = var.enable_loki ? 1 : 0
+
+  bucket_prefix = "${var.cluster_name}-loki-"
+  force_destroy = true # For easier cleanup in dev/demo environments
+
+  tags = local.common_tags
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "loki" {
+  count = var.enable_loki ? 1 : 0
+
+  bucket = aws_s3_bucket.loki[0].id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Tempo S3 Bucket
+resource "aws_s3_bucket" "tempo" {
+  count = var.enable_tempo ? 1 : 0
+
+  bucket_prefix = "${var.cluster_name}-tempo-"
+  force_destroy = true
+
+  tags = local.common_tags
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "tempo" {
+  count = var.enable_tempo ? 1 : 0
+
+  bucket = aws_s3_bucket.tempo[0].id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+#############################################
+# Loki Deployment
+#############################################
+
+resource "helm_release" "loki" {
+  count = var.enable_loki ? 1 : 0
+
+  name       = "loki"
+  repository = "https://grafana.github.io/helm-charts"
+  chart      = "loki"
+  version    = "5.41.6" # Pin to a stable version
+  namespace  = local.monitoring_namespace
+
+  values = [
+    yamlencode({
+      serviceAccount = {
+        create = true
+        name   = local.loki_sa_name
+        annotations = {
+          "eks.amazonaws.com/role-arn" = module.loki_irsa[0].iam_role_arn
+        }
+      }
+      loki = {
+        auth_enabled = false
+        commonConfig = {
+          replication_factor = 1
+        }
+        storage = {
+          bucketNames = {
+            chunks = aws_s3_bucket.loki[0].id
+            ruler  = aws_s3_bucket.loki[0].id
+            admin  = aws_s3_bucket.loki[0].id
+          }
+          type = "s3"
+        }
+      }
+    })
+  ]
+
+  depends_on = [module.eks_blueprints_addons]
+}
+
+#############################################
+# Tempo Deployment
+#############################################
+
+resource "helm_release" "tempo" {
+  count = var.enable_tempo ? 1 : 0
+
+  name       = "tempo"
+  repository = "https://grafana.github.io/helm-charts"
+  chart      = "tempo"
+  version    = "1.7.1"
+  namespace  = local.monitoring_namespace
+
+  values = [
+    yamlencode({
+      serviceAccount = {
+        create = true
+        name   = local.tempo_sa_name
+        annotations = {
+          "eks.amazonaws.com/role-arn" = module.tempo_irsa[0].iam_role_arn
+        }
+      }
+      tempo = {
+        storage = {
+          trace = {
+            backend = "s3"
+            s3 = {
+              bucket   = aws_s3_bucket.tempo[0].id
+              endpoint = "s3.${data.aws_region.current.name}.amazonaws.com"
+            }
+          }
+        }
+      }
+    })
+  ]
+
+  depends_on = [module.eks_blueprints_addons]
+}
+
+#############################################
 # PrometheusRule Resources
 #############################################
 # These resources deploy alert definitions as PrometheusRule CRDs

@@ -47,6 +47,60 @@ locals {
       }
     }
 
+    admin = {
+      existingSecret = "grafana-admin-credentials"
+      userKey        = "admin-user"
+      passwordKey    = "admin-password"
+    }
+
+    additionalDataSources = [
+      {
+        name   = "Loki"
+        type   = "loki"
+        uid    = "loki"
+        url    = "http://loki-gateway.${local.monitoring_namespace}.svc.cluster.local"
+        access = "proxy"
+        jsonData = {
+          derivedFields = [
+            {
+              datasourceUid = "tempo"
+              matcherRegex  = "(?:traceID|trace_id)=(\\w+)"
+              name          = "TraceID"
+              url           = "$${__value.raw}"
+            }
+          ]
+        }
+      },
+      {
+        name   = "Tempo"
+        type   = "tempo"
+        uid    = "tempo"
+        url    = "http://tempo.${local.monitoring_namespace}.svc.cluster.local:3100"
+        access = "proxy"
+        jsonData = {
+          tracesToLogs = {
+            datasourceUid      = "loki"
+            tags               = ["job", "instance", "pod", "namespace"]
+            mappedTags         = [{ key = "service.name", value = "service" }]
+            mapTagNamesEnabled = false
+            spanStartTimeShift = "1h"
+            spanEndTimeShift   = "-1h"
+            filterByTraceID    = true
+            filterBySpanID     = true
+          }
+          serviceMap = {
+            datasourceUid = "prometheus"
+          }
+          search = {
+            hide = false
+          }
+          nodeGraph = {
+            enabled = true
+          }
+        }
+      }
+    ]
+
     # Enables automatic dashboard provisioning from ConfigMaps
     sidecar = {
       dashboards = {
@@ -107,6 +161,15 @@ locals {
     #     value = "/aws/eks/${var.cluster_name}/application"
     #   }
     # ]
+    additionalOutputs = <<-EOT
+      [OUTPUT]
+          Name loki
+          Match *
+          Host loki-gateway.${local.monitoring_namespace}.svc.cluster.local
+          Port 80
+          Labels job=fluentbit
+          Auto_Kubernetes_Labels on
+    EOT
   }
 }
 

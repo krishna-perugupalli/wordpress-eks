@@ -159,6 +159,35 @@ resource "aws_secretsmanager_secret_version" "wpadmin" {
   secret_string = local.wpadmin_secret_value_json
 }
 
+# --- Grafana Admin Secret ---
+resource "random_password" "grafana_admin" {
+  count   = var.create_grafana_admin_secret && var.grafana_admin_password == "" ? 1 : 0
+  length  = 24
+  special = true
+}
+
+locals {
+  grafana_admin_pass_effective = var.create_grafana_admin_secret ? (var.grafana_admin_password != "" ? var.grafana_admin_password : random_password.grafana_admin[0].result) : ""
+  grafana_admin_secret_value_json = var.create_grafana_admin_secret ? jsonencode({
+    username = "admin"
+    password = local.grafana_admin_pass_effective
+  }) : null
+}
+
+resource "aws_secretsmanager_secret" "grafana_admin" {
+  count                   = var.create_grafana_admin_secret ? 1 : 0
+  name                    = var.grafana_admin_secret_name
+  kms_key_id              = aws_kms_key.secrets.arn
+  recovery_window_in_days = 7
+  tags                    = var.tags
+}
+
+resource "aws_secretsmanager_secret_version" "grafana_admin" {
+  count         = var.create_grafana_admin_secret ? 1 : 0
+  secret_id     = aws_secretsmanager_secret.grafana_admin[0].id
+  secret_string = local.grafana_admin_secret_value_json
+}
+
 # --- Redis AUTH secret (optional, JSON: {"token":"..."}) ---
 resource "random_password" "redis_token" {
   count   = var.create_redis_auth_secret && var.existing_redis_auth_secret_arn == "" ? 1 : 0
@@ -201,6 +230,7 @@ locals {
   module_created_secret_arns = concat(
     var.create_wpapp_db_secret ? [aws_secretsmanager_secret.wpapp[0].arn] : [],
     var.create_wp_admin_secret ? [aws_secretsmanager_secret.wpadmin[0].arn] : [],
+    var.create_grafana_admin_secret ? [aws_secretsmanager_secret.grafana_admin[0].arn] : [],
     (var.create_redis_auth_secret && var.existing_redis_auth_secret_arn == "") ? [aws_secretsmanager_secret.redis_auth[0].arn] : []
   )
 
@@ -210,6 +240,7 @@ locals {
     values(var.readable_secret_arn_map),
     var.create_wpapp_db_secret ? [aws_secretsmanager_secret.wpapp[0].arn] : [],
     var.create_wp_admin_secret ? [aws_secretsmanager_secret.wpadmin[0].arn] : [],
+    var.create_grafana_admin_secret ? [aws_secretsmanager_secret.grafana_admin[0].arn] : [],
     (var.create_redis_auth_secret || var.existing_redis_auth_secret_arn != "") ? [local.redis_auth_secret_arn] : []
   )))
 
@@ -218,6 +249,7 @@ locals {
     length(var.readable_secret_arns) > 0 ||
     var.create_wpapp_db_secret ||
     var.create_wp_admin_secret ||
+    var.create_grafana_admin_secret ||
     var.create_redis_auth_secret ||
     var.existing_redis_auth_secret_arn != ""
   )
@@ -242,6 +274,7 @@ locals {
   kms_arns_for_read = distinct(compact(concat(
     (var.create_wpapp_db_secret ? [aws_kms_key.secrets.arn] : []),
     (var.create_wp_admin_secret ? [aws_kms_key.secrets.arn] : []),
+    (var.create_grafana_admin_secret ? [aws_kms_key.secrets.arn] : []),
     (var.create_redis_auth_secret && var.existing_redis_auth_secret_arn == "" ? [local.redis_kms_arn] : []),
     [for s in data.aws_secretsmanager_secret.external : s.kms_key_id]
   )))
@@ -250,6 +283,7 @@ locals {
   need_kms_policy = (
     var.create_wpapp_db_secret ||
     var.create_wp_admin_secret ||
+    var.create_grafana_admin_secret ||
     (var.create_redis_auth_secret && var.existing_redis_auth_secret_arn == "") ||
     length(var.readable_secret_arns) > 0
   )

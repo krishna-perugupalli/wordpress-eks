@@ -50,6 +50,7 @@ locals {
   file_system_id                    = local.infra_outputs.file_system_id
   redis_endpoint                    = try(local.infra_outputs.redis_endpoint, null)
   redis_auth_secret_arn             = try(local.infra_outputs.redis_auth_secret_arn, null)
+  grafana_admin_secret_arn          = try(local.infra_outputs.grafana_admin_secret_arn, null)
   target_group_arn                  = local.infra_outputs.target_group_arn
 
   _ensure_infra_ready = length(keys(local.infra_outputs)) > 0

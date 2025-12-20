@@ -257,6 +257,9 @@ module "secrets_iam" {
   create_redis_auth_secret = true
   redis_auth_secret_name   = "${local.name}-redis-auth"
 
+  create_grafana_admin_secret = true
+  grafana_admin_secret_name   = "${local.name}-grafana-admin"
+
   depends_on = [module.data_aurora]
 }
 

@@ -89,11 +89,13 @@ module "observability" {
   oidc_provider_arn = local.oidc_provider_arn
 
   # Component toggles
-  enable_prometheus   = var.enable_prometheus
-  enable_grafana      = var.enable_grafana
-  enable_alertmanager = var.enable_alertmanager
-  enable_fluentbit    = var.enable_fluentbit
-  enable_yace         = var.enable_yace
+  enable_prometheus     = var.enable_prometheus
+  enable_grafana        = var.enable_grafana
+  enable_alertmanager   = var.enable_alertmanager
+  enable_fluentbit      = var.enable_fluentbit
+  enable_loki           = var.enable_loki
+  enable_tempo          = var.enable_tempo
+  enable_yace           = var.enable_yace
   enable_metrics_server = var.enable_metrics_server
 
   # Dashboard toggles
@@ -112,6 +114,9 @@ module "observability" {
 
   # Common tags
   tags = local.tags
+
+  # Secrets
+  grafana_secret_arn = local.grafana_admin_secret_arn
 
   depends_on = [module.edge_ingress]
 }

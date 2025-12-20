@@ -70,6 +70,11 @@ output "redis_auth_secret_arn" {
   value = module.secrets_iam.redis_auth_secret_arn
 }
 
+output "grafana_admin_secret_arn" {
+  value       = module.secrets_iam.grafana_admin_secret_arn
+  description = "ARN of the Grafana admin secret"
+}
+
 ## Region
 output "region" {
   value       = var.region
