@@ -217,7 +217,8 @@ resource "helm_release" "yace" {
 
   depends_on = [
     module.eks_blueprints_addons,
-    aws_iam_role.yace
+    aws_iam_role.yace,
+    kubectl_manifest.servicemonitor_crd
   ]
 }
 
@@ -361,6 +362,7 @@ resource "helm_release" "redis_exporter" {
   depends_on = [
     module.eks_blueprints_addons.kube_prometheus_stack,
     module.eks_blueprints_addons,
+    kubectl_manifest.servicemonitor_crd
   ]
 }
 
@@ -409,7 +411,10 @@ resource "helm_release" "mysql_exporter" {
     value = "password"
   }
 
-  depends_on = [module.eks_blueprints_addons]
+  depends_on = [
+    module.eks_blueprints_addons,
+    kubectl_manifest.servicemonitor_crd
+  ]
 }
 
 # ------------------------------------------------------------------------------

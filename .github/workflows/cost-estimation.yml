@@ -1,0 +1,442 @@
+name: Cost Estimation
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - feat-*
+    paths:
+      - '**/*.tf'
+      - '**/*.tfvars'
+      - '.github/workflows/cost-estimation.yml'
+  pull_request:
+    paths:
+      - '**/*.tf'
+      - '**/*.tfvars'
+      - '.github/workflows/cost-estimation.yml'
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to analyze (optional)'
+        required: false
+        type: number
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: cost-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+jobs:
+  infracost:
+    name: Infracost Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine branches
+        id: branches
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "base_ref=${{ github.event.pull_request.base.ref }}" >> $GITHUB_OUTPUT
+            echo "head_ref=${{ github.head_ref }}" >> $GITHUB_OUTPUT
+            echo "is_pr=true" >> $GITHUB_OUTPUT
+          else
+            # For push events, compare against main/master
+            if [ "${{ github.ref }}" == "refs/heads/main" ] || [ "${{ github.ref }}" == "refs/heads/master" ]; then
+              echo "base_ref=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+              echo "head_ref=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            else
+              # Feature branch - compare against main
+              echo "base_ref=main" >> $GITHUB_OUTPUT
+              echo "head_ref=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            fi
+            echo "is_pr=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.branches.outputs.base_ref }}
+          path: base
+
+      - name: Checkout comparison branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.branches.outputs.head_ref }}
+          path: pr
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+          terraform_wrapper: false
+
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+
+      - name: Discover Terraform directories
+        id: discover
+        run: |
+          # Find all directories containing .tf files in the PR branch
+          cd pr
+          terraform_dirs=$(find . -type f -name '*.tf' -not -path '*/.terraform/*' -not -path '*/.external_modules/*' -exec dirname {} \; | sort -u)
+          
+          # Convert to JSON array
+          dirs_json=$(echo "$terraform_dirs" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "directories=${dirs_json}" >> $GITHUB_OUTPUT
+          echo "Found Terraform directories: ${dirs_json}"
+
+      - name: Generate Infracost baseline
+        id: baseline
+        run: |
+          cd base
+          
+          # Create Infracost config file
+          cat > infracost-config.yml <<EOF
+          version: 0.1
+          projects:
+          EOF
+          
+          # Add each directory as a project
+          for dir in $(echo '${{ steps.discover.outputs.directories }}' | jq -r '.[]'); do
+            # Skip if directory doesn't exist in base branch
+            if [ ! -d "$dir" ]; then
+              echo "Skipping $dir (not in base branch)"
+              continue
+            fi
+            
+            cat >> infracost-config.yml <<EOF
+            - path: $dir
+              name: $(basename $dir)
+          EOF
+          done
+          
+          # Generate baseline cost estimate
+          if ! infracost breakdown --config-file=infracost-config.yml --format=json --out-file=/tmp/infracost-base.json 2>&1 | tee /tmp/baseline-output.txt; then
+            echo "baseline_failed=true" >> $GITHUB_OUTPUT
+            echo "::warning::Baseline cost estimation failed, will show PR costs only"
+          else
+            echo "baseline_failed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate Infracost diff
+        id: diff
+        run: |
+          cd pr
+          
+          # Create Infracost config file
+          cat > infracost-config.yml <<EOF
+          version: 0.1
+          projects:
+          EOF
+          
+          # Add each directory as a project
+          for dir in $(echo '${{ steps.discover.outputs.directories }}' | jq -r '.[]'); do
+            cat >> infracost-config.yml <<EOF
+            - path: $dir
+              name: $(basename $dir)
+          EOF
+          done
+          
+          # Generate PR cost estimate
+          if ! infracost breakdown --config-file=infracost-config.yml --format=json --out-file=/tmp/infracost-pr.json 2>&1 | tee /tmp/pr-output.txt; then
+            echo "pr_failed=true" >> $GITHUB_OUTPUT
+            echo "::error::PR cost estimation failed"
+            exit 1
+          fi
+          
+          # Generate diff if baseline exists
+          if [ "${{ steps.baseline.outputs.baseline_failed }}" != "true" ] && [ -f /tmp/infracost-base.json ]; then
+            infracost diff --path=/tmp/infracost-pr.json --compare-to=/tmp/infracost-base.json --format=json --out-file=/tmp/infracost-diff.json
+            echo "diff_available=true" >> $GITHUB_OUTPUT
+          else
+            echo "diff_available=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Calculate cost impact
+        id: impact
+        run: |
+          # Parse cost data
+          if [ "${{ steps.diff.outputs.diff_available }}" == "true" ]; then
+            # Use diff data
+            total_monthly_diff=$(jq -r '.totalMonthlyCost // 0' /tmp/infracost-diff.json)
+            baseline_cost=$(jq -r '.projects[0].breakdown.totalMonthlyCost // 0' /tmp/infracost-base.json)
+          else
+            # Use PR data only
+            total_monthly_diff=$(jq -r '.totalMonthlyCost // 0' /tmp/infracost-pr.json)
+            baseline_cost=0
+          fi
+          
+          pr_cost=$(jq -r '.totalMonthlyCost // 0' /tmp/infracost-pr.json)
+          
+          # Calculate percentage change
+          if [ "$baseline_cost" != "0" ] && [ "$baseline_cost" != "null" ]; then
+            percent_change=$(echo "scale=2; ($total_monthly_diff / $baseline_cost) * 100" | bc)
+          else
+            percent_change=0
+          fi
+          
+          echo "baseline_cost=${baseline_cost}" >> $GITHUB_OUTPUT
+          echo "pr_cost=${pr_cost}" >> $GITHUB_OUTPUT
+          echo "monthly_diff=${total_monthly_diff}" >> $GITHUB_OUTPUT
+          echo "percent_change=${percent_change}" >> $GITHUB_OUTPUT
+          
+          # Determine impact level
+          if (( $(echo "$percent_change > 20" | bc -l) )) || (( $(echo "$total_monthly_diff > 100" | bc -l) )); then
+            echo "impact_level=high" >> $GITHUB_OUTPUT
+          elif (( $(echo "$percent_change > 10" | bc -l) )); then
+            echo "impact_level=medium" >> $GITHUB_OUTPUT
+          elif (( $(echo "$total_monthly_diff < 0" | bc -l) )); then
+            echo "impact_level=decrease" >> $GITHUB_OUTPUT
+          else
+            echo "impact_level=low" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Apply cost impact labels
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const impactLevel = '${{ steps.impact.outputs.impact_level }}';
+            const labels = [];
+            
+            // Remove old cost labels
+            const oldLabels = ['high-cost-impact', 'medium-cost-impact', 'cost-decrease', 'cost-neutral'];
+            try {
+              const currentLabels = await github.rest.issues.listLabelsOnIssue({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number
+              });
+              
+              for (const label of currentLabels.data) {
+                if (oldLabels.includes(label.name)) {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: context.issue.number,
+                    name: label.name
+                  });
+                }
+              }
+            } catch (error) {
+              console.log('No existing cost labels to remove');
+            }
+            
+            // Add new label based on impact
+            if (impactLevel === 'high') {
+              labels.push('high-cost-impact');
+            } else if (impactLevel === 'medium') {
+              labels.push('medium-cost-impact');
+            } else if (impactLevel === 'decrease') {
+              labels.push('cost-decrease');
+            } else {
+              labels.push('cost-neutral');
+            }
+            
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: labels
+              });
+            }
+
+      - name: Post cost summary
+        if: always() && steps.impact.outcome == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const baselineCost = parseFloat('${{ steps.impact.outputs.baseline_cost }}');
+            const prCost = parseFloat('${{ steps.impact.outputs.pr_cost }}');
+            const monthlyDiff = parseFloat('${{ steps.impact.outputs.monthly_diff }}');
+            const percentChange = parseFloat('${{ steps.impact.outputs.percent_change }}');
+            const impactLevel = '${{ steps.impact.outputs.impact_level }}';
+            const diffAvailable = '${{ steps.diff.outputs.diff_available }}' === 'true';
+            
+            // Format currency
+            const formatCost = (cost) => {
+              if (cost === 0 || isNaN(cost)) return '$0.00';
+              return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              }).format(cost);
+            };
+            
+            // Determine emoji and message based on impact
+            let emoji = '💰';
+            let impactMessage = '';
+            
+            if (impactLevel === 'high') {
+              emoji = '🚨';
+              impactMessage = '**High cost impact detected!** This change will significantly increase infrastructure costs.';
+            } else if (impactLevel === 'medium') {
+              emoji = '⚠️';
+              impactMessage = '**Moderate cost impact.** Please review the cost changes carefully.';
+            } else if (impactLevel === 'decrease') {
+              emoji = '✅';
+              impactMessage = '**Cost savings detected!** This change will reduce infrastructure costs.';
+            } else {
+              emoji = '💰';
+              impactMessage = 'Minimal cost impact detected.';
+            }
+            
+            const isPR = '${{ steps.branches.outputs.is_pr }}' === 'true';
+            
+            // Build comment body
+            let body = `## ${emoji} Infrastructure Cost Estimation\n\n`;
+            body += `${impactMessage}\n\n`;
+            
+            if (diffAvailable) {
+              body += `### Cost Summary\n\n`;
+              body += `| Metric | Value |\n`;
+              body += `|--------|-------|\n`;
+              body += `| **Baseline Cost** (${isPR ? 'base' : 'main'}) | ${formatCost(baselineCost)}/month |\n`;
+              body += `| **Proposed Cost** (${isPR ? 'PR' : 'branch'}) | ${formatCost(prCost)}/month |\n`;
+              body += `| **Monthly Difference** | ${monthlyDiff >= 0 ? '+' : ''}${formatCost(monthlyDiff)}/month |\n`;
+              body += `| **Percentage Change** | ${percentChange >= 0 ? '+' : ''}${percentChange.toFixed(2)}% |\n\n`;
+            } else {
+              body += `### Cost Summary\n\n`;
+              body += `| Metric | Value |\n`;
+              body += `|--------|-------|\n`;
+              body += `| **Estimated Cost** | ${formatCost(prCost)}/month |\n\n`;
+              body += `> ℹ️ Baseline comparison unavailable. Showing current costs only.\n\n`;
+            }
+            
+            // Try to read detailed breakdown
+            try {
+              let detailsFile = '/tmp/infracost-diff.json';
+              if (!diffAvailable) {
+                detailsFile = '/tmp/infracost-pr.json';
+              }
+              
+              const details = JSON.parse(fs.readFileSync(detailsFile, 'utf8'));
+              
+              if (details.projects && details.projects.length > 0) {
+                body += `### Cost Breakdown by Module\n\n`;
+                body += `| Module | Monthly Cost | Change |\n`;
+                body += `|--------|--------------|--------|\n`;
+                
+                for (const project of details.projects) {
+                  const projectCost = project.breakdown?.totalMonthlyCost || 0;
+                  const projectDiff = project.diff?.totalMonthlyCost || 0;
+                  const projectName = project.name || 'Unknown';
+                  
+                  if (diffAvailable && projectDiff !== 0) {
+                    body += `| ${projectName} | ${formatCost(projectCost)} | ${projectDiff >= 0 ? '+' : ''}${formatCost(projectDiff)} |\n`;
+                  } else if (!diffAvailable && projectCost > 0) {
+                    body += `| ${projectName} | ${formatCost(projectCost)} | N/A |\n`;
+                  }
+                }
+                body += `\n`;
+              }
+            } catch (error) {
+              console.log('Could not read detailed breakdown:', error.message);
+            }
+            
+            body += `---\n`;
+            body += `<sub>💡 **Tip:** Cost estimates are based on list prices and may not reflect your actual AWS costs due to discounts, reserved instances, or savings plans.</sub>\n`;
+            body += `<sub>📊 Powered by [Infracost](https://www.infracost.io/)</sub>`;
+            
+            // For PRs, post as comment
+            if (isPR) {
+              // Find existing cost comment
+              const comments = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number
+              });
+              
+              const botComment = comments.data.find(comment => 
+                comment.user.type === 'Bot' && 
+                comment.body.includes('Infrastructure Cost Estimation')
+              );
+              
+              // Update or create comment
+              if (botComment) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: botComment.id,
+                  body: body
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body: body
+                });
+              }
+            } else {
+              // For push events, write to workflow summary
+              await core.summary
+                .addRaw(body)
+                .write();
+              
+              console.log('Cost estimation summary:');
+              console.log(body);
+            }
+
+      - name: Handle estimation failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const isPR = '${{ steps.branches.outputs.is_pr }}' === 'true';
+            const body = `## ⚠️ Infrastructure Cost Estimation Failed
+            
+            The cost estimation workflow encountered an error and could not complete the analysis.
+            
+            **Possible reasons:**
+            - Invalid Terraform configuration
+            - Missing Infracost API key
+            - Unsupported resource types
+            - Network connectivity issues
+            
+            **Next steps:**
+            1. Check the [workflow logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details
+            2. Verify your Terraform configuration is valid
+            3. Contact the platform team if the issue persists
+            
+            ---
+            <sub>📊 Powered by [Infracost](https://www.infracost.io/)</sub>`;
+            
+            if (isPR) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            } else {
+              await core.summary
+                .addRaw(body)
+                .write();
+              console.log('Cost estimation failed');
+              console.log(body);
+            }
+            });
+
+      - name: Upload Infracost results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: infracost-results
+          path: |
+            /tmp/infracost-*.json
+            /tmp/*-output.txt
+          retention-days: 30
+          if-no-files-found: ignore
