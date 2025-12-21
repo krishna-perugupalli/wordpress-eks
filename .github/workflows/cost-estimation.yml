@@ -3,9 +3,9 @@ name: Cost Estimation
 on:
   push:
     branches:
-      - main
-      - master
-      - feat-*
+      - '**'
+      - '!main'
+      - '!master'
     paths:
       - '**/*.tf'
       - '**/*.tfvars'
