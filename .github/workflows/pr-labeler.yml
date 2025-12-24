@@ -478,7 +478,7 @@ ${categories.workflows.length > 0 ?
   `- **Workflows:** ${categories.workflows.length} file(s)` : ''}
 
 Please ensure appropriate reviewers are assigned based on ` +
-                `the CODEOWNERS file.`;
+                `the root CODEOWNERS file.`;
 
               // Check if we already posted this comment
               const { data: comments } = await github.rest.issues.listComments({

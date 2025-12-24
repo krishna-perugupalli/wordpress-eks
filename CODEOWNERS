@@ -116,7 +116,7 @@
 /.github/dependabot.yml @platform-team
 
 # This CODEOWNERS file itself
-/.github/CODEOWNERS @platform-team
+/CODEOWNERS @platform-team
 
 # =============================================================================
 # Configuration Files
