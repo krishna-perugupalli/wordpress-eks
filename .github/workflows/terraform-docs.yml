@@ -179,6 +179,14 @@ jobs:
           has_failures="${{ steps.generate-all.outputs.has_failures }}"
           has_updates="${{ steps.generate-all.outputs.has_updates }}"
           
+          # Set defaults if empty
+          updated_count="${updated_count:-0}"
+          failed_count="${failed_count:-0}"
+          skipped_count="${skipped_count:-0}"
+          total_count="${total_count:-0}"
+          has_failures="${has_failures:-false}"
+          has_updates="${has_updates:-false}"
+          
           echo "## 📚 Terraform Documentation Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
@@ -189,24 +197,31 @@ jobs:
           echo "| ⏭️ Skipped | ${skipped_count} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          if [ "${has_updates}" = "true" ]; then
+          # Only show updated modules if there are any
+          if [ "${has_updates}" = "true" ] && [ -n "${{ steps.generate-all.outputs.updated_modules }}" ]; then
             echo "### ✅ Updated Modules" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "${{ steps.generate-all.outputs.updated_modules }}" | while read -r module; do
-              [ -n "$module" ] && echo "- \`${module}\`" >> $GITHUB_STEP_SUMMARY
+            echo "${{ steps.generate-all.outputs.updated_modules }}" | grep -v '^$' | while read -r module; do
+              if [ -n "$module" ]; then
+                echo "- \`${module}\`" >> $GITHUB_STEP_SUMMARY
+              fi
             done
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
           
-          if [ "${has_failures}" = "true" ]; then
+          # Only show failed modules if there are any
+          if [ "${has_failures}" = "true" ] && [ -n "${{ steps.generate-all.outputs.failed_modules }}" ]; then
             echo "### ❌ Failed Modules" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "${{ steps.generate-all.outputs.failed_modules }}" | while read -r module; do
-              [ -n "$module" ] && echo "- \`${module}\`" >> $GITHUB_STEP_SUMMARY
+            echo "${{ steps.generate-all.outputs.failed_modules }}" | grep -v '^$' | while read -r module; do
+              if [ -n "$module" ]; then
+                echo "- \`${module}\`" >> $GITHUB_STEP_SUMMARY
+              fi
             done
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
           
+          # Final status message
           if [ "${has_updates}" = "false" ] && [ "${has_failures}" = "false" ]; then
             echo "✅ All module documentation is up to date!" >> $GITHUB_STEP_SUMMARY
           elif [ "${has_failures}" = "true" ]; then
