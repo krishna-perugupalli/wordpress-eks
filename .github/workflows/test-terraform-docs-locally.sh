@@ -54,6 +54,18 @@ echo "🧪 Terraform Documentation Local Test"
 echo -e "==================================================${NC}"
 echo ""
 
+# Validate workflow YAML syntax first
+echo -e "${BLUE}Validating GitHub Actions workflow YAML...${NC}"
+if ruby -ryaml -e "YAML.load_file('.github/workflows/terraform-docs.yml')" 2>/dev/null; then
+  echo -e "${GREEN}✅ Workflow YAML syntax is valid${NC}"
+else
+  echo -e "${RED}❌ Workflow YAML syntax error detected!${NC}"
+  echo "Run this to see the error:"
+  echo "  ruby -ryaml -e \"YAML.load_file('.github/workflows/terraform-docs.yml')\""
+  exit 1
+fi
+echo ""
+
 # Check if we're in the right directory
 if [ ! -d "modules" ]; then
   echo -e "${RED}❌ Error: modules/ directory not found${NC}"
