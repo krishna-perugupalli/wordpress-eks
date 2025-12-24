@@ -1,7 +1,9 @@
 name: Terraform Documentation
 
 on:
-  pull_request:
+  push:
+    branches:
+      - loki-tempo
     paths:
       - 'modules/**/*.tf'
       - '.github/workflows/terraform-docs.yml'
@@ -56,7 +58,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup terraform-docs
@@ -144,11 +146,11 @@ jobs:
       - name: Push documentation changes
         if: steps.check-changes.outputs.has_changes == 'true'
         run: |
-          # Push changes to the PR branch
-          git pull --rebase origin ${{ github.head_ref }}
-          git push origin HEAD:${{ github.head_ref }}
+          # Push changes to the current branch
+          git pull --rebase origin ${{ github.ref_name }}
+          git push origin HEAD:${{ github.ref_name }}
           
-          echo "Pushed documentation changes to PR branch"
+          echo "✅ Pushed documentation changes to branch"
 
       - name: Report generation error
         if: failure() && steps.generate.outputs.generation_failed == 'true'
@@ -190,7 +192,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.ref }}
 
       - name: Check for documentation updates
         id: check-updates
