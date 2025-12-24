@@ -1,0 +1,578 @@
+---
+name: PR Labeling Automation
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to label (optional, for manual runs)'
+        required: false
+        type: number
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: >-
+    pr-labeler-${{ github.event.pull_request.number ||
+    github.event.inputs.pr_number }}
+  cancel-in-progress: true
+
+jobs:
+  analyze-and-label:
+    name: Analyze PR and Apply Labels
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR information
+        id: pr-info
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let pr;
+            if (context.eventName === 'workflow_dispatch') {
+              const prNumber = context.payload.inputs.pr_number;
+              if (!prNumber) {
+                core.setFailed(
+                  'PR number is required for manual workflow dispatch'
+                );
+                return;
+              }
+              const { data } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: parseInt(prNumber)
+              });
+              pr = data;
+            } else {
+              pr = context.payload.pull_request;
+            }
+
+            core.setOutput('number', pr.number);
+            core.setOutput('base', pr.base.ref);
+            core.setOutput('head', pr.head.ref);
+            core.setOutput('additions', pr.additions);
+            core.setOutput('deletions', pr.deletions);
+            core.setOutput('changed_files', pr.changed_files);
+
+            return pr;
+
+      - name: Get changed files
+        id: changed-files
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ steps.pr-info.outputs.number }};
+
+            // Get list of changed files
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+              per_page: 100
+            });
+
+            // Categorize files
+            const categories = {
+              modules: new Set(),
+              stacks: new Set(),
+              docs: [],
+              workflows: [],
+              terraform: [],
+              other: []
+            };
+
+            let totalLines = 0;
+
+            files.forEach(file => {
+              totalLines += file.additions + file.deletions;
+
+              const path = file.filename;
+
+              // Categorize by modules
+              if (path.startsWith('modules/')) {
+                const moduleName = path.split('/')[1];
+                categories.modules.add(moduleName);
+                categories.terraform.push(path);
+              }
+              // Categorize by stacks
+              else if (path.startsWith('stacks/')) {
+                const stackName = path.split('/')[1];
+                categories.stacks.add(stackName);
+                categories.terraform.push(path);
+              }
+              // Documentation
+              else if (path.startsWith('docs/') || path.endsWith('.md')) {
+                categories.docs.push(path);
+              }
+              // Workflows
+              else if (path.startsWith('.github/workflows/')) {
+                categories.workflows.push(path);
+              }
+              // Other Terraform files
+              else if (path.endsWith('.tf') || path.endsWith('.tfvars')) {
+                categories.terraform.push(path);
+              }
+              // Everything else
+              else {
+                categories.other.push(path);
+              }
+            });
+
+            // Convert sets to arrays for output
+            const result = {
+              modules: Array.from(categories.modules),
+              stacks: Array.from(categories.stacks),
+              docs: categories.docs,
+              workflows: categories.workflows,
+              terraform: categories.terraform,
+              other: categories.other,
+              totalLines: totalLines,
+              fileCount: files.length
+            };
+
+            core.setOutput('categories', JSON.stringify(result));
+            core.setOutput('total_lines', totalLines);
+
+            console.log(
+              'File categorization:',
+              JSON.stringify(result, null, 2)
+            );
+
+            return result;
+
+      - name: Determine labels to apply
+        id: determine-labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const categories = JSON.parse(
+              '${{ steps.changed-files.outputs.categories }}'
+            );
+            const totalLines = parseInt(
+              '${{ steps.changed-files.outputs.total_lines }}'
+            );
+
+            const labelsToAdd = [];
+            const labelsToRemove = [];
+
+            // Module-specific labels
+            categories.modules.forEach(module => {
+              labelsToAdd.push(`module:${module}`);
+            });
+
+            // Stack-specific labels
+            categories.stacks.forEach(stack => {
+              labelsToAdd.push(`stack:${stack}`);
+            });
+
+            // Documentation label
+            if (categories.docs.length > 0) {
+              labelsToAdd.push('documentation');
+            }
+
+            // Workflow/CI label
+            if (categories.workflows.length > 0) {
+              labelsToAdd.push('ci-cd');
+            }
+
+            // Terraform label (if any .tf or .tfvars files changed)
+            if (categories.terraform.length > 0) {
+              labelsToAdd.push('terraform');
+            }
+
+            // Large PR label (> 500 lines changed)
+            if (totalLines > 500) {
+              labelsToAdd.push('large-pr');
+            } else {
+              // Remove large-pr label if it exists and PR is now small
+              labelsToRemove.push('large-pr');
+            }
+
+            // Size labels
+            if (totalLines <= 50) {
+              labelsToAdd.push('size:small');
+              labelsToRemove.push('size:medium', 'size:large', 'size:xlarge');
+            } else if (totalLines <= 200) {
+              labelsToAdd.push('size:medium');
+              labelsToRemove.push('size:small', 'size:large', 'size:xlarge');
+            } else if (totalLines <= 500) {
+              labelsToAdd.push('size:large');
+              labelsToRemove.push('size:small', 'size:medium', 'size:xlarge');
+            } else {
+              labelsToAdd.push('size:xlarge');
+              labelsToRemove.push('size:small', 'size:medium', 'size:large');
+            }
+
+            core.setOutput('labels_to_add', JSON.stringify(labelsToAdd));
+            core.setOutput('labels_to_remove', JSON.stringify(labelsToRemove));
+
+            console.log('Labels to add:', labelsToAdd);
+            console.log('Labels to remove:', labelsToRemove);
+
+            return { labelsToAdd, labelsToRemove };
+
+      - name: Create labels if they don't exist
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labelsToAdd = JSON.parse(
+              '${{ steps.determine-labels.outputs.labels_to_add }}'
+            );
+
+            // Define label colors and descriptions
+            const labelDefinitions = {
+              // Module labels (blue)
+              'module:': {
+                color: '0366d6',
+                description: 'Changes to a specific module'
+              },
+              // Stack labels (purple)
+              'stack:': {
+                color: '8b5cf6',
+                description: 'Changes to a specific stack'
+              },
+              // Category labels
+              'documentation': {
+                color: '0075ca',
+                description: 'Documentation changes'
+              },
+              'ci-cd': {
+                color: 'f9d0c4',
+                description: 'CI/CD workflow changes'
+              },
+              'terraform': {
+                color: '7b42bc',
+                description: 'Terraform configuration changes'
+              },
+              'large-pr': {
+                color: 'd93f0b',
+                description: 'PR with more than 500 lines changed'
+              },
+              // Size labels
+              'size:small': {
+                color: '00ff00',
+                description: 'PR with 50 or fewer lines changed'
+              },
+              'size:medium': {
+                color: 'ffff00',
+                description: 'PR with 51-200 lines changed'
+              },
+              'size:large': {
+                color: 'ff9900',
+                description: 'PR with 201-500 lines changed'
+              },
+              'size:xlarge': {
+                color: 'ff0000',
+                description: 'PR with more than 500 lines changed'
+              }
+            };
+
+            // Get existing labels in the repository
+            const { data: existingLabels } =
+              await github.rest.issues.listLabelsForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100
+              });
+
+            const existingLabelNames = existingLabels.map(l => l.name);
+
+            // Create missing labels
+            for (const label of labelsToAdd) {
+              if (!existingLabelNames.includes(label)) {
+                // Find matching definition
+                let color = 'ededed';
+                let description = '';
+
+                for (const [prefix, def] of Object.entries(labelDefinitions)) {
+                  if (label === prefix || label.startsWith(prefix)) {
+                    color = def.color;
+                    description = def.description;
+                    break;
+                  }
+                }
+
+                try {
+                  await github.rest.issues.createLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: label,
+                    color: color,
+                    description: description
+                  });
+                  console.log(`Created label: ${label}`);
+                } catch (error) {
+                  // 422 = label already exists
+                  if (error.status !== 422) {
+                    console.error(
+                      `Failed to create label ${label}:`,
+                      error.message
+                    );
+                  }
+                }
+              }
+            }
+
+      - name: Apply labels to PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ steps.pr-info.outputs.number }};
+            const labelsToAdd = JSON.parse(
+              '${{ steps.determine-labels.outputs.labels_to_add }}'
+            );
+            const labelsToRemove = JSON.parse(
+              '${{ steps.determine-labels.outputs.labels_to_remove }}'
+            );
+
+            // Get current labels on the PR
+            const { data: currentLabels } =
+              await github.rest.issues.listLabelsOnIssue({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber
+              });
+
+            const currentLabelNames = currentLabels.map(l => l.name);
+
+            // Remove labels that should be removed
+            for (const label of labelsToRemove) {
+              if (currentLabelNames.includes(label)) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: prNumber,
+                    name: label
+                  });
+                  console.log(`Removed label: ${label}`);
+                } catch (error) {
+                  console.error(
+                    `Failed to remove label ${label}:`,
+                    error.message
+                  );
+                }
+              }
+            }
+
+            // Add new labels (only if not already present)
+            const labelsToActuallyAdd = labelsToAdd.filter(
+              l => !currentLabelNames.includes(l)
+            );
+
+            if (labelsToActuallyAdd.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                labels: labelsToActuallyAdd
+              });
+              console.log(
+                `Added labels: ${labelsToActuallyAdd.join(', ')}`
+              );
+            } else {
+              console.log('No new labels to add');
+            }
+
+      - name: Request reviews from code owners
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ steps.pr-info.outputs.number }};
+            const categories = JSON.parse(
+              '${{ steps.changed-files.outputs.categories }}'
+            );
+
+            // Map file paths to code owners based on CODEOWNERS patterns
+            const reviewers = new Set();
+            const teamReviewers = new Set();
+
+            // Module-specific owners
+            const moduleOwners = {
+              'observability': ['@sre-team', '@platform-team'],
+              'security-baseline': ['@security-team', '@platform-team'],
+              'secrets-iam': ['@security-team', '@platform-team'],
+              'secrets-operator': ['@security-team', '@platform-team'],
+              'waf-regional': ['@security-team', '@platform-team'],
+              'aws-auth': ['@security-team', '@platform-team'],
+              'data-aurora': ['@database-team', '@platform-team'],
+              'data-efs': ['@database-team', '@platform-team'],
+              'elasticache': ['@database-team', '@platform-team'],
+              'edge-ingress': ['@infrastructure-team', '@platform-team'],
+              'standalone-alb': ['@infrastructure-team', '@platform-team'],
+              'cloudfront': ['@infrastructure-team', '@platform-team'],
+              'cert-manager': ['@infrastructure-team', '@platform-team'],
+              'app-wordpress': ['@application-team', '@platform-team'],
+              'foundation': ['@infrastructure-team', '@platform-team'],
+              'cost-budgets': ['@platform-team']
+            };
+
+            // Stack-specific owners
+            const stackOwners = {
+              'infra': ['@infrastructure-team', '@platform-team'],
+              'app': ['@application-team', '@platform-team']
+            };
+
+            // Add reviewers based on changed modules
+            categories.modules.forEach(module => {
+              const owners = moduleOwners[module] || ['@platform-team'];
+              owners.forEach(owner => {
+                if (owner.startsWith('@') && owner.includes('-team')) {
+                  teamReviewers.add(owner.substring(1)); // Remove @ prefix
+                }
+              });
+            });
+
+            // Add reviewers based on changed stacks
+            categories.stacks.forEach(stack => {
+              const owners = stackOwners[stack] || ['@platform-team'];
+              owners.forEach(owner => {
+                if (owner.startsWith('@') && owner.includes('-team')) {
+                  teamReviewers.add(owner.substring(1)); // Remove @ prefix
+                }
+              });
+            });
+
+            // Add reviewers for documentation changes
+            if (categories.docs.length > 0) {
+              teamReviewers.add('documentation-team');
+            }
+
+            // Add reviewers for workflow changes
+            if (categories.workflows.length > 0) {
+              teamReviewers.add('platform-team');
+              teamReviewers.add('sre-team');
+            }
+
+            // Request reviews
+            // GitHub API doesn't support team reviewers directly
+            // We'll add a comment mentioning the teams instead
+            if (teamReviewers.size > 0) {
+              const teams = Array.from(teamReviewers)
+                .map(t => `@${t}`)
+                .join(', ');
+              const body = `## 🔍 Code Owner Review Requested
+
+This PR modifies files that require review from: ${teams}
+
+**Changed areas:**
+${categories.modules.length > 0 ?
+  `- **Modules:** ${categories.modules.join(', ')}` : ''}
+${categories.stacks.length > 0 ?
+  `- **Stacks:** ${categories.stacks.join(', ')}` : ''}
+${categories.docs.length > 0 ?
+  `- **Documentation:** ${categories.docs.length} file(s)` : ''}
+${categories.workflows.length > 0 ?
+  `- **Workflows:** ${categories.workflows.length} file(s)` : ''}
+
+Please ensure appropriate reviewers are assigned based on ` +
+                `the CODEOWNERS file.`;
+
+              // Check if we already posted this comment
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber
+              });
+
+              const botComments = comments.filter(c =>
+                c.user.type === 'Bot' &&
+                c.body.includes('Code Owner Review Requested')
+              );
+
+              if (botComments.length === 0) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  body: body
+                });
+                console.log('Posted code owner review request comment');
+              } else {
+                console.log('Code owner review comment already exists');
+              }
+            }
+
+      - name: Post labeling summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ steps.pr-info.outputs.number }};
+            const categories = JSON.parse(
+              '${{ steps.changed-files.outputs.categories }}'
+            );
+            const labelsToAdd = JSON.parse(
+              '${{ steps.determine-labels.outputs.labels_to_add }}'
+            );
+            const totalLines = parseInt(
+              '${{ steps.changed-files.outputs.total_lines }}'
+            );
+
+            const body = `## 🏷️ PR Labeling Summary
+
+**PR Size:** ${totalLines} lines changed across ` +
+              `${categories.fileCount} files
+
+**Applied Labels:**
+${labelsToAdd.map(l => `- \`${l}\``).join('\n')}
+
+**Changed Components:**
+${categories.modules.length > 0 ?
+  `- **Modules:** ${categories.modules.join(', ')}` : ''}
+${categories.stacks.length > 0 ?
+  `- **Stacks:** ${categories.stacks.join(', ')}` : ''}
+${categories.terraform.length > 0 ?
+  `- **Terraform files:** ${categories.terraform.length}` : ''}
+${categories.docs.length > 0 ?
+  `- **Documentation:** ${categories.docs.length}` : ''}
+${categories.workflows.length > 0 ?
+  `- **Workflows:** ${categories.workflows.length}` : ''}
+
+${totalLines > 500 ?
+  '⚠️ **Large PR detected** - Consider breaking this into ' +
+  'smaller PRs for easier review.' : ''}`;
+
+            // Check if we already posted a summary
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber
+            });
+
+            const summaryComments = comments.filter(c =>
+              c.user.type === 'Bot' &&
+              c.body.includes('PR Labeling Summary')
+            );
+
+            if (summaryComments.length > 0) {
+              // Update the existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: summaryComments[0].id,
+                body: body
+              });
+              console.log('Updated existing labeling summary comment');
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: body
+              });
+              console.log('Posted new labeling summary comment');
+            }

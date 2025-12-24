@@ -1,0 +1,149 @@
+# CODEOWNERS - Define code ownership and required reviewers
+# 
+# This file defines who owns specific parts of the codebase and who should
+# review pull requests that modify those areas. When a PR modifies files
+# matching these patterns, GitHub automatically requests reviews from the
+# defined owners.
+#
+# Pattern format: <file-pattern> @owner1 @owner2 @team-name
+# More specific patterns override less specific ones
+# Teams must be in the format @org/team-name
+
+# =============================================================================
+# Global Ownership
+# =============================================================================
+# Default owners for everything in the repository
+# These owners will be requested for review unless a more specific rule applies
+* @platform-team
+
+# =============================================================================
+# Infrastructure Stack
+# =============================================================================
+# Core infrastructure components (VPC, EKS, Aurora, ElastiCache, EFS)
+/stacks/infra/ @infrastructure-team @platform-team
+
+# =============================================================================
+# Application Stack
+# =============================================================================
+# Kubernetes application layer (add-ons, WordPress deployment)
+/stacks/app/ @application-team @platform-team
+
+# =============================================================================
+# Observability Module
+# =============================================================================
+# Monitoring, logging, alerting, and observability stack
+/modules/observability/ @sre-team @platform-team
+
+# =============================================================================
+# Security Modules
+# =============================================================================
+# Security baseline, IAM policies, and security configurations
+/modules/security-baseline/ @security-team @platform-team
+
+# Secrets management (IAM roles and External Secrets Operator)
+/modules/secrets-iam/ @security-team @platform-team
+/modules/secrets-operator/ @security-team @platform-team
+
+# Web Application Firewall modules
+/modules/waf-regional/ @security-team @platform-team
+
+# AWS authentication and authorization
+/modules/aws-auth/ @security-team @platform-team
+
+# =============================================================================
+# Data Modules
+# =============================================================================
+# Aurora MySQL database module
+/modules/data-aurora/ @database-team @platform-team
+
+# EFS shared storage module
+/modules/data-efs/ @database-team @platform-team
+
+# ElastiCache Redis module
+/modules/elasticache/ @database-team @platform-team
+
+# =============================================================================
+# Edge and Ingress Modules
+# =============================================================================
+# ALB Controller, ACM certificates, and ingress configuration
+/modules/edge-ingress/ @infrastructure-team @platform-team
+
+# Standalone ALB for direct load balancing
+/modules/standalone-alb/ @infrastructure-team @platform-team
+
+# CloudFront CDN distribution
+/modules/cloudfront/ @infrastructure-team @platform-team
+
+# Certificate Manager for Kubernetes
+/modules/cert-manager/ @infrastructure-team @platform-team
+
+# =============================================================================
+# Application Modules
+# =============================================================================
+# WordPress application deployment
+/modules/app-wordpress/ @application-team @platform-team
+
+# =============================================================================
+# Foundation and Core Modules
+# =============================================================================
+# Base networking and core infrastructure
+/modules/foundation/ @infrastructure-team @platform-team
+
+# Cost budgets and monitoring
+/modules/cost-budgets/ @platform-team
+
+# =============================================================================
+# Documentation
+# =============================================================================
+# All documentation files
+/docs/ @documentation-team
+*.md @documentation-team
+
+# Specific documentation that requires technical review
+/docs/architecture.md @infrastructure-team @documentation-team
+/docs/operations/ @sre-team @documentation-team
+
+# =============================================================================
+# CI/CD and Automation
+# =============================================================================
+# GitHub workflows and automation
+/.github/ @platform-team
+
+# Workflow files require careful review
+/.github/workflows/ @platform-team @sre-team
+
+# Dependabot configuration
+/.github/dependabot.yml @platform-team
+
+# This CODEOWNERS file itself
+/.github/CODEOWNERS @platform-team
+
+# =============================================================================
+# Configuration Files
+# =============================================================================
+# Terraform configuration files
+*.tfvars @infrastructure-team @platform-team
+
+# Security scanning configuration
+.checkov.yml @security-team @platform-team
+
+# Terraform documentation configuration
+.terraform-docs.yml @documentation-team @platform-team
+
+# TFLint configuration
+.tflint.hcl @platform-team
+
+# Makefile for build automation
+Makefile @platform-team
+
+# =============================================================================
+# Examples and Templates
+# =============================================================================
+# Example configurations
+/examples/ @documentation-team @platform-team
+
+# =============================================================================
+# Kubernetes Manifests
+# =============================================================================
+# Kubernetes manifest files
+/.kube-manifest/ @application-team @platform-team
