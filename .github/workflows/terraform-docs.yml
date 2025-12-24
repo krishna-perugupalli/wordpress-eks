@@ -21,45 +21,16 @@ env:
   TERRAFORM_DOCS_VERSION: "v0.18.0"
 
 jobs:
-  discover-modules:
-    name: Discover Terraform Modules
+  generate-and-commit-docs:
+    name: Generate and Commit Documentation
     runs-on: ubuntu-latest
-    outputs:
-      modules: ${{ steps.find-modules.outputs.modules }}
-      module_count: ${{ steps.find-modules.outputs.module_count }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Find module directories
-        id: find-modules
-        run: |
-          # Find all directories under modules/ that contain .tf files
-          # Each module should have main.tf, variables.tf, outputs.tf, versions.tf
-          module_dirs=$(find modules -mindepth 1 -maxdepth 1 -type d | sort | jq -R -s -c 'split("\n")[:-1]')
-          module_count=$(echo "$module_dirs" | jq 'length')
-          
-          echo "modules=${module_dirs}" >> $GITHUB_OUTPUT
-          echo "module_count=${module_count}" >> $GITHUB_OUTPUT
-          
-          echo "Found ${module_count} modules:"
-          echo "$module_dirs" | jq -r '.[]'
-
-  generate-docs:
-    name: Generate Documentation (${{ matrix.module }})
-    runs-on: ubuntu-latest
-    needs: discover-modules
-    if: needs.discover-modules.outputs.module_count != '0'
-    strategy:
-      fail-fast: false
-      matrix:
-        module: ${{ fromJson(needs.discover-modules.outputs.modules) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       - name: Setup terraform-docs
         run: |
@@ -71,300 +42,180 @@ jobs:
           sudo mv terraform-docs /usr/local/bin/
           terraform-docs --version
 
-      - name: Generate module documentation
-        id: generate
-        working-directory: ${{ matrix.module }}
+      - name: Discover and generate documentation for all modules
+        id: generate-all
         run: |
-          echo "Generating documentation for ${{ matrix.module }}..."
+          # Find all module directories
+          module_dirs=$(find modules -mindepth 1 -maxdepth 1 -type d | sort)
+          module_count=$(echo "$module_dirs" | wc -l)
           
-          # Check if module has required files
-          if [ ! -f "variables.tf" ] && [ ! -f "outputs.tf" ]; then
-            echo "Module has no variables.tf or outputs.tf, skipping documentation generation"
-            echo "skipped=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
+          echo "📦 Found ${module_count} modules"
+          echo "$module_dirs"
           
-          # Generate documentation and inject into README.md
-          # This will update the section between <!-- BEGIN_TF_DOCS --> and <!-- END_TF_DOCS -->
-          set +e
-          terraform-docs markdown table \
-            --output-file README.md \
-            --output-mode inject \
-            --sort-by required \
-            --header-from main.tf \
-            . > /tmp/terraform-docs-output.txt 2>&1
+          updated_count=0
+          failed_count=0
+          skipped_count=0
+          updated_modules=""
+          failed_modules=""
           
-          exit_code=$?
+          # Process each module
+          for module_dir in $module_dirs; do
+            echo ""
+            echo "=================================================="
+            echo "📝 Processing: ${module_dir}"
+            echo "=================================================="
+            
+            # Check if module has required files
+            if [ ! -f "${module_dir}/variables.tf" ] && [ ! -f "${module_dir}/outputs.tf" ]; then
+              echo "⏭️  Skipping ${module_dir} - no variables.tf or outputs.tf"
+              skipped_count=$((skipped_count + 1))
+              continue
+            fi
+            
+            # Generate documentation
+            cd "${module_dir}"
+            if terraform-docs markdown table \
+              --output-file README.md \
+              --output-mode inject \
+              --sort-by required \
+              --header-from main.tf \
+              .; then
+              
+              # Check if README was modified
+              if ! git diff --quiet README.md; then
+                echo "✅ Documentation updated for ${module_dir}"
+                updated_count=$((updated_count + 1))
+                updated_modules="${updated_modules}${module_dir}\n"
+              else
+                echo "ℹ️  No changes for ${module_dir}"
+              fi
+            else
+              echo "❌ Failed to generate documentation for ${module_dir}"
+              failed_count=$((failed_count + 1))
+              failed_modules="${failed_modules}${module_dir}\n"
+            fi
+            
+            cd - > /dev/null
+          done
           
-          if [ $exit_code -ne 0 ]; then
-            echo "generation_failed=true" >> $GITHUB_OUTPUT
-            echo "error_message<<EOF" >> $GITHUB_OUTPUT
-            cat /tmp/terraform-docs-output.txt >> $GITHUB_OUTPUT
+          echo ""
+          echo "=================================================="
+          echo "📊 Summary"
+          echo "=================================================="
+          echo "Total modules: ${module_count}"
+          echo "Updated: ${updated_count}"
+          echo "Failed: ${failed_count}"
+          echo "Skipped: ${skipped_count}"
+          
+          # Save outputs
+          echo "updated_count=${updated_count}" >> $GITHUB_OUTPUT
+          echo "failed_count=${failed_count}" >> $GITHUB_OUTPUT
+          echo "skipped_count=${skipped_count}" >> $GITHUB_OUTPUT
+          echo "total_count=${module_count}" >> $GITHUB_OUTPUT
+          
+          if [ ${failed_count} -gt 0 ]; then
+            echo "has_failures=true" >> $GITHUB_OUTPUT
+            echo "failed_modules<<EOF" >> $GITHUB_OUTPUT
+            echo -e "${failed_modules}" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
-            
-            echo "::error::Failed to generate documentation for ${{ matrix.module }}"
-            cat /tmp/terraform-docs-output.txt
-            exit 1
           else
-            echo "generation_failed=false" >> $GITHUB_OUTPUT
-            echo "skipped=false" >> $GITHUB_OUTPUT
-            echo "Documentation generated successfully"
+            echo "has_failures=false" >> $GITHUB_OUTPUT
           fi
-
-      - name: Check for documentation changes
-        id: check-changes
-        if: steps.generate.outputs.skipped != 'true' && steps.generate.outputs.generation_failed != 'true'
-        working-directory: ${{ matrix.module }}
-        run: |
-          # Ensure we're in a clean state
-          git status
           
-          # Check if README.md was modified
-          if git diff --quiet README.md; then
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "ℹ️  No documentation changes detected"
+          if [ ${updated_count} -gt 0 ]; then
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+            echo "updated_modules<<EOF" >> $GITHUB_OUTPUT
+            echo -e "${updated_modules}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
           else
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "📝 Documentation changes detected"
-            
-            # Show the diff for logging
-            echo "Changes:"
-            git diff README.md
+            echo "has_updates=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Commit documentation changes
-        if: steps.check-changes.outputs.has_changes == 'true'
+      - name: Commit and push documentation changes
+        if: steps.generate-all.outputs.has_updates == 'true'
         run: |
-          # Configure git (run from repo root)
+          # Configure git
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
-          # Make sure we're on the right branch
-          git checkout ${{ github.ref_name }}
+          # Show what changed
+          echo "📋 Changed files:"
+          git status --short
           
-          # Stage ONLY the README.md for this module
-          git add ${{ matrix.module }}/README.md
+          # Stage all README changes
+          git add modules/*/README.md
           
-          # Verify what we're about to commit
-          echo "📋 Files to be committed:"
+          # Show what will be committed
+          echo ""
+          echo "📝 Files to be committed:"
           git diff --cached --name-only
           
-          # Commit the changes
-          git commit -m "docs: update terraform-docs for ${{ matrix.module }}"
-          
-          echo "✅ Committed documentation changes for ${{ matrix.module }}"
+          # Commit all changes in one commit
+          git commit -m "docs: update terraform-docs for ${{ steps.generate-all.outputs.updated_count }} module(s)
 
-      - name: Push documentation changes with retry
-        if: steps.check-changes.outputs.has_changes == 'true'
+Updated modules:
+${{ steps.generate-all.outputs.updated_modules }}
+
+Generated by terraform-docs workflow"
+          
+          # Push changes
+          echo ""
+          echo "📤 Pushing changes to ${{ github.ref_name }}..."
+          git push origin HEAD:${{ github.ref_name }}
+          
+          echo "✅ Successfully pushed documentation updates"
+
+      - name: Create summary
+        if: always()
         run: |
-          # Retry logic for handling parallel pushes
-          max_attempts=10
-          attempt=1
+          updated_count="${{ steps.generate-all.outputs.updated_count }}"
+          failed_count="${{ steps.generate-all.outputs.failed_count }}"
+          skipped_count="${{ steps.generate-all.outputs.skipped_count }}"
+          total_count="${{ steps.generate-all.outputs.total_count }}"
+          has_failures="${{ steps.generate-all.outputs.has_failures }}"
+          has_updates="${{ steps.generate-all.outputs.has_updates }}"
           
-          while [ $attempt -le $max_attempts ]; do
-            echo "📤 Push attempt $attempt of $max_attempts..."
-            
-            # Fetch the latest state
-            git fetch origin ${{ github.ref_name }}
-            
-            # Check if we need to rebase
-            if git diff --quiet HEAD origin/${{ github.ref_name }}; then
-              echo "✅ Already up to date with remote"
-            else
-              echo "🔄 Rebasing on top of remote changes..."
-              if ! git rebase origin/${{ github.ref_name }}; then
-                echo "⚠️ Rebase failed, aborting and retrying..."
-                git rebase --abort 2>/dev/null || true
-                sleep $((attempt * 2))
-                attempt=$((attempt + 1))
-                continue
-              fi
-            fi
-            
-            # Try to push
-            if git push origin HEAD:${{ github.ref_name }}; then
-              echo "✅ Successfully pushed documentation changes for ${{ matrix.module }}"
-              exit 0
-            else
-              echo "⚠️ Push failed, will retry..."
-              sleep $((attempt * 2))
-            fi
-            
-            attempt=$((attempt + 1))
-          done
+          echo "## 📚 Terraform Documentation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Total Modules | ${total_count} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ✅ Updated | ${updated_count} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ❌ Failed | ${failed_count} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⏭️ Skipped | ${skipped_count} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "❌ Failed to push after $max_attempts attempts"
-          exit 1
-
-      - name: Report generation error
-        if: failure() && steps.generate.outputs.generation_failed == 'true'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const errorMessage = `${{ steps.generate.outputs.error_message }}`;
-            const body = `## Documentation Generation Error
-            
-            Failed to generate documentation for \`${{ matrix.module }}\`.
-            
-            ### Error Details
-            
-            \`\`\`
-            ${errorMessage}
-            \`\`\`
-            
-            ### Troubleshooting
-            
-            - Ensure the module has valid \`variables.tf\` and \`outputs.tf\` files
-            - Check that all Terraform syntax is correct
-            - Verify that variable and output descriptions are properly formatted
-            
-            The workflow will continue, but this module's documentation was not updated.`;
-            
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: body
-            });
-
-  documentation-summary:
-    name: Documentation Summary
-    runs-on: ubuntu-latest
-    needs: [discover-modules, generate-docs]
-    if: always()
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref }}
-
-      - name: Check for documentation updates
-        id: check-updates
-        run: |
-          # Check if any README files were updated in this workflow run
-          # We'll check the recent commits from github-actions bot
-          recent_commits=$(git log --author="github-actions\[bot\]" --since="5 minutes ago" --oneline --grep="docs: update terraform-docs" | wc -l)
+          if [ "${has_updates}" = "true" ]; then
+            echo "### ✅ Updated Modules" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "${{ steps.generate-all.outputs.updated_modules }}" | while read -r module; do
+              [ -n "$module" ] && echo "- \`${module}\`" >> $GITHUB_STEP_SUMMARY
+            done
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
           
-          echo "updated_modules=${recent_commits}" >> $GITHUB_OUTPUT
+          if [ "${has_failures}" = "true" ]; then
+            echo "### ❌ Failed Modules" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "${{ steps.generate-all.outputs.failed_modules }}" | while read -r module; do
+              [ -n "$module" ] && echo "- \`${module}\`" >> $GITHUB_STEP_SUMMARY
+            done
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
           
-          if [ "$recent_commits" -gt 0 ]; then
-            echo "has_updates=true" >> $GITHUB_OUTPUT
-            echo "${recent_commits} module(s) had documentation updates"
+          if [ "${has_updates}" = "false" ] && [ "${has_failures}" = "false" ]; then
+            echo "✅ All module documentation is up to date!" >> $GITHUB_STEP_SUMMARY
+          elif [ "${has_failures}" = "true" ]; then
+            echo "⚠️ Some modules failed documentation generation. Please review the logs above." >> $GITHUB_STEP_SUMMARY
           else
-            echo "has_updates=false" >> $GITHUB_OUTPUT
-            echo "No documentation updates were needed"
+            echo "✅ Documentation successfully updated and committed!" >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Evaluate results
-        id: evaluate
+      - name: Check for failures
+        if: steps.generate-all.outputs.has_failures == 'true'
         run: |
-          generate_result="${{ needs.generate-docs.result }}"
-          module_count="${{ needs.discover-modules.outputs.module_count }}"
-          
-          echo "## Documentation Generation Results"
-          echo "- Modules discovered: ${module_count}"
-          echo "- Generation status: ${generate_result}"
-          
-          if [[ "$generate_result" == "failure" ]]; then
-            echo "workflow_failed=true" >> $GITHUB_OUTPUT
-            echo "::warning::Some modules failed documentation generation"
-          else
-            echo "workflow_failed=false" >> $GITHUB_OUTPUT
-            echo "Documentation generation completed successfully"
-          fi
-
-      - name: Comment on PR with summary
-        if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const moduleCount = '${{ needs.discover-modules.outputs.module_count }}';
-            const hasUpdates = '${{ steps.check-updates.outputs.has_updates }}';
-            const updatedModules = '${{ steps.check-updates.outputs.updated_modules }}';
-            const workflowFailed = '${{ steps.evaluate.outputs.workflow_failed }}';
-            const generateResult = '${{ needs.generate-docs.result }}';
-            
-            let body = '';
-            
-            if (generateResult === 'skipped') {
-              body = `## Terraform Documentation
-            
-            No modules were found or all modules were skipped.
-            
-            **Modules discovered:** ${moduleCount}`;
-            } else if (workflowFailed === 'true') {
-              body = `## Terraform Documentation - Completed with Errors
-            
-            Documentation generation completed, but some modules encountered errors.
-            
-            **Modules discovered:** ${moduleCount}
-            **Modules updated:** ${updatedModules}
-            
-            Please check the workflow logs for details on which modules failed.
-            The errors have been posted as separate comments above.`;
-            } else if (hasUpdates === 'true') {
-              body = `## Terraform Documentation Updated
-            
-            Module documentation has been automatically updated and committed to this PR.
-            
-            **Modules discovered:** ${moduleCount}
-            **Modules updated:** ${updatedModules}
-            
-            ### What was updated?
-            
-            - Variable documentation (inputs)
-            - Output documentation
-            - Provider requirements
-            - Terraform version requirements
-            
-            The changes have been committed to your PR branch. Please review the updated README files.`;
-            } else {
-              body = `## Terraform Documentation - Up to Date
-            
-            All module documentation is current. No updates were needed.
-            
-            **Modules discovered:** ${moduleCount}
-            
-            Your module documentation is synchronized with the code.`;
-            }
-            
-            // Find existing comment
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            
-            const botComment = comments.find(comment => 
-              comment.user.type === 'Bot' && 
-              comment.body.includes('Terraform Documentation')
-            );
-            
-            // Update or create comment
-            if (botComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body: body
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: body
-              });
-            }
-
-      - name: Final status check
-        run: |
-          workflow_failed="${{ steps.evaluate.outputs.workflow_failed }}"
-          
-          if [[ "$workflow_failed" == "true" ]]; then
-            echo "::warning::Documentation generation completed with some errors"
-            # Don't fail the workflow - errors were reported in comments
-            exit 0
-          fi
-          
-          echo "Documentation workflow completed successfully!"
+          echo "::warning::Some modules failed documentation generation"
+          echo "Failed modules:"
+          echo "${{ steps.generate-all.outputs.failed_modules }}"
+          # Don't fail the workflow, just warn
+          exit 0
