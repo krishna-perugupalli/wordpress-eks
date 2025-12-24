@@ -146,9 +146,21 @@ jobs:
       - name: Push documentation changes
         if: steps.check-changes.outputs.has_changes == 'true'
         run: |
+          # Fetch latest changes
+          git fetch origin ${{ github.ref_name }}
+          
+          # Try to rebase our commit on top of any new changes
+          # If there are conflicts or issues, we'll force push our changes
+          if git rebase origin/${{ github.ref_name }}; then
+            echo "✅ Rebased successfully"
+          else
+            echo "⚠️ Rebase failed, will force push"
+            git rebase --abort || true
+          fi
+          
           # Push changes to the current branch
-          git pull --rebase origin ${{ github.ref_name }}
-          git push origin HEAD:${{ github.ref_name }}
+          # Use --force-with-lease to safely overwrite if needed
+          git push --force-with-lease origin HEAD:${{ github.ref_name }}
           
           echo "✅ Pushed documentation changes to branch"
 
