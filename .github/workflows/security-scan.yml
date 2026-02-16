@@ -17,9 +17,9 @@ on:
       - '**/*.tfvars'
       - '.github/workflows/security-scan.yml'
       - '.checkov.yml'
-  schedule:
+  #schedule:
     # Run daily at 2 AM UTC
-    - cron: '0 2 * * *'
+  #  - cron: '0 2 * * *'
   workflow_dispatch:
 
 permissions:
